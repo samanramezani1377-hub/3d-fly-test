@@ -168,3 +168,35 @@ def test_takeoff_bonus_is_reported_as_a_separate_reward_component():
     assert not crashed and reason is None
     assert terms["takeoff_bonus"] == 2.0
     assert np.isfinite(reward)
+
+
+def test_reset_after_motor_spin_matches_fresh_core():
+    """Reset must clear rotor, ESC, inflow, VRS, battery, and turbulence runtime."""
+    used = NativeSkySimEnv(max_steps=100)
+    fresh = NativeSkySimEnv(max_steps=100)
+    try:
+        used.reset(seed=123)
+        for _ in range(20):
+            used.step(np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32))
+        reset_obs, _ = used.reset(seed=456)
+        fresh_obs, _ = fresh.reset(seed=456)
+        assert np.allclose(reset_obs, fresh_obs, atol=1e-7)
+        action = np.array([0.0, 0.0, 0.0, 0.25], dtype=np.float32)
+        used_next, _, _, _, used_info = used.step(action)
+        fresh_next, _, _, _, fresh_info = fresh.step(action)
+        assert np.allclose(used_next, fresh_next, atol=1e-6)
+        assert np.allclose(used_info["rotor_thrust_n"], fresh_info["rotor_thrust_n"], atol=1e-8)
+        assert np.allclose(used_info["rotor_omega_rads"], fresh_info["rotor_omega_rads"], atol=1e-8)
+    finally:
+        used.close()
+        fresh.close()
+
+
+def test_telemetry_altitude_is_post_integration_state():
+    env = NativeSkySimEnv(max_steps=10)
+    try:
+        env.reset(seed=1)
+        obs, _, _, _, info = env.step(np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32))
+        assert np.isclose(info["telemetry_altitude_m"], obs[1], atol=1e-7)
+    finally:
+        env.close()
