@@ -25,8 +25,15 @@ def read_json(path: Path, errors: list[str]):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:  # report all missing/broken inputs together
-        fail(errors, f"{path.relative_to(ROOT)}: invalid or unreadable JSON: {exc}")
+        fail(errors, f"{display_path(path)}: invalid or unreadable JSON: {exc}")
         return None
+
+
+def display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
 
 
 def check_step(path: Path, errors: list[str]) -> None:
