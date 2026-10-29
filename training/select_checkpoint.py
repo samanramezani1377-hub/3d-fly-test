@@ -1,4 +1,4 @@
-"""Choose PPO checkpoints by hover safety/stability, not episode return alone."""
+"""Choose PPO checkpoints with a cheap screening pass and a robust finalist pass."""
 from __future__ import annotations
 
 import argparse
@@ -22,14 +22,33 @@ def rank(report):
     )
 
 
+def evaluate(model_path: Path, report_path: Path, episodes: int, seed: int) -> dict:
+    subprocess.run([
+        sys.executable, "training/evaluate.py",
+        "--model", str(model_path),
+        "--episodes", str(episodes),
+        "--seed", str(seed),
+        "--output", str(report_path),
+    ], check=True)
+    return json.loads(report_path.read_text(encoding="utf-8"))
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, required=True)
-    parser.add_argument("--episodes", type=int, default=10)
+    parser.add_argument("--episodes", type=int, default=10,
+                        help="Full evaluation episodes per finalist")
+    parser.add_argument("--screen-episodes", type=int, default=2,
+                        help="Cheap screening episodes per checkpoint")
+    parser.add_argument("--finalist-count", type=int, default=3,
+                        help="Number of screened checkpoints to re-evaluate fully")
     parser.add_argument("--seed", type=int, default=3000)
     args = parser.parse_args(argv)
-    if args.episodes <= 0:
-        parser.error("--episodes must be positive")
+    if args.episodes <= 0 or args.screen_episodes <= 0 or args.finalist_count <= 0:
+        parser.error("--episodes, --screen-episodes and --finalist-count must be positive")
+    if args.screen_episodes > args.episodes:
+        parser.error("--screen-episodes must not exceed --episodes")
+
     run_dir = args.run_dir.resolve()
     if not run_dir.is_dir():
         raise SystemExit(f"Run directory not found: {run_dir}")
@@ -42,17 +61,32 @@ def main(argv=None):
 
     report_dir = run_dir / "checkpoint-evaluations"
     report_dir.mkdir(parents=True, exist_ok=True)
-    evaluated = []
+
+    # Screen every checkpoint cheaply, then spend the larger evaluation budget only
+    # on the strongest candidates. Final ranking always uses the full episode count.
+    screened = []
     for index, model_path in enumerate(candidates):
-        report_path = report_dir / f"candidate-{index:03d}.json"
-        subprocess.run([
-            sys.executable, "training/evaluate.py",
-            "--model", str(model_path),
-            "--episodes", str(args.episodes),
-            "--seed", str(args.seed),
-            "--output", str(report_path),
-        ], check=True)
-        report = json.loads(report_path.read_text(encoding="utf-8"))
+        report_path = report_dir / f"screen-candidate-{index:03d}.json"
+        report = evaluate(model_path, report_path, args.screen_episodes, args.seed)
+        screened.append({
+            "model": str(model_path),
+            "screen_evaluation": str(report_path),
+            "screen_episodes": args.screen_episodes,
+            "screen_rank": list(rank(report)),
+            "screen_metrics": report,
+        })
+
+    finalists = sorted(
+        screened,
+        key=lambda item: tuple(item["screen_rank"]),
+        reverse=True,
+    )[:min(args.finalist_count, len(screened))]
+
+    evaluated = []
+    for index, candidate in enumerate(finalists):
+        model_path = Path(candidate["model"])
+        report_path = report_dir / f"finalist-{index:03d}.json"
+        report = evaluate(model_path, report_path, args.episodes, args.seed)
         evaluated.append({
             "model": str(model_path),
             "evaluation": str(report_path),
@@ -79,10 +113,17 @@ def main(argv=None):
             "mean_absolute_final_altitude_error_m ascending",
             "mean_hover_stable_fraction descending",
             "mean_absolute_vertical_speed_during_flight_mps ascending",
-            "mean_absolute_final_altitude_error_m ascending",
             "mean_return descending (tie-breaker only)",
         ],
-        "candidate_count": len(evaluated),
+        "screening": {
+            "episodes_per_candidate": args.screen_episodes,
+            "candidate_count": len(screened),
+            "finalist_count": len(finalists),
+            "full_evaluation_episodes_per_finalist": args.episodes,
+            "candidates": screened,
+        },
+        "candidate_count": len(candidates),
+        "finalists_evaluated": len(evaluated),
         "candidates": evaluated,
         "selected": winner,
         "selected_checkpoint_path": str(destination),
@@ -93,7 +134,8 @@ def main(argv=None):
         json.dumps(selection, indent=2) + "\n", encoding="utf-8"
     )
     print(json.dumps({
-        "candidate_count": len(evaluated),
+        "candidate_count": len(candidates),
+        "finalists_evaluated": len(evaluated),
         "selected": winner,
         "destination": str(destination),
         "deployment_eligible": selection["deployment_eligible"],
