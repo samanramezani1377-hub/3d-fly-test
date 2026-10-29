@@ -87,7 +87,10 @@ Use this checklist as the source of truth for project progress. Check an item on
 
 - [ ] Add named test scenarios in version control.
 - [ ] Add an output format such as CSV/JSON.
-- [x] Include repository commit SHA, pinned simulator revision, optional GLB SHA-256, full configuration, controller source, and scenario in JSON exports.
+- [ ] Verify JSON metadata matches the active controller source and effective controller mode on a deployed browser recording.
+- [x] Patch recorder source capture so JS/Python runs save the editor code actually compiled; browser verification still pending.
+- [x] Confirmed from pinned source that world Y is up and current default JS demo returns zero roll/pitch/yaw-rate commands; it does not actively hold horizontal position.
+- [ ] Include repository commit SHA, pinned simulator revision, optional GLB SHA-256, full configuration, active controller source, and scenario in verified JSON exports.
 - [ ] Verify metadata and scenario labels on two distinct runs.
 - [ ] Add a concise run summary with pass/fail criteria and derived metrics (altitude error, drift, peak tilt, battery use, and limit events).
 - [ ] Define metrics: altitude error, settling time, drift, peak tilt, battery use, and crash/limit events.
