@@ -12,8 +12,8 @@ from pathlib import Path
 def rank(report):
     return (
         float(report["hover_success_rate"]),
-        float(report.get("takeoff_success_rate", 0.0)),
         -float(report["crash_rate"]),
+        float(report.get("takeoff_success_rate", 0.0)),
         -float(report["mean_absolute_final_altitude_error_m"]),
         float(report["mean_hover_stable_fraction"]),
         -float(report["mean_absolute_vertical_speed_during_flight_mps"]),
@@ -74,8 +74,8 @@ def main(argv=None):
     selection = {
         "selection_metric": [
             "hover_success_rate descending",
-            "takeoff_success_rate descending",
             "crash_rate ascending",
+            "takeoff_success_rate descending",
             "mean_absolute_final_altitude_error_m ascending",
             "mean_hover_stable_fraction descending",
             "mean_absolute_vertical_speed_during_flight_mps ascending",
