@@ -32,6 +32,9 @@ def test_native_core_reset_and_step():
         assert not truncated
         assert np.isclose(step_info["throttle"], 0.35)
         assert "position_xyz_m" in step_info
+        assert "reward_components" in step_info
+        assert np.isclose(step_info["reward_total"], reward)
+        assert "crash_penalty" in step_info["reward_components"]
         for _ in range(2):
             _, _, terminated, truncated, _ = env.step(np.zeros(4, dtype=np.float32))
         assert truncated
