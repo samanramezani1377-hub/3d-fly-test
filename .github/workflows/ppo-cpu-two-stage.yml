@@ -48,7 +48,17 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r training/requirements.txt
 
-      - name: Build native simulator core
+      - name: Cache native simulator core and pinned upstream source
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            training/libskysim_core.so
+            .cache/skysim-upstream
+          key: native-core-ubuntu-${{ hashFiles('training/build_native_core.py', 'scripts/prepare_site.py', 'config/drone.json', 'controllers/controller.py', 'sim_support/battery.hpp') }}
+
+      - name: Build native simulator core (cache miss only)
+        if: steps.native-cache.outputs.cache-hit != 'true'
         run: python training/build_native_core.py
 
       - name: Verify CPU-only runtime
@@ -118,7 +128,17 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r training/requirements.txt
 
-      - name: Build native simulator core
+      - name: Cache native simulator core and pinned upstream source
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            training/libskysim_core.so
+            .cache/skysim-upstream
+          key: native-core-ubuntu-${{ hashFiles('training/build_native_core.py', 'scripts/prepare_site.py', 'config/drone.json', 'controllers/controller.py', 'sim_support/battery.hpp') }}
+
+      - name: Build native simulator core (cache miss only)
+        if: steps.native-cache.outputs.cache-hit != 'true'
         run: python training/build_native_core.py
 
       - name: Download seed 42 candidate
