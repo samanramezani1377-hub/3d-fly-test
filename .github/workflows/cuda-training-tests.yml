@@ -1,0 +1,35 @@
+name: CUDA training static checks
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "training/cuda_*.py"
+      - "training/train_ppo_cuda.py"
+      - "training/test_cuda_path.py"
+      - "notebooks/colab_cuda_gpu_ppo.ipynb"
+      - ".github/workflows/cuda-training-tests.yml"
+  pull_request:
+    paths:
+      - "training/cuda_*.py"
+      - "training/train_ppo_cuda.py"
+      - "training/test_cuda_path.py"
+      - "notebooks/colab_cuda_gpu_ppo.ipynb"
+      - ".github/workflows/cuda-training-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile CUDA path Python modules
+        run: python -m py_compile training/cuda_quadrotor_physics.py training/cuda_physics_env.py training/cuda_hover_batch.py training/train_ppo_cuda.py training/test_cuda_path.py
+      - name: Validate notebook JSON
+        run: python -c "import json; json.load(open('notebooks/colab_cuda_gpu_ppo.ipynb', encoding='utf-8'))"
