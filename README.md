@@ -55,6 +55,11 @@ The browser tier runs Python through Pyodide and is intended for classical/light
 - The upstream SkySim source is fetched at a pinned commit during deployment; see `.github/workflows/pages.yml`. The pinned upstream revision omits its documented battery header, so `sim_support/battery.hpp` supplies a small deterministic compatibility battery model with configurable capacity, cell count and internal resistance.
 - SkySim is MIT-licensed; see `THIRD_PARTY_NOTICES.md`.
 
+## Project documentation
+
+- [Full project status, architecture, limitations, and roadmap](docs/PROJECT_STATUS.md)
+- [Master checklist](docs/CHECKLIST.md)
+
 ## Upstream
 
 - [SkySim source](https://github.com/vishwagw/Sky-Sim-drone-simulator-3.0)
