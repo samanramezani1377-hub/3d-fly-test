@@ -70,8 +70,9 @@ jobs:
           print("Training device: CPU (explicit)")
           PY
 
-      - name: Validate observation slots and action mapping
+      - name: Validate Python syntax, observation slots, and action mapping
         run: |
+          python -m compileall -q training
           python training/validate_observations.py | tee observation-validation.json
           python training/diagnose_control.py --steps 100 --throttles -1 -0.5 0 0.5 1 --output training/runs/control-diagnostics.json | tee control-diagnostics-summary.json
 
