@@ -51,9 +51,9 @@ The workflow checks out the configuration repository and the pinned SkySim revis
 
 ## 4. Current state and verification
 
-The repository files and the first GitHub Actions runs were inspected during setup. An early build exposed a missing battery-header dependency in the pinned upstream source; a compatibility header was added and the workflow was updated to use it.
+The repository files and GitHub Actions runs were inspected during setup. An early build exposed a missing battery-header dependency in the pinned upstream source; a compatibility header was added and the workflow was updated to use it. The next run successfully completed source checkout, Emscripten setup, configuration patching, WebAssembly build, Pages artifact preparation, and artifact upload. Deployment then failed because GitHub Pages has not yet been enabled for this repository.
 
-**Do not treat the deployment as verified until a GitHub Actions run finishes with a successful conclusion and the published page is opened and tested.** The workflow's existence alone does not prove that the build, browser loading, controller execution, or flight behaviour works correctly.
+**Current blocker: enable GitHub Pages.** Open [Settings → Pages](https://github.com/samanramezani1377-hub/3d-fly-test/settings/pages) and configure **Build and deployment → Source: GitHub Actions**. A later run must finish successfully, and the published page must be opened and tested, before deployment is considered verified. The successful compilation alone does not prove that browser loading, controller execution, or flight behaviour works correctly.
 
 Use these live links to check status:
 
