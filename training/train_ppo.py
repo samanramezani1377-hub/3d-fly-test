@@ -18,7 +18,6 @@ BACKEND_WARNING = (
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", type=int, default=5557)
     parser.add_argument("--timesteps", type=int, default=200_000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--target-x", type=float, default=0.0)
@@ -48,8 +47,8 @@ def main(argv=None):
         from native_env import NativeSkySimEnv
     except ImportError as exc:
         raise SystemExit(
-            "Missing dependencies. Install training/requirements.txt and the pinned "
-            "upstream python package (python -m pip install -e 'upstream/python[rl]')."
+            "Missing dependencies. Install training/requirements.txt. Build the native core "
+            "first with python training/build_native_core.py."
         ) from exc
 
     random.seed(args.seed)
@@ -79,12 +78,11 @@ def main(argv=None):
         "timesteps": args.timesteps,
         "max_steps_per_episode": args.max_steps,
         "target_xyz_m": list(target),
-        "server_port": args.port,
         "backend": "native-drone-core",
         "browser_core_same_cpp_sources": True,
         "upstream_revision_expected": UPSTREAM_REVISION,
         "backend_warning": "Uses the same pinned DroneCore C++ sources and project config patch as the browser WASM build, compiled natively. Native-vs-WASM numerical parity still requires regression testing.",
-        "drone_config_used": False,
+        "drone_config_used": True,
         "physical_aircraft_model_ready": False,
     }
     (run_dir / "metadata.json").write_text(
