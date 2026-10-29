@@ -38,6 +38,8 @@ def run_throttle_probe(env, throttle_action: float, steps: int) -> dict:
             "terminated": bool(terminated),
             "truncated": bool(truncated),
             "crashed": bool(info.get("crashed", False)),
+            "rotor_thrust_n": info.get("rotor_thrust_n"),
+            "rotor_omega_rads": info.get("rotor_omega_rads"),
         })
         if terminated or truncated:
             break
@@ -123,12 +125,23 @@ def main(argv=None):
             "and building the native core with python training/build_native_core.py."
         ) from exc
 
-    env = PolicyObservationWrapper(NativeSkySimEnv())
-    try:
-        probes = [run_throttle_probe(env, t, args.steps) for t in args.throttles]
-        policy = run_policy_probe(env, args.model, args.policy_steps) if args.model else None
-    finally:
-        env.close()
+    # Isolate each throttle point in a fresh core: no motor, ESC, inflow,
+    # battery, VRS, or turbulence state may leak between measurements.
+    probes = []
+    for throttle in args.throttles:
+        probe_env = PolicyObservationWrapper(NativeSkySimEnv())
+        try:
+            probes.append(run_throttle_probe(probe_env, throttle, args.steps))
+        finally:
+            probe_env.close()
+
+    policy = None
+    if args.model:
+        policy_env = PolicyObservationWrapper(NativeSkySimEnv())
+        try:
+            policy = run_policy_probe(policy_env, args.model, args.policy_steps)
+        finally:
+            policy_env.close()
 
     report = {
         "diagnostic_only": True,
