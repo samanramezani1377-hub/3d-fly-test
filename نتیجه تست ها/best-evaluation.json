@@ -1,0 +1,220 @@
+{
+  "backend": "native-drone-core",
+  "browser_core_same_cpp_sources": true,
+  "backend_warning": "Native and WASM builds use the same pinned C++ sources and config patch, but numerical parity still requires regression tests; this is not sim-to-real validation.",
+  "model": "training/runs/ppo-hover-50000/best/best_model.zip",
+  "episodes": 10,
+  "target_xyz_m": [
+    0.0,
+    3.0,
+    0.0
+  ],
+  "mean_return": -743.3966388396024,
+  "std_return": 14.219567319106723,
+  "crash_rate": 1.0,
+  "mean_steps": 78.4,
+  "mean_absolute_final_altitude_error_m": 2.8489651784300802,
+  "mean_absolute_final_vertical_speed_mps": 0.4379850149154663,
+  "episode_results": [
+    {
+      "episode": 0,
+      "seed": 1000,
+      "return": -736.4971556652373,
+      "steps": 78,
+      "terminated": true,
+      "truncated": false,
+      "crashed": true,
+      "final_position_xyz_m": [
+        0.6429598331451416,
+        0.1565038561820984,
+        1.724570631980896
+      ],
+      "final_velocity_xyz_mps": [
+        0.7691500782966614,
+        -2.2015275955200195,
+        1.4042762517929077
+      ],
+      "final_altitude_error_m": -2.8434961438179016
+    },
+    {
+      "episode": 1,
+      "seed": 1001,
+      "return": -766.5361776098308,
+      "steps": 81,
+      "terminated": true,
+      "truncated": false,
+      "crashed": true,
+      "final_position_xyz_m": [
+        0.6640716195106506,
+        0.15000000596046448,
+        1.8567075729370117
+      ],
+      "final_velocity_xyz_mps": [
+        0.6248211860656738,
+        0.0,
+        1.2423748970031738
+      ],
+      "final_altitude_error_m": -2.8499999940395355
+    },
+    {
+      "episode": 2,
+      "seed": 1002,
+      "return": -728.8455287348849,
+      "steps": 77,
+      "terminated": true,
+      "truncated": false,
+      "crashed": true,
+      "final_position_xyz_m": [
+        0.4637483060359955,
+        0.15000000596046448,
+        1.7562609910964966
+      ],
+      "final_velocity_xyz_mps": [
+        0.5579889416694641,
+        0.0,
+        1.323025107383728
+      ],
+      "final_altitude_error_m": -2.8499999940395355
+    },
+    {
+      "episode": 3,
+      "seed": 1003,
+      "return": -718.4147906950566,
+      "steps": 75,
+      "terminated": true,
+      "truncated": false,
+      "crashed": true,
+      "final_position_xyz_m": [
+        0.5343021154403687,
+        0.15000000596046448,
+        1.6150743961334229
+      ],
+      "final_velocity_xyz_mps": [
+        0.5881005525588989,
+        0.0,
+        1.257322072982788
+      ],
+      "final_altitude_error_m": -2.8499999940395355
+    },
+    {
+      "episode": 4,
+      "seed": 1004,
+      "return": -754.7073176410684,
+      "steps": 79,
+      "terminated": true,
+      "truncated": false,
+      "crashed": true,
+      "final_position_xyz_m": [
+        0.5460833311080933,
+        0.15000000596046448,
+        1.8305383920669556
+      ],
+      "final_velocity_xyz_mps": [
+        0.6299514770507812,
+        0.0,
+        1.295386791229248
+      ],
+      "final_altitude_error_m": -2.8499999940395355
+    },
+    {
+      "episode": 5,
+      "seed": 1005,
+      "return": -739.5310235061137,
+      "steps": 78,
+      "terminated": true,
+      "truncated": false,
+      "crashed": true,
+      "final_position_xyz_m": [
+        0.6154863834381104,
+        0.15000000596046448,
+        1.7415498495101929
+      ],
+      "final_velocity_xyz_mps": [
+        0.6219857335090637,
+        0.0,
+        1.2641146183013916
+      ],
+      "final_altitude_error_m": -2.8499999940395355
+    },
+    {
+      "episode": 6,
+      "seed": 1006,
+      "return": -748.5694922690487,
+      "steps": 79,
+      "terminated": true,
+      "truncated": false,
+      "crashed": true,
+      "final_position_xyz_m": [
+        0.6220846772193909,
+        0.15000000596046448,
+        1.7794766426086426
+      ],
+      "final_velocity_xyz_mps": [
+        0.6203962564468384,
+        0.0,
+        1.2639124393463135
+      ],
+      "final_altitude_error_m": -2.8499999940395355
+    },
+    {
+      "episode": 7,
+      "seed": 1007,
+      "return": -735.3513189451356,
+      "steps": 78,
+      "terminated": true,
+      "truncated": false,
+      "crashed": true,
+      "final_position_xyz_m": [
+        0.4543527364730835,
+        0.15384431183338165,
+        1.82279634475708
+      ],
+      "final_velocity_xyz_mps": [
+        0.6406788229942322,
+        -2.1783225536346436,
+        1.6156487464904785
+      ],
+      "final_altitude_error_m": -2.8461556881666183
+    },
+    {
+      "episode": 8,
+      "seed": 1008,
+      "return": -762.5931359901002,
+      "steps": 81,
+      "terminated": true,
+      "truncated": false,
+      "crashed": true,
+      "final_position_xyz_m": [
+        0.7150439023971558,
+        0.15000000596046448,
+        1.8371472358703613
+      ],
+      "final_velocity_xyz_mps": [
+        0.6775017380714417,
+        0.0,
+        1.207457184791565
+      ],
+      "final_altitude_error_m": -2.8499999940395355
+    },
+    {
+      "episode": 9,
+      "seed": 1009,
+      "return": -742.9204473395473,
+      "steps": 78,
+      "terminated": true,
+      "truncated": false,
+      "crashed": true,
+      "final_position_xyz_m": [
+        0.4501880705356598,
+        0.15000000596046448,
+        1.8299106359481812
+      ],
+      "final_velocity_xyz_mps": [
+        0.5404032468795776,
+        0.0,
+        1.4051088094711304
+      ],
+      "final_altitude_error_m": -2.8499999940395355
+    }
+  ]
+}

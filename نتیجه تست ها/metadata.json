@@ -1,0 +1,24 @@
+{
+  "created_at_utc": "2026-10-29T05:15:25.740240+00:00",
+  "run_name": "ppo-hover-50000",
+  "algorithm": "PPO",
+  "seed": 42,
+  "timesteps_requested": 50000,
+  "max_steps_per_episode": 1500,
+  "target_xyz_m": [
+    0.0,
+    3.0,
+    0.0
+  ],
+  "checkpoint_frequency": 5000,
+  "evaluation_frequency": 5000,
+  "evaluation_episodes": 5,
+  "action_space": "symmetric [-1, 1]; throttle biased around hover estimate (0.35)",
+  "reward": "altitude/position error + velocity/attitude penalties; explicit crash penalty",
+  "backend": "native-drone-core",
+  "browser_core_same_cpp_sources": true,
+  "upstream_revision_expected": "a31864f999418531775980b879979ce4c57e791d",
+  "backend_warning": "Native build shares pinned DroneCore C++ sources with browser WASM; numerical parity still requires regression tests and this is not sim-to-real validation.",
+  "drone_config_used": true,
+  "physical_aircraft_model_ready": false
+}
