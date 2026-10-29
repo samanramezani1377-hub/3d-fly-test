@@ -27,6 +27,10 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     upstream = args.upstream.resolve()
+    battery_source = root / "sim_support/battery.hpp"
+    battery_target = upstream / "include/power/battery.hpp"
+    battery_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(battery_source, battery_target)
     config = json.loads((root / "config/drone.json").read_text(encoding="utf-8"))
     controller = (root / "controllers/controller.py").read_text(encoding="utf-8").strip()
     if not controller or "def policy(obs)" not in controller:
@@ -42,8 +46,13 @@ def main():
     wind = config["wind_mps"]
     visual = config["visual"]
     model_scale = num(config, "model_scale")
+    battery_cells = int(config.get("battery_cells", 4))
+    battery_capacity_mah = num(config | {"battery_capacity_mah": config.get("battery_capacity_mah", 4000)}, "battery_capacity_mah")
+    battery_resistance = num(config | {"battery_internal_resistance_ohm": config.get("battery_internal_resistance_ohm", 0.03)}, "battery_internal_resistance_ohm")
     if min(mass, rotor_radius, arm_length, motor_kv, voltage, ground_radius, model_scale) <= 0:
         raise ValueError("Mass, rotor radius, arm length, motor KV, voltage, ground radius and model scale must be positive")
+    if battery_cells < 1 or battery_capacity_mah <= 0 or battery_resistance < 0:
+        raise ValueError("Battery cells/capacity must be positive and internal resistance non-negative")
     if any(float(inertia[k]) <= 0 for k in ("x", "y", "z")):
         raise ValueError("All inertia values must be positive")
 
@@ -54,6 +63,7 @@ def main():
     core = replace_once(core, r"_mass\{[^}]+\}", f"_mass{{{mass}}}", "mass")
     core = replace_once(core, r"_inertia\{[^}]+\}", f"_inertia{{{float(inertia['x'])}, {float(inertia['y'])}, {float(inertia['z'])}}}", "inertia")
     core = replace_once(core, r"_ground_radius\{[^}]+\}", f"_ground_radius{{{ground_radius}}}", "ground contact radius")
+    core = replace_once(core, r"DroneCore\(\) \{ build_rotors\(\); reset\(0, 2, 0\); \}", f"DroneCore() {{ build_rotors(); _battery.configure({battery_capacity_mah}, {battery_cells}, {battery_resistance}, _max_voltage); reset(0, 2, 0); }}", "battery configuration")
     header_path.write_text(core, encoding="utf-8")
 
     cpp_path = upstream / "web/core/drone_core.cpp"
