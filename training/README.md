@@ -6,7 +6,7 @@ This folder provides a native C++ build of SkySim DroneCore, a Gymnasium adapter
 
 - PPO actions now use a symmetric [-1, 1] action space. The old throttle space [0, 1] interacted badly with PPO's zero-centered Gaussian actions: negative samples were clipped to zero, and the trained policy collapsed toward zero throttle.
 - The throttle action is mapped to a narrower simulator range (0.20–0.50) around a hover-centered starting estimate (0.35), reducing early exploration into extreme motor commands. This estimate comes from the repository's diagnostic sweep and is a simulation-specific starting point, not a measured physical flight value.
-- Reward shaping uses bounded altitude/horizontal proximity scores, capped velocity and attitude penalties, and an explicit crash penalty. Evaluation reports stable-hover fraction and success rate, not only episode return.
+- Episodes now reset on the ground and train through explicit `grounded`, `airborne`, `hovering`, and `crashed` phases. Remaining grounded receives an increasingly negative (capped) waiting penalty; crossing the takeoff threshold latches takeoff and can receive a one-time bonus only when tilt, horizontal displacement, and vertical speed are within limits. Ground contact is expected before takeoff but is a terminal crash after takeoff. The separate `reward_components` breakdown reports waiting, takeoff, and crash terms. The target remains stable hover at the configured target position; this is not a landing task.
 - Training defaults to 50,000 timesteps, saves checkpoints every 5,000 steps, and evaluates every 5,000 steps across 10 episodes. The best evaluated model and the final model are saved separately.
 
 ## Backend architecture
