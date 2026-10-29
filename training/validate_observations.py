@@ -52,13 +52,13 @@ def main():
             "passed": True,
             "raw_observation_order": [
                 "x_m", "y_m", "z_m", "vx_mps", "vy_mps", "vz_mps",
-                "roll_rad", "pitch_rad", "yaw_rad", "wx_rads", "wy_rads", "wz_rads"
+                "roll_frd_rad", "pitch_frd_rad", "yaw_frd_rad", "wx_frd_rads", "wy_frd_rads", "wz_frd_rads"
             ],
             "policy_transform": {
                 "position": "(position - target) / 12 m",
                 "linear_velocity": "velocity / 8 m/s",
-                "euler_angles": "angle / pi rad",
-                "angular_velocity": "angular_velocity / 10 rad/s"
+                "euler_angles": "FRD body Euler angles / pi rad",
+                "angular_velocity": "FRD body rates / 10 rad/s"
             },
             "checks": checks,
             "important_limit": "This checks Python-to-C API slot consistency and internal units/transform; it does not independently prove the upstream C++ physical semantics or real-world accuracy."
