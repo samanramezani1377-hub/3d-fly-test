@@ -10,8 +10,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RUNS = ROOT / "training" / "runs"
 STEPS = 100_000
-EVAL_EPISODES = 10
+# Periodic training diagnostics are cheaper; checkpoint finalists and each stage's
+# selected model still receive a larger evaluation budget.
+EVAL_EPISODES = 5
 SELECTION_EPISODES = 10
+SCREENING_EPISODES = 2
+FINALIST_COUNT = 3
+CHECKPOINT_FREQ = 20_000
+EVAL_FREQ = 20_000
 
 
 def run(args, log_path: Path | None = None) -> None:
@@ -65,8 +71,8 @@ def train(run_name: str, seed: int, initial_model: Path | None = None) -> Path:
         "--timesteps", str(STEPS), "--seed", str(seed),
         "--run-name", run_name, "--output-dir", "training/runs",
         "--device", "cpu", "--n-envs", "1", "--n-steps", "1024",
-        "--batch-size", "64", "--save-freq", "10000",
-        "--eval-freq", "10000", "--eval-episodes", str(EVAL_EPISODES),
+        "--batch-size", "64", "--save-freq", str(CHECKPOINT_FREQ),
+        "--eval-freq", str(EVAL_FREQ), "--eval-episodes", str(EVAL_EPISODES),
     ]
     if initial_model is not None:
         args.extend(["--load-model", str(initial_model)])
@@ -74,7 +80,8 @@ def train(run_name: str, seed: int, initial_model: Path | None = None) -> Path:
     run([
         sys.executable, "training/select_checkpoint.py",
         "--run-dir", str(run_dir), "--episodes", str(SELECTION_EPISODES),
-        "--seed", "3000",
+        "--screen-episodes", str(SCREENING_EPISODES),
+        "--finalist-count", str(FINALIST_COUNT), "--seed", "3000",
     ], run_dir / "checkpoint-selection.log")
     selected = run_dir / "best" / "best_model.zip"
     if not selected.is_file():
@@ -137,6 +144,12 @@ def main() -> None:
     manifest = {
         "training_stages": 5,
         "environment_steps_per_training_run": STEPS,
+        "periodic_evaluation_episodes": EVAL_EPISODES,
+        "checkpoint_frequency_transitions": CHECKPOINT_FREQ,
+        "periodic_evaluation_frequency_transitions": EVAL_FREQ,
+        "checkpoint_selection_screen_episodes": SCREENING_EPISODES,
+        "checkpoint_selection_finalists": FINALIST_COUNT,
+        "checkpoint_selection_final_episodes": SELECTION_EPISODES,
         "stage1_independent_seeds": [42, 43],
         "stages_2_to_5_continue_from_previous_selected_checkpoint": True,
         "selection_metric": [
