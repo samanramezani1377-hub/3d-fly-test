@@ -77,6 +77,28 @@ class RewardDesignTests(unittest.TestCase):
         self.assertGreater(chained_rank(safe_grounded), chained_rank(takeoff_then_crash))
         self.assertGreater(checkpoint_rank(safe_grounded), checkpoint_rank(takeoff_then_crash))
 
+    def test_checkpoint_rank_handles_missing_flight_metrics(self):
+        grounded_only = {
+            "hover_success_rate": 0.0,
+            "takeoff_success_rate": 0.0,
+            "crash_rate": 0.0,
+            "mean_absolute_final_altitude_error_m": 2.84,
+            "mean_hover_stable_fraction": 0.0,
+            "mean_absolute_vertical_speed_during_flight_mps": None,
+            "mean_return": 10.0,
+        }
+        airborne = {
+            **grounded_only,
+            "takeoff_success_rate": 1.0,
+            "mean_absolute_final_altitude_error_m": 0.2,
+            "mean_hover_stable_fraction": 0.8,
+            "mean_absolute_vertical_speed_during_flight_mps": 0.1,
+        }
+        self.assertIsInstance(chained_rank(grounded_only), tuple)
+        self.assertIsInstance(checkpoint_rank(grounded_only), tuple)
+        self.assertGreater(chained_rank(airborne), chained_rank(grounded_only))
+        self.assertGreater(checkpoint_rank(airborne), checkpoint_rank(grounded_only))
+
     def test_stable_hover_always_outranks_non_hover(self):
         baseline = {
             "hover_success_rate": 0.0,
