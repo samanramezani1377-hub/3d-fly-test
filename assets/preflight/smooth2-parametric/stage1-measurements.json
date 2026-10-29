@@ -1,0 +1,63 @@
+{
+  "stage": 1,
+  "source": "output/\u0642\u0627\u0644\u0628 \u06af\u06cc\u0631\u06cc \u0634\u062f\u0647/smooth 2/quadcopter_smooth_2_reduced.stl",
+  "source_modified": false,
+  "mesh": {
+    "faces": 11156,
+    "watertight_after_vertex_merge": true,
+    "volume_mm3": 189355.4,
+    "bounds_mm": [
+      [
+        -72.4,
+        0.0,
+        -75.0
+      ],
+      [
+        72.3,
+        26.2,
+        75.0
+      ]
+    ]
+  },
+  "axes": "Y is up; X-Z is the horizontal plane",
+  "guard_circle_fits_xz_mm": [
+    {
+      "quadrant": "+x,+z",
+      "center": [
+        38.04,
+        40.09
+      ],
+      "fitted_R": 32.21
+    },
+    {
+      "quadrant": "+x,-z",
+      "center": [
+        38.6,
+        -39.86
+      ],
+      "fitted_R": 31.34
+    },
+    {
+      "quadrant": "-x,+z",
+      "center": [
+        -39.35,
+        39.87
+      ],
+      "fitted_R": 31.97
+    },
+    {
+      "quadrant": "-x,-z",
+      "center": [
+        -38.81,
+        -39.6
+      ],
+      "fitted_R": 31.6
+    }
+  ],
+  "observations": [
+    "Four prop-guard rings sit at roughly (+-39, +-40) mm; outer radius about 35 mm (radial point density drops beyond ~36 mm).",
+    "Fitted rings are not perfectly round and centers differ by ~1.3 mm between corners: the mesh is faceted/noisy, so the rounding must come from design intent, not from the mesh.",
+    "Guard height roughly y=0..17 mm; central body/canopy rises to ~26 mm."
+  ],
+  "plan": "Rebuild as a CadQuery parametric model: symmetric true-circle guard rings, arms, motors, central body; export STEP + STL."
+}
