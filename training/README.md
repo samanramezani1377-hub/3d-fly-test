@@ -4,6 +4,10 @@ This folder provides a native C++ build of SkySim DroneCore, a Gymnasium adapter
 
 ## Important fixes in the current training version
 
+- The shared upstream patch resets rotor RPM/commands, blade-element inflow caches, VRS state, battery, and turbulence RNG at each episode reset, preventing physics state from leaking between episodes.
+- Policy attitude Euler angles and body angular rates use FRD body coordinates, matching the flight controller feedback and roll/pitch/yaw-rate action convention. Position and linear velocity remain world-Godot coordinates.
+- Fixed-throttle diagnostics run each throttle point in a fresh simulator instance and report per-rotor thrust/RPM. Telemetry altitude is sampled after integration to match the returned state.
+
 - PPO actions now use a symmetric [-1, 1] action space. The old throttle space [0, 1] interacted badly with PPO's zero-centered Gaussian actions: negative samples were clipped to zero, and the trained policy collapsed toward zero throttle.
 - The throttle action is mapped to a narrower simulator range (0.20–0.50) around a hover-centered starting estimate (0.35), reducing early exploration into extreme motor commands. This estimate comes from the repository's diagnostic sweep and is a simulation-specific starting point, not a measured physical flight value.
 - Episodes now reset on the ground and train through explicit `grounded`, `airborne`, `hovering`, and `crashed` phases. Remaining grounded receives an increasingly negative (capped) waiting penalty; crossing the takeoff threshold latches takeoff and can receive a one-time bonus only when tilt, horizontal displacement, and vertical speed are within limits. Ground contact is expected before takeoff but is a terminal crash after takeoff. The separate `reward_components` breakdown reports waiting, takeoff, and crash terms. The target remains stable hover at the configured target position; this is not a landing task.
