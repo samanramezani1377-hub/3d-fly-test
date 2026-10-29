@@ -107,7 +107,8 @@ class CudaQuadrotorPhysics:
                                base+roll_delta/2+pitch_delta/2+yaw_delta), -1).clamp_min(0)
         # First-order motor/rotor response, no Python-side per-environment loop.
         tau_motor = 0.045
-        self.rotor_thrust += (desired-self.rotor_thrust)*(self.dt/tau_motor).clamp(max=1.0)
+        motor_alpha = min(self.dt / tau_motor, 1.0)
+        self.rotor_thrust += (desired-self.rotor_thrust)*motor_alpha
         rotor_sum = self.rotor_thrust.sum(-1)
         roll_torque = self.arm*(self.rotor_thrust[:,1]+self.rotor_thrust[:,3]-self.rotor_thrust[:,0]-self.rotor_thrust[:,2])
         pitch_torque = self.arm*(self.rotor_thrust[:,0]+self.rotor_thrust[:,1]-self.rotor_thrust[:,2]-self.rotor_thrust[:,3])
