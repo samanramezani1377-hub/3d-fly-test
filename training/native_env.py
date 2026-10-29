@@ -13,7 +13,7 @@ from gymnasium import spaces
 class NativeSkySimEnv(gym.Env):
     """Hover task backed by the native DroneCore C API.
 
-    Observation: [x,y,z,vx,vy,vz,roll,pitch,yaw,wx,wy,wz].
+    Observation: world-Godot [x,y,z,vx,vy,vz] + body-FRD [roll,pitch,yaw,wx,wy,wz].
     Action is symmetric [-1, 1] on every dimension so PPO does not clip a
     zero-centered Gaussian throttle distribution to zero. Throttle is mapped
     to 0.20..0.50 around a configurable throttle bias. The default 0.35 is not assumed to be a calibrated hover throttle.
@@ -68,6 +68,10 @@ class NativeSkySimEnv(gym.Env):
         self.core.skysim_get_obs.argtypes = [ptr, ctypes.POINTER(dbl)]
         self.core.skysim_altitude.argtypes = [ptr]
         self.core.skysim_altitude.restype = dbl
+        self.core.skysim_rotor_thrust.argtypes = [ptr, ctypes.c_int]
+        self.core.skysim_rotor_thrust.restype = dbl
+        self.core.skysim_rotor_omega.argtypes = [ptr, ctypes.c_int]
+        self.core.skysim_rotor_omega.restype = dbl
         self.handle = self.core.skysim_create()
         if not self.handle:
             raise RuntimeError("skysim_create returned a null pointer")
@@ -332,6 +336,9 @@ class NativeSkySimEnv(gym.Env):
             "reward_total": float(reward),
             "angular_velocity_xyz_rads": angular_velocity.tolist(),
             "backend": "native-drone-core",
+            "telemetry_altitude_m": float(self.core.skysim_altitude(self.handle)),
+            "rotor_thrust_n": [float(self.core.skysim_rotor_thrust(self.handle, i)) for i in range(4)],
+            "rotor_omega_rads": [float(self.core.skysim_rotor_omega(self.handle, i)) for i in range(4)],
         }
         return obs, float(reward), terminated, truncated, info
 
