@@ -203,12 +203,6 @@ class NativeSkySimEnv(gym.Env):
         attitude = obs[6:9].astype(np.float64)
         position_error = position - self.target
         horizontal_error_sq = float(position_error[0] ** 2 + position_error[2] ** 2)
-        crashed = bool(
-            position[1] <= 0.16
-            or position[1] > 12.0
-            or np.linalg.norm(position[[0, 2]]) > 12.0
-        )
-
         altitude_error = abs(float(position_error[1]))
         horizontal_error = float(np.sqrt(horizontal_error_sq))
         angular_velocity = obs[9:12].astype(np.float64)
