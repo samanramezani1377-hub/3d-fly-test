@@ -13,11 +13,20 @@ import numpy as np
 
 
 def run_throttle_probe(env, throttle: float, steps: int) -> dict:
+    """Probe a physical simulator throttle value, not PPO's normalized action."""
+    min_throttle = env.throttle_center - env.throttle_span
+    max_throttle = env.throttle_center + env.throttle_span
+    if not min_throttle <= throttle <= max_throttle:
+        raise ValueError(
+            f"physical throttle must be between {min_throttle:.3f} and {max_throttle:.3f}; "
+            f"got {throttle:.3f}"
+        )
+    action_throttle = (throttle - env.throttle_center) / env.throttle_span
     obs, _ = env.reset(seed=123)
     initial_position = [float(obs[0]), float(obs[1]), float(obs[2])]
     trace = []
     for step in range(steps):
-        action = np.array([0.0, 0.0, 0.0, throttle], dtype=np.float32)
+        action = np.array([0.0, 0.0, 0.0, action_throttle], dtype=np.float32)
         obs, reward, terminated, truncated, info = env.step(action)
         trace.append({
             "step": step + 1,
@@ -30,7 +39,9 @@ def run_throttle_probe(env, throttle: float, steps: int) -> dict:
             "roll_rad": float(obs[6]),
             "pitch_rad": float(obs[7]),
             "yaw_rad": float(obs[8]),
-            "throttle": float(throttle),
+            "throttle": float(info.get("throttle", throttle)),
+            "requested_physical_throttle": float(throttle),
+            "action_throttle": float(action_throttle),
             "reward": float(reward),
             "terminated": bool(terminated),
             "truncated": bool(truncated),
@@ -41,6 +52,7 @@ def run_throttle_probe(env, throttle: float, steps: int) -> dict:
     last = trace[-1] if trace else {}
     return {
         "throttle": float(throttle),
+        "action_throttle": float(action_throttle),
         "steps_run": len(trace),
         "initial_position_xyz_m": initial_position,
         "final_position_xyz_m": [last.get("x_m"), last.get("altitude_m"), last.get("z_m")],
@@ -98,14 +110,20 @@ def main(argv=None):
     parser.add_argument("--model", type=Path, default=None, help="Optional saved Stable-Baselines3 PPO .zip model")
     parser.add_argument("--steps", type=int, default=100, help="Maximum steps per fixed-throttle probe")
     parser.add_argument("--policy-steps", type=int, default=40, help="Maximum PPO rollout steps when --model is supplied")
-    parser.add_argument("--throttles", type=float, nargs="+", default=[0.0, 0.25, 0.5, 0.75, 1.0])
+    parser.add_argument(
+        "--throttles",
+        type=float,
+        nargs="+",
+        default=[0.20, 0.275, 0.35, 0.425, 0.50],
+        help="physical simulator throttle values (default range: 0.20..0.50)",
+    )
     parser.add_argument("--output", type=Path, default=Path("training/runs/control-diagnostics.json"))
     args = parser.parse_args(argv)
 
     if args.steps <= 0 or args.policy_steps <= 0:
         parser.error("--steps and --policy-steps must be positive")
-    if any(t < 0.0 or t > 1.0 for t in args.throttles):
-        parser.error("all throttle values must be between 0 and 1")
+    if any(not np.isfinite(t) for t in args.throttles):
+        parser.error("all throttle values must be finite numbers")
     if args.model is not None and not args.model.is_file():
         parser.error(f"model not found: {args.model}")
 
@@ -118,6 +136,14 @@ def main(argv=None):
         ) from exc
 
     env = NativeSkySimEnv()
+    min_throttle = env.throttle_center - env.throttle_span
+    max_throttle = env.throttle_center + env.throttle_span
+    if any(t < min_throttle or t > max_throttle for t in args.throttles):
+        env.close()
+        parser.error(
+            f"physical throttle values must be between {min_throttle:.3f} and {max_throttle:.3f} "
+            "for this environment"
+        )
     try:
         probes = [run_throttle_probe(env, t, args.steps) for t in args.throttles]
         policy = run_policy_probe(env, args.model, args.policy_steps) if args.model else None
