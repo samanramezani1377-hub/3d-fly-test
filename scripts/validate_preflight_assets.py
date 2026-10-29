@@ -31,26 +31,26 @@ def read_json(path: Path, errors: list[str]):
 
 def display_path(path: Path) -> str:
     try:
-        return str(path.relative_to(ROOT))
+        return str(display_path(path))
     except ValueError:
         return str(path)
 
 
 def check_step(path: Path, errors: list[str]) -> None:
     if not path.is_file():
-        fail(errors, f"Missing STEP file: {path.relative_to(ROOT)}")
+        fail(errors, f"Missing STEP file: {display_path(path)}")
         return
     if path.stat().st_size < 100:
-        fail(errors, f"STEP file is unexpectedly small: {path.relative_to(ROOT)}")
+        fail(errors, f"STEP file is unexpectedly small: {display_path(path)}")
         return
     with path.open("rb") as stream:
         head = stream.read(4096)
         stream.seek(max(0, path.stat().st_size - 4096))
         tail = stream.read()
     if b"ISO-10303-21;" not in head:
-        fail(errors, f"Missing ISO-10303-21 header: {path.relative_to(ROOT)}")
+        fail(errors, f"Missing ISO-10303-21 header: {display_path(path)}")
     if b"END-ISO-10303-21;" not in tail:
-        fail(errors, f"Missing END-ISO-10303-21 trailer: {path.relative_to(ROOT)}")
+        fail(errors, f"Missing END-ISO-10303-21 trailer: {display_path(path)}")
 
 
 def main() -> int:
