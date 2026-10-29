@@ -151,11 +151,10 @@ def main():
                 advantages = torch.zeros_like(rew_buf)
                 last_gae = torch.zeros(args.n_envs, device=device)
                 for t in reversed(range(args.n_steps)):
+                    next_nonterminal = 1.0 - done_buf[t]
                     if t == args.n_steps - 1:
-                        next_nonterminal = 1.0 - done_buf[t]
                         next_values = next_value
                     else:
-                        next_nonterminal = 1.0 - done_buf[t + 1]
                         next_values = val_buf[t + 1]
                     delta = rew_buf[t] + args.gamma * next_values * next_nonterminal - val_buf[t]
                     last_gae = delta + args.gamma * args.gae_lambda * next_nonterminal * last_gae
