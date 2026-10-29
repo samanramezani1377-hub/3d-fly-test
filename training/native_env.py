@@ -189,7 +189,7 @@ class NativeSkySimEnv(gym.Env):
         crash_penalty = 100.0 if crashed else 0.0
         # Increasing but capped penalty discourages waiting on the ground.
         # Staying on the ground must not be a cheap local optimum.
-        ground_wait_penalty = min(0.02 * max(int(ground_wait_steps), 0), 2.0) if not has_taken_off else 0.0
+        ground_wait_penalty = min(0.015 * max(int(ground_wait_steps), 0), 0.75) if not has_taken_off else 0.0
         reward = (
             altitude_term
             + horizontal_term
