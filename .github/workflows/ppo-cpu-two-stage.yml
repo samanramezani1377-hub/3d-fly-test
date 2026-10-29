@@ -109,10 +109,6 @@ jobs:
             training/runs/ppo-stage4-continued/
             training/runs/ppo-stage5-continued/
             training/runs/control-diagnostics.json
-            training/runs/parallel-env-benchmark.json
-            training/runs/parallel-benchmark-envs-1/
-            training/runs/parallel-benchmark-envs-4/
-            training/runs/parallel-benchmark-envs-8/
             observation-validation.json
             control-diagnostics-summary.json
             five-stage-training.log
