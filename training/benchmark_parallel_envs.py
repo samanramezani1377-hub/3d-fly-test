@@ -46,7 +46,7 @@ def main():
         "note": "The five-stage pipeline is configured for 8 environments as requested; benchmark result is diagnostic and does not automatically override that setting.",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(payload, indent=2) + "\\n", encoding="utf-8")
+    args.output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(payload, indent=2))
 
 
