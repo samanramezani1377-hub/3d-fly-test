@@ -139,7 +139,16 @@ The starter controller is a basic example, not a tuned or certified flight contr
 - [ ] Consider automated parameter sweeps only after a single run is reliable.
 - [ ] Keep the upstream simulator revision pinned and review upstream changes before updating it.
 
-## 8. Known limitations and risks
+## 8. Structured flight-test logging
+
+The browser page now includes a recorder that samples simulator telemetry at approximately 20 Hz and can export:
+
+- **JSON**: run metadata plus samples, including scenario name, UTC start/stop timestamps, repository commit SHA, pinned upstream simulator revision, controller source, full configured drone parameters, and optional GLB SHA-256.
+- **CSV**: time-series telemetry for spreadsheet analysis.
+
+Captured samples include simulation time, position and velocity, attitude and angular rates, altitude, vertical speed, thrust, commanded control values, armed state, and controller mode. This feature is implemented in the preparation script and must still be verified in a successful deployed browser session. It does not yet calculate pass/fail or derived performance metrics automatically.
+
+## 9. Known limitations and risks
 
 1. **GLB import is visual-only.** It does not turn the mesh into a complete physics model.
 2. **Simplified quad-X physics.** Arbitrary motor/prop layouts, prop guards, ducts, body drag, structural flex, and detailed aerodynamic interactions are not necessarily represented.
@@ -149,7 +158,7 @@ The starter controller is a basic example, not a tuned or certified flight contr
 6. **No guarantee of physical fidelity.** Simulation outcomes depend on model assumptions and parameter quality.
 7. **No real-flight safety claim.** A successful browser simulation does not certify a real drone as safe to fly.
 
-## 9. Definition of done for the first usable milestone
+## 10. Definition of done for the first usable milestone
 
 The first milestone is complete only when all of these are true:
 
