@@ -27,6 +27,6 @@ def test_step_envelope_check_rejects_non_step(tmp_path):
 def test_step_envelope_check_accepts_minimal_envelope(tmp_path):
     errors = []
     good = tmp_path / "minimal.step"
-    good.write_bytes(b"ISO-10303-21;\nHEADER;\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n")
+    good.write_bytes(b"ISO-10303-21;\nHEADER;\n/* " + (b"fixture " * 20) + b"*/\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n")
     MODULE.check_step(good, errors)
     assert errors == []
