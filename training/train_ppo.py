@@ -32,8 +32,6 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
-    if args.port < 1 or args.port > 65535:
-        raise SystemExit("--port must be in [1, 65535]")
     if args.timesteps <= 0 or args.max_steps <= 0 or args.save_freq <= 0:
         raise SystemExit("--timesteps, --max-steps, and --save-freq must be positive")
     if not args.run_name or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for c in args.run_name):
