@@ -124,9 +124,9 @@ class CudaHoverBatch:
         reward -= crashed.float() * 100.0
         timeout = self.step_count >= self.max_steps
         done = crashed | timeout
-        obs = self.observation()
-        # Auto-reset only completed environments; preserve terminal observations
-        # separately for correct value bootstrapping in a production implementation.
+        # Reset completed rows on-device before producing the next observation.
+        # The done mask prevents value bootstrapping across these resets.
         if done.any():
             self.reset(done)
+        obs = self.observation()
         return obs, reward, done, {"crashed": crashed}
