@@ -9,16 +9,21 @@ import sys
 from pathlib import Path
 
 
+def _metric(report: dict, key: str, default: float) -> float:
+    value = report.get(key)
+    return default if value is None else float(value)
+
+
 def rank(report):
     return (
-        float(report["hover_success_rate"]),
-        -float(report["crash_rate"]),
-        float(report.get("takeoff_success_rate", 0.0)),
-        -float(report["mean_absolute_final_altitude_error_m"]),
-        float(report["mean_hover_stable_fraction"]),
-        -float(report["mean_absolute_vertical_speed_during_flight_mps"]),
-        -float(report["mean_absolute_final_altitude_error_m"]),
-        float(report["mean_return"]),
+        _metric(report, "hover_success_rate", 0.0),
+        -_metric(report, "crash_rate", 1.0),
+        _metric(report, "takeoff_success_rate", 0.0),
+        -_metric(report, "mean_absolute_final_altitude_error_m", float("inf")),
+        _metric(report, "mean_hover_stable_fraction", 0.0),
+        -_metric(report, "mean_absolute_vertical_speed_during_flight_mps", float("inf")),
+        -_metric(report, "mean_absolute_final_altitude_error_m", float("inf")),
+        _metric(report, "mean_return", float("-inf")),
     )
 
 
@@ -44,8 +49,8 @@ def main(argv=None):
                         help="Number of screened checkpoints to re-evaluate fully")
     parser.add_argument("--seed", type=int, default=3000)
     args = parser.parse_args(argv)
-    if args.episodes <= 0 or args.screen_episodes <= 0 or args.finalist_count <= 0:
-        parser.error("--episodes, --screen-episodes and --finalist-count must be positive")
+    if args.episodes < 2 or args.screen_episodes <= 0 or args.finalist_count <= 0:
+        parser.error("--episodes must be at least 2; --screen-episodes and --finalist-count must be positive")
     if args.screen_episodes > args.episodes:
         parser.error("--screen-episodes must not exceed --episodes")
 
@@ -87,16 +92,42 @@ def main(argv=None):
         model_path = Path(candidate["model"])
         reports = []
         seed_reports = []
-        for seed_offset in (0, 10_000):
+        episode_budgets = (args.episodes // 2, args.episodes - args.episodes // 2)
+        evaluation_seeds = (args.seed, args.seed + 10_000)
+        for seed_offset, episode_budget in zip((0, 10_000), episode_budgets):
             seed_report_path = report_dir / f"finalist-{index:03d}-seed-{args.seed + seed_offset}.json"
-            reports.append(evaluate(model_path, seed_report_path, max(1, args.episodes // 2), args.seed + seed_offset))
+            reports.append(evaluate(
+                model_path, seed_report_path, episode_budget, args.seed + seed_offset
+            ))
             seed_reports.append(str(seed_report_path))
-        keys = ["hover_success_rate", "takeoff_success_rate", "crash_rate",
-                "mean_hover_stable_fraction", "mean_absolute_vertical_speed_during_flight_mps",
-                "mean_absolute_final_altitude_error_m", "mean_return"]
-        aggregate = {key: sum(float(report.get(key, 0.0)) for report in reports) / len(reports) for key in keys}
-        evaluated.append({"model": str(model_path), "evaluation": seed_reports,
-                          "evaluation_seeds": [args.seed, args.seed + 10_000], **aggregate})
+
+        keys = [
+            "hover_success_rate", "takeoff_success_rate", "crash_rate",
+            "mean_hover_stable_fraction", "mean_absolute_vertical_speed_during_flight_mps",
+            "mean_absolute_final_altitude_error_m", "mean_return",
+        ]
+        aggregate = {}
+        for key in keys:
+            usable = [report for report in reports if report.get(key) is not None]
+            if not usable:
+                aggregate[key] = None
+                continue
+            weights = [
+                int(report.get("flight_episodes", 0))
+                if key == "mean_absolute_vertical_speed_during_flight_mps"
+                else int(report["episodes"])
+                for report in usable
+            ]
+            aggregate[key] = sum(
+                float(report[key]) * weight for report, weight in zip(usable, weights)
+            ) / sum(weights)
+        evaluated.append({
+            "model": str(model_path),
+            "evaluation": seed_reports,
+            "evaluation_seeds": list(evaluation_seeds),
+            "evaluation_episode_budgets": list(episode_budgets),
+            **aggregate,
+        })
 
     winner = max(evaluated, key=rank)
     destination = run_dir / "best" / "best_model.zip"
@@ -119,6 +150,7 @@ def main(argv=None):
             "candidate_count": len(screened),
             "finalist_count": len(finalists),
             "full_evaluation_episodes_per_finalist": args.episodes,
+            "evaluation_seeds": [args.seed, args.seed + 10_000],
             "candidates": screened,
         },
         "candidate_count": len(candidates),
