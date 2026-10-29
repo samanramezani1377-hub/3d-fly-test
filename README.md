@@ -7,6 +7,7 @@ This repository prepares a customizable SkySim browser flight-test environment.
 - Deploys the upstream SkySim WebAssembly flight simulator to this repository's GitHub Pages.
 - Builds the physics core in GitHub Actions whenever `main` changes, or on manual workflow dispatch.
 - Loads the Python controller from `controllers/controller.py` as the default policy in the browser.
+- Records repeatable flight-test telemetry in the browser and exports JSON (metadata + samples) or CSV (time series).
 - Applies physical parameters from `config/drone.json` to the simulator before building.
 - If `models/current/drone.glb` exists, loads it as a **visual model** in the browser. GLB appearance does not automatically change aerodynamics; physical values must also be entered in `config/drone.json`.
 
@@ -16,6 +17,16 @@ This repository prepares a customizable SkySim browser flight-test environment.
 2. Open **Actions → Deploy SkySim flight test → Run workflow** (or push a commit to `main`).
 3. Wait for the workflow to finish, then open the GitHub Pages URL shown in the deployment.
 4. Select **Python** in the simulator and press **Run Python ▶**. The controller in `controllers/controller.py` is preloaded by the deployment.
+
+## Record and compare flight tests
+
+1. Deploy the latest commit and open the simulator.
+2. Enter a scenario name in **Flight test recorder** (for example `baseline-hover-v1`).
+3. Press **Start recording**, run the desired test, then press **Stop**.
+4. Download both JSON and CSV. JSON includes the scenario, timestamps, repository commit, pinned simulator revision, controller source, full configured parameters, optional GLB SHA-256, and telemetry samples. CSV contains the time series for spreadsheet analysis.
+5. Keep each run's files together when comparing controller or drone revisions. Use the same scenario and initial conditions for fair comparisons.
+
+Samples are captured at approximately 20 Hz while the simulator page is running. Available fields include position/velocity, attitude and angular rates, altitude, vertical speed, thrust, commanded roll/pitch/yaw-rate/throttle, armed state, and controller mode. This is simulation telemetry; it does not by itself establish physical accuracy or flight safety.
 
 ## Change the drone
 
