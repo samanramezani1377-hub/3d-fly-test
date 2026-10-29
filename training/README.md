@@ -23,16 +23,28 @@ Requires Python 3.10+ and a C++ compiler with C++20 support (for example, g++).
     python training/build_native_core.py
     python training/train_ppo.py --timesteps 50000 --seed 42 --run-name ppo-hover-50000 --save-freq 5000 --eval-freq 5000
 
-For a single PPO policy trained from 40 parallel environments for 40 million aggregate transitions:
+## Production five-stage CPU training
 
-    python training/train_ppo.py --timesteps 40000000 --n-envs 40 --n-steps 1000 --batch-size 4000 --seed 42 --run-name ppo-hover-parallel-40m --save-freq 400000 --eval-freq 400000 --eval-episodes 10
+The production workflow is `.github/workflows/ppo-cpu-two-stage.yml` and runs `training/run_five_stage.py` on CPU. Its current configuration is:
 
-The rollout size is `n-envs * n-steps` (40,000 samples per update for this configuration). Callback intervals are specified in aggregate environment transitions. Forty subprocesses can exceed available CPU/RAM in some Colab sessions; reduce `--n-envs` if needed, and note that 40 million is the aggregate transition target, not 40 million per worker.
+- Five chained stages, each requesting 100,000 aggregate environment transitions.
+- Stage 1 trains two independent candidates (seeds 42 and 40) concurrently; each candidate uses 4 environments.
+- Stages 2–5 each use 4 environments and continue from the previous stage's selected checkpoint.
+- Stage 1 therefore runs 8 simulator environments concurrently in total (two training processes × four environments); each later stage runs four.
+- Checkpoints and periodic evaluation are every 20,000 aggregate transitions. Periodic evaluation uses 5 episodes.
+- Candidate screening uses 2 episodes; up to 3 finalists receive 10 evaluation episodes each, split evenly across two independent evaluation seeds.
+- The standalone 1/4/8-environment benchmarks are separate workflows/scripts and are not invoked by production five-stage training.
+
+Run locally after building the native core:
+
+    python training/run_five_stage.py
+
+The GitHub Actions workflow installs CPU-only PyTorch and runs the five-stage chain. The full run can take several hours. The manifest records the selected seed/checkpoint at each stage and whether the final model meets the simulation-only eligibility gate.
     python training/evaluate.py --model training/runs/ppo-hover-50000/final_model.zip --episodes 10
 
 ## Google Colab
 
-Open the [parallel 40-million-transition Colab notebook](https://colab.research.google.com/github/samanramezani1377-hub/3d-fly-test/blob/feat/parallel-single-ppo-40m/notebooks/colab_train_ppo.ipynb). It installs dependencies, builds the native core, trains one shared PPO policy using 40 parallel environments, evaluates the final and best evaluated models, and downloads a ZIP containing models, checkpoints, logs, and reports. Colab sessions can terminate, and 40 workers may exceed available resources, so download the ZIP before closing and reduce the worker count if needed.
+Open the [experimental 40-million-transition Colab notebook](https://colab.research.google.com/github/samanramezani1377-hub/3d-fly-test/blob/main/notebooks/colab_train_ppo.ipynb). This is a separate research experiment (one shared policy, 40 parallel environments), not the production five-stage CPU workflow. It may exceed Colab resources and is not a recommended substitute for the chained pipeline. Download its ZIP before closing the session.
 
 ## Run artifacts
 
