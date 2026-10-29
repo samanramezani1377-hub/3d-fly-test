@@ -178,7 +178,7 @@ jobs:
         env:
           INITIAL_MODEL: ${{ steps.select.outputs.model }}
           STAGE2_TIMESTEPS: "100000"
-          EVAL_EPISODES: ${{ env.EVAL_EPISODES }}
+          EVAL_EPISODES: "10"
         run: |
           python training/train_ppo.py \
             --timesteps "$STAGE2_TIMESTEPS" \
