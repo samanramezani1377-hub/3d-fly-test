@@ -15,7 +15,7 @@ import torch
 from torch import nn
 from torch.distributions import Normal
 
-from cuda_hover_batch import CudaHoverBatch
+from cuda_physics_env import CudaPhysicsHoverBatch
 
 
 def args_parser():
@@ -97,7 +97,7 @@ def main():
 
     run_dir = args.output_dir / args.run_name
     run_dir.mkdir(parents=True, exist_ok=True)
-    env = CudaHoverBatch(args.n_envs, device=str(device))
+    env = CudaPhysicsHoverBatch(args.n_envs, device=str(device))
     model = ActorCritic().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, eps=1e-5)
 
@@ -115,7 +115,7 @@ def main():
     next_save = args.save_freq
     metadata = {
         "algorithm": "PPO",
-        "backend": "torch-cuda-batched-surrogate",
+        "backend": "torch-cuda-four-rotor-prototype",
         "device_required": "cuda",
         "shared_policy": True,
         "parallel_environments": args.n_envs,
@@ -125,7 +125,7 @@ def main():
         "rollout_size": rollout_size,
         "epochs": args.epochs,
         "physics_parity": False,
-        "warning": "GPU-native surrogate, not equivalent to pinned DroneCore; do not treat as validated flight physics.",
+        "warning": "GPU-native four-rotor rigid-body prototype; not numerically equivalent to pinned DroneCore and not validated for real flight.",
         "python_cpu_role": "setup, filesystem, periodic scalar logging/checkpoint only; simulation, rewards, rollout tensors and PPO updates are CUDA tensors",
     }
     (run_dir / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
