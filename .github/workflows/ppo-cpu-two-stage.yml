@@ -94,6 +94,12 @@ jobs:
             --save-freq 10000 \
             --eval-freq 10000 \
             --eval-episodes "$EVAL_EPISODES" 2>&1 | tee "ppo-seed$SEED.log"
+      - name: Select best Stage 1 checkpoint by hover stability
+        run: |
+          python training/select_checkpoint.py \
+            --run-dir "training/runs/ppo-hover-100k-seed${{ matrix.seed }}" \
+            --episodes 5 --seed 3000 \
+            | tee "checkpoint-selection-seed${{ matrix.seed }}.json"
       - name: Trace trained policy actions and physical state
         if: success()
         run: |
@@ -113,6 +119,7 @@ jobs:
             training/runs/control-diagnostics.json
             training/runs/ppo-hover-100k-seed${{ matrix.seed }}/policy-diagnostics.json
             policy-diagnostics-seed${{ matrix.seed }}.json
+            checkpoint-selection-seed${{ matrix.seed }}.json
             observation-validation.json
             control-diagnostics-summary.json
             ppo-seed${{ matrix.seed }}.log
@@ -257,6 +264,13 @@ jobs:
             --eval-freq 10000 \
             --eval-episodes "$EVAL_EPISODES" 2>&1 | tee ppo-stage2.log
 
+      - name: Select best Stage 2 checkpoint by hover stability
+        if: success()
+        run: |
+          python training/select_checkpoint.py \
+            --run-dir training/runs/ppo-stage2-continued \
+            --episodes 5 --seed 3000 \
+            | tee checkpoint-selection-stage2.json
       - name: Evaluate selected Stage 1 checkpoint
         run: |
           python training/evaluate.py \
@@ -369,6 +383,7 @@ jobs:
             stage1-selected-evaluation.json
             stage2-best-evaluation.json
             stage2-evaluation-notes.txt
+            checkpoint-selection-stage2.json
             ppo-stage2.log
           if-no-files-found: warn
           retention-days: 30
