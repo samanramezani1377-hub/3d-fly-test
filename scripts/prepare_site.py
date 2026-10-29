@@ -5,6 +5,7 @@ import json
 import re
 import hashlib
 import shutil
+import subprocess
 from pathlib import Path
 
 
@@ -69,7 +70,7 @@ def main():
     core = replace_once(core, r"DroneCore\(\) \{ build_rotors\(\); reset\(0, 2, 0\); \}", f"DroneCore() {{ build_rotors(); _battery.configure({battery_capacity_mah}, {battery_cells}, {battery_resistance}, _max_voltage); reset(0, 2, 0); }}", "battery configuration")
     header_path.write_text(core, encoding="utf-8")
 
-    run(["python", str(root / "scripts" / "patch_native_core.py"), "--upstream", upstream], cwd=root)
+    subprocess.run(["python", str(root / "scripts" / "patch_native_core.py"), "--upstream", str(upstream)], cwd=root, check=True)
 
     cpp_path = upstream / "web/core/drone_core.cpp"
     cpp = cpp_path.read_text(encoding="utf-8")
