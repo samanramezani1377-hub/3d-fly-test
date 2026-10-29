@@ -169,6 +169,8 @@ def main(argv=None):
             "final_vertical_speed_mps": p["final_velocity_xyz_mps"][1],
             "terminated": p["terminated"],
             "crashed": p["crashed"],
+            "rotor_thrust_n": p["trace"][-1].get("rotor_thrust_n") if p["trace"] else None,
+            "rotor_omega_rads": p["trace"][-1].get("rotor_omega_rads") if p["trace"] else None,
         } for p in probes],
         "ppo_summary": None if policy is None else {
             "steps_run": policy["steps_run"],
