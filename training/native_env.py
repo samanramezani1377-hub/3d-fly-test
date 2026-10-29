@@ -1,4 +1,4 @@
-"""Gymnasium environment over the same native C++ DroneCore sources used for WASM."""
+"""Gymnasium environment over the project's native C++ DroneCore build."""
 from __future__ import annotations
 
 import ctypes
@@ -11,10 +11,12 @@ from gymnasium import spaces
 
 
 class NativeSkySimEnv(gym.Env):
-    """Hover task backed directly by the project's native DroneCore shared library.
+    """Hover task backed by the native DroneCore C API.
 
-    Action: normalized roll, pitch, yaw-rate, throttle.
-    Observation: [x,y,z,vx,vy,vz,roll,pitch,yaw,wx,wy,wz] in core SI/radian units.
+    Observation: [x,y,z,vx,vy,vz,roll,pitch,yaw,wx,wy,wz].
+    Action is symmetric [-1, 1] on every dimension so PPO does not clip a
+    zero-centered Gaussian throttle distribution to zero. Throttle is mapped
+    to 0..0.70 with 0.35 as the initial hover estimate from the control sweep.
     """
 
     metadata = {"render_modes": []}
@@ -27,6 +29,8 @@ class NativeSkySimEnv(gym.Env):
         dt=1.0 / 50.0,
         max_tilt_rad=0.785,
         max_yaw_rate_rads=3.14,
+        throttle_center=0.35,
+        throttle_span=0.35,
     ):
         super().__init__()
         self.library_path = Path(library_path or Path(__file__).with_name("libskysim_core.so")).resolve()
@@ -40,10 +44,14 @@ class NativeSkySimEnv(gym.Env):
             raise ValueError("target must contain exactly three coordinates")
         if max_steps <= 0 or dt <= 0:
             raise ValueError("max_steps and dt must be positive")
+        if not 0.0 < throttle_center < 1.0 or not 0.0 < throttle_span <= 1.0:
+            raise ValueError("throttle_center must be in (0,1) and throttle_span in (0,1]")
         self.max_steps = int(max_steps)
         self.dt = float(dt)
         self.max_tilt_rad = float(max_tilt_rad)
         self.max_yaw_rate_rads = float(max_yaw_rate_rads)
+        self.throttle_center = float(throttle_center)
+        self.throttle_span = float(throttle_span)
 
         self.core = ctypes.CDLL(str(self.library_path))
         ptr = ctypes.c_void_p
@@ -64,16 +72,20 @@ class NativeSkySimEnv(gym.Env):
         if not self.handle:
             raise RuntimeError("skysim_create returned a null pointer")
 
-        self.action_space = spaces.Box(
-            low=np.array([-1.0, -1.0, -1.0, 0.0], dtype=np.float32),
-            high=np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32),
-            dtype=np.float32,
-        )
-        self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(12,), dtype=np.float32
-        )
+        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(4,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(12,), dtype=np.float32)
         self._step_count = 0
         self._closed = False
+
+    @staticmethod
+    def map_action(action, throttle_center=0.35, throttle_span=0.35):
+        """Map PPO's symmetric action vector into simulator controls."""
+        action = np.asarray(action, dtype=np.float64)
+        if action.shape != (4,):
+            raise ValueError("action must be [roll, pitch, yaw_rate, throttle]")
+        action = np.clip(action, -1.0, 1.0)
+        throttle = float(np.clip(throttle_center + throttle_span * action[3], 0.0, 1.0))
+        return action, throttle
 
     def _observation(self):
         out = (ctypes.c_double * 12)()
@@ -82,26 +94,23 @@ class NativeSkySimEnv(gym.Env):
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
-        # Reset to a fixed initial state for reproducible comparisons.
         self.core.skysim_reset(self.handle, 0.0, 2.0, 0.0)
         wind = self._config.get("wind_mps", {})
-        self.core.skysim_set_wind(self.handle, float(wind.get("x", 0)), float(wind.get("y", 0)), float(wind.get("z", 0)))
+        self.core.skysim_set_wind(
+            self.handle, float(wind.get("x", 0)), float(wind.get("y", 0)), float(wind.get("z", 0))
+        )
         self.core.skysim_arm(self.handle, 1)
         self._step_count = 0
-        obs = self._observation()
-        return obs, {"target_xyz_m": self.target.tolist(), "backend": "native-drone-core"}
+        return self._observation(), {"target_xyz_m": self.target.tolist(), "backend": "native-drone-core"}
 
     def step(self, action):
-        action = np.asarray(action, dtype=np.float64)
-        if action.shape != (4,):
-            raise ValueError("action must be [roll, pitch, yaw_rate, throttle]")
-        action = np.clip(action, self.action_space.low, self.action_space.high)
+        action, throttle = self.map_action(action, self.throttle_center, self.throttle_span)
         self.core.skysim_set_attitude(
             self.handle,
             float(action[0] * self.max_tilt_rad),
             float(action[1] * self.max_tilt_rad),
             float(action[2] * self.max_yaw_rate_rads),
-            float(action[3]),
+            throttle,
         )
         self.core.skysim_step(self.handle, self.dt)
         self._step_count += 1
@@ -111,19 +120,34 @@ class NativeSkySimEnv(gym.Env):
         velocity = obs[3:6].astype(np.float64)
         attitude = obs[6:9].astype(np.float64)
         position_error = position - self.target
-        reward = (
-            -1.0 * float(np.dot(position_error, position_error))
-            -0.08 * float(np.dot(velocity, velocity))
-            -0.15 * float(np.dot(attitude, attitude))
-            -0.002 * float(np.dot(action[:3], action[:3]))
+        horizontal_error_sq = float(position_error[0] ** 2 + position_error[2] ** 2)
+        crashed = bool(
+            position[1] <= 0.16
+            or position[1] > 12.0
+            or np.linalg.norm(position[[0, 2]]) > 12.0
         )
-        crashed = bool(position[1] <= 0.16 or position[1] > 12.0 or np.linalg.norm(position[[0, 2]]) > 12.0)
+
+        # Dense, interpretable shaping: reward staying near the target and
+        # damped motion; a large explicit penalty makes terminal crashes costly.
+        reward = (
+            1.0
+            - 2.5 * float(position_error[1] ** 2)
+            - 1.0 * horizontal_error_sq
+            - 0.20 * float(np.dot(velocity, velocity))
+            - 0.12 * float(np.dot(attitude, attitude))
+            - 0.005 * float(np.dot(action[:3], action[:3]))
+            - 0.002 * float((throttle - self.throttle_center) ** 2)
+        )
+        if crashed:
+            reward -= 100.0
+
         terminated = crashed
         truncated = self._step_count >= self.max_steps
         info = {
             "position_xyz_m": position.tolist(),
             "velocity_xyz_mps": velocity.tolist(),
             "target_xyz_m": self.target.tolist(),
+            "throttle": throttle,
             "crashed": crashed,
             "backend": "native-drone-core",
         }
