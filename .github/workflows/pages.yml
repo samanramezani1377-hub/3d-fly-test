@@ -43,7 +43,7 @@ jobs:
           actions-cache-folder: emsdk-cache
 
       - name: Apply this repository's drone configuration and controller
-        run: python3 scripts/prepare_site.py --upstream upstream
+        run: python3 scripts/prepare_site.py --upstream upstream --commit-sha "$GITHUB_SHA" --upstream-ref a31864f999418531775980b879979ce4c57e791d
 
       - name: Build SkySim WebAssembly physics core
         run: |
