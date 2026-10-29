@@ -10,6 +10,7 @@ on:
       - ".github/workflows/ppo-reward-regression.yml"
   push:
     branches:
+      - main
       - "fix/**"
     paths:
       - "training/native_env.py"
