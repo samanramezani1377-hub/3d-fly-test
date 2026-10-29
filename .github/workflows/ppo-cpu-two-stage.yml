@@ -2,22 +2,6 @@ name: PPO two-stage CPU training
 
 on:
   workflow_dispatch:
-    inputs:
-      timesteps_per_stage1_run:
-        description: "Timesteps for each parallel Stage 1 run"
-        required: true
-        default: "100000"
-        type: string
-      stage2_timesteps:
-        description: "Timesteps for Stage 2 continuation"
-        required: true
-        default: "100000"
-        type: string
-      eval_episodes:
-        description: "Episodes per periodic evaluation"
-        required: true
-        default: "10"
-        type: string
 
 permissions:
   contents: read
@@ -32,6 +16,9 @@ env:
   OPENBLAS_NUM_THREADS: "1"
   NUMEXPR_NUM_THREADS: "1"
   PYTHONUNBUFFERED: "1"
+  STAGE1_TIMESTEPS: "100000"
+  STAGE2_TIMESTEPS: "100000"
+  EVAL_EPISODES: "10"
 
 jobs:
   stage1:
@@ -79,8 +66,8 @@ jobs:
       - name: Train Stage 1 candidate
         env:
           SEED: ${{ matrix.seed }}
-          TIMESTEPS: ${{ inputs.timesteps_per_stage1_run }}
-          EVAL_EPISODES: ${{ inputs.eval_episodes }}
+          TIMESTEPS: ${{ env.STAGE1_TIMESTEPS }}
+          EVAL_EPISODES: ${{ env.EVAL_EPISODES }}
         run: |
           python training/train_ppo.py \
             --timesteps "$TIMESTEPS" \
@@ -193,8 +180,8 @@ jobs:
       - name: Train Stage 2 on selected model (CPU)
         env:
           INITIAL_MODEL: ${{ steps.select.outputs.model }}
-          STAGE2_TIMESTEPS: ${{ inputs.stage2_timesteps }}
-          EVAL_EPISODES: ${{ inputs.eval_episodes }}
+          STAGE2_TIMESTEPS: ${{ env.STAGE2_TIMESTEPS }}
+          EVAL_EPISODES: ${{ env.EVAL_EPISODES }}
         run: |
           python training/train_ppo.py \
             --timesteps "$STAGE2_TIMESTEPS" \
