@@ -41,6 +41,7 @@ def main(argv=None):
             total_reward = 0.0
             steps = 0
             hover_steps = 0
+            takeoff_seen = False
             altitude_errors_during_flight = []
             horizontal_errors_during_flight = []
             vertical_speeds_during_flight = []
@@ -55,6 +56,7 @@ def main(argv=None):
                 horizontal_errors_during_flight.append(float(info.get("horizontal_error_m", 0.0)))
                 vertical_speeds_during_flight.append(abs(float(info.get("velocity_xyz_mps", [0, 0, 0])[1])))
                 hover_steps += int(bool(info.get("hover_stable", False)))
+                takeoff_seen = takeoff_seen or bool(info.get("has_taken_off", False))
             final_position = info.get("position_xyz_m")
             final_velocity = info.get("velocity_xyz_mps")
             final_altitude_error = (
@@ -69,6 +71,7 @@ def main(argv=None):
                 "terminated": bool(terminated),
                 "truncated": bool(truncated),
                 "crashed": bool(info.get("crashed", False)),
+                "takeoff_success": bool(takeoff_seen),
                 "crash_reason": info.get("crash_reason"),
                 "hover_stable_steps": hover_steps,
                 "hover_stable_fraction": hover_fraction,
@@ -105,6 +108,7 @@ def main(argv=None):
         "mean_return": float(np.mean(returns)),
         "std_return": float(np.std(returns)),
         "crash_rate": float(np.mean([row["crashed"] for row in episode_results])),
+        "takeoff_success_rate": float(np.mean([row["takeoff_success"] for row in episode_results])),
         "hover_success_rate": float(np.mean([row["episode_hover_success"] for row in episode_results])),
         "mean_hover_stable_fraction": float(np.mean([row["hover_stable_fraction"] for row in episode_results])),
         "mean_steps": float(np.mean([row["steps"] for row in episode_results])),
