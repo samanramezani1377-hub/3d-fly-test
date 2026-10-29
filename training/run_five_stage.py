@@ -35,19 +35,22 @@ def read_report(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _metric(report: dict, key: str, default: float) -> float:
+    value = report.get(key)
+    return default if value is None else float(value)
+
+
 def rank(report: dict) -> tuple:
-    # Never let return alone reward a policy that refuses to take off.
+    # Missing flight metrics are worst-case, not a reason to crash selection.
+    # First maximize sustained hover, then safety, then takeoff and precision.
     return (
-        # First maximize actual stable hover, then minimize crashes. Takeoff
-        # rate is considered only after safety so a takeoff-then-crash policy
-        # cannot outrank a safer checkpoint merely because it left the ground.
-        float(report.get("hover_success_rate", 0.0)),
-        -float(report.get("crash_rate", 1.0)),
-        float(report.get("takeoff_success_rate", 0.0)),
-        -float(report.get("mean_absolute_final_altitude_error_m", float("inf"))),
-        float(report.get("mean_hover_stable_fraction", 0.0)),
-        -float(report.get("mean_absolute_vertical_speed_during_flight_mps", float("inf"))),
-        float(report.get("mean_return", float("-inf"))),
+        _metric(report, "hover_success_rate", 0.0),
+        -_metric(report, "crash_rate", 1.0),
+        _metric(report, "takeoff_success_rate", 0.0),
+        -_metric(report, "mean_absolute_final_altitude_error_m", float("inf")),
+        _metric(report, "mean_hover_stable_fraction", 0.0),
+        -_metric(report, "mean_absolute_vertical_speed_during_flight_mps", float("inf")),
+        _metric(report, "mean_return", float("-inf")),
     )
 
 
