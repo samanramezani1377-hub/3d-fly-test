@@ -1,0 +1,126 @@
+"""Experimental PPO training against the upstream SkySim Gymnasium server.
+
+This currently uses the upstream Godot headless backend, NOT this repository's
+browser WebAssembly physics core. See training/README.md before interpreting results.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import random
+from datetime import datetime, timezone
+from pathlib import Path
+
+import numpy as np
+
+UPSTREAM_REVISION = "a31864f999418531775980b879979ce4c57e791d"
+BACKEND_WARNING = (
+    "Godot headless Gymnasium backend; not verified equivalent to browser WebAssembly "
+    "physics and not validated for the user's physical aircraft."
+)
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--port", type=int, default=5557)
+    parser.add_argument("--timesteps", type=int, default=200_000)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--target-x", type=float, default=0.0)
+    parser.add_argument("--target-y", type=float, default=3.0)
+    parser.add_argument("--target-z", type=float, default=0.0)
+    parser.add_argument("--max-steps", type=int, default=1500)
+    parser.add_argument("--run-name", default="prototype-hover")
+    parser.add_argument("--output-dir", type=Path, default=Path("training/runs"))
+    parser.add_argument("--save-freq", type=int, default=25_000)
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    if args.port < 1 or args.port > 65535:
+        raise SystemExit("--port must be in [1, 65535]")
+    if args.timesteps <= 0 or args.max_steps <= 0 or args.save_freq <= 0:
+        raise SystemExit("--timesteps, --max-steps, and --save-freq must be positive")
+    if not args.run_name or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for c in args.run_name):
+        raise SystemExit("--run-name may contain only letters, numbers, '-' and '_'")
+
+    try:
+        from stable_baselines3 import PPO
+        from stable_baselines3.common.callbacks import CheckpointCallback
+        from stable_baselines3.common.monitor import Monitor
+        from stable_baselines3.common.env_checker import check_env
+        from skysim import SkySimEnv, HoverTask
+    except ImportError as exc:
+        raise SystemExit(
+            "Missing dependencies. Install training/requirements.txt and the pinned "
+            "upstream python package (python -m pip install -e 'upstream/python[rl]')."
+        ) from exc
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+
+    run_dir = args.output_dir / args.run_name
+    run_dir.mkdir(parents=True, exist_ok=True)
+    target = (args.target_x, args.target_y, args.target_z)
+
+    raw_env = SkySimEnv(
+        port=args.port,
+        task=HoverTask(target=target),
+        max_steps=args.max_steps,
+    )
+    check_env(raw_env, warn=True)
+    try:
+        raw_env.reset(seed=args.seed)
+    except TypeError:
+        # Compatibility with older Gymnasium wrappers; seed still recorded.
+        pass
+    env = Monitor(raw_env, filename=str(run_dir / "monitor.csv"))
+
+    metadata = {
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "run_name": args.run_name,
+        "algorithm": "PPO",
+        "seed": args.seed,
+        "timesteps": args.timesteps,
+        "max_steps_per_episode": args.max_steps,
+        "target_xyz_m": list(target),
+        "server_port": args.port,
+        "backend": "upstream-skysim-godot-headless",
+        "upstream_revision_expected": UPSTREAM_REVISION,
+        "backend_warning": BACKEND_WARNING,
+        "drone_config_used": False,
+        "physical_aircraft_model_ready": False,
+    }
+    (run_dir / "metadata.json").write_text(
+        json.dumps(metadata, indent=2), encoding="utf-8"
+    )
+
+    callback = CheckpointCallback(
+        save_freq=max(1, args.save_freq),
+        save_path=str(run_dir / "checkpoints"),
+        name_prefix="ppo_hover",
+        save_replay_buffer=False,
+        save_vecnormalize=False,
+    )
+    model = PPO(
+        "MlpPolicy",
+        env,
+        verbose=1,
+        seed=args.seed,
+        tensorboard_log=str(run_dir / "tensorboard"),
+        device="auto",
+    )
+    try:
+        model.learn(total_timesteps=args.timesteps, callback=callback)
+        model.save(str(run_dir / "final_model"))
+    finally:
+        env.close()
+
+    print(f"Saved model: {run_dir / 'final_model.zip'}")
+    print(f"Saved metadata: {run_dir / 'metadata.json'}")
+    print(f"WARNING: {BACKEND_WARNING}")
+
+
+if __name__ == "__main__":
+    main()
