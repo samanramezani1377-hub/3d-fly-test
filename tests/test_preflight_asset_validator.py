@@ -18,7 +18,7 @@ def test_expected_asset_contract_is_explicit():
 def test_step_envelope_check_rejects_non_step(tmp_path):
     errors = []
     bad = tmp_path / "not-a-step.step"
-    bad.write_text("not a STEP file", encoding="ascii")
+    bad.write_text("not a STEP file " * 20, encoding="ascii")
     MODULE.check_step(bad, errors)
     assert any("Missing ISO-10303-21 header" in item for item in errors)
     assert any("Missing END-ISO-10303-21 trailer" in item for item in errors)
