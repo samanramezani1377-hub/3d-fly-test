@@ -32,6 +32,8 @@ def parse_args(argv=None):
     parser.add_argument("--save-freq", type=int, default=5_000)
     parser.add_argument("--eval-freq", type=int, default=5_000)
     parser.add_argument("--eval-episodes", type=int, default=10)
+    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto", help="Compute device for PPO; simulator physics remains native C++")
+    parser.add_argument("--load-model", type=Path, default=None, help="Load an existing PPO checkpoint and continue training instead of creating a fresh policy")
     return parser.parse_args(argv)
 
 
@@ -125,6 +127,7 @@ def main(argv=None):
         "checkpoint_frequency_total_transitions": args.save_freq,
         "evaluation_frequency_total_transitions": args.eval_freq,
         "evaluation_episodes": args.eval_episodes,
+        "training_device": args.device,
         "action_space": "symmetric [-1, 1]; throttle restricted to 0.20..0.50 around hover estimate (0.35)",
         "reward": "bounded exponential altitude/horizontal proximity scores, capped speed/attitude penalties, explicit crash penalty -100",
         "backend": "native-drone-core",
@@ -136,22 +139,37 @@ def main(argv=None):
     }
     (run_dir / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
-    model = PPO(
-        "MlpPolicy",
-        env,
-        learning_rate=3e-4,
-        n_steps=args.n_steps,
-        batch_size=args.batch_size,
-        n_epochs=10,
-        gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.005,
-        verbose=1,
-        seed=args.seed,
-        tensorboard_log=str(run_dir / "tensorboard"),
-        device="auto",
-    )
+    if args.load_model is not None:
+        if not args.load_model.is_file():
+            env.close()
+            eval_env.close()
+            raise SystemExit(f"--load-model file not found: {args.load_model}")
+        print(f"Continuing PPO training from checkpoint: {args.load_model}")
+        model = PPO.load(
+            str(args.load_model), env=env, device=args.device,
+            tensorboard_log=str(run_dir / "tensorboard"),
+        )
+        # Keep the loaded policy and optimizer state, while applying the requested rollout settings.
+        model.n_steps = args.n_steps
+        model.batch_size = args.batch_size
+        model.n_epochs = 10
+    else:
+        model = PPO(
+            "MlpPolicy",
+            env,
+            learning_rate=3e-4,
+            n_steps=args.n_steps,
+            batch_size=args.batch_size,
+            n_epochs=10,
+            gamma=0.99,
+            gae_lambda=0.95,
+            clip_range=0.2,
+            ent_coef=0.005,
+            verbose=1,
+            seed=args.seed,
+            tensorboard_log=str(run_dir / "tensorboard"),
+            device=args.device,
+        )
     try:
         model.learn(total_timesteps=args.timesteps, callback=[checkpoint_callback, eval_callback])
         model.save(str(run_dir / "final_model"))
