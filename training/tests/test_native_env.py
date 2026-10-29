@@ -37,3 +37,62 @@ def test_native_core_reset_and_step():
         assert truncated
     finally:
         env.close()
+
+
+
+def test_reward_prefers_target_altitude_and_position_to_low_hover():
+    common = {
+        "velocity": np.zeros(3),
+        "attitude": np.zeros(3),
+        "angular_velocity": np.zeros(3),
+        "target": np.array([0.0, 3.0, 0.0]),
+        "action": np.zeros(4),
+        "throttle": 0.35,
+    }
+    target_reward, _, target_crashed, _ = NativeSkySimEnv.calculate_reward(
+        position=np.array([0.0, 3.0, 0.0]), **common
+    )
+    low_reward, _, low_crashed, _ = NativeSkySimEnv.calculate_reward(
+        position=np.array([0.0, 0.2, 0.0]), **common
+    )
+    assert not target_crashed
+    assert not low_crashed
+    assert target_reward > 0
+    assert low_reward < 0
+    assert target_reward > low_reward
+
+
+def test_reward_penalizes_linear_and_angular_motion():
+    common = {
+        "position": np.array([0.0, 3.0, 0.0]),
+        "attitude": np.zeros(3),
+        "target": np.array([0.0, 3.0, 0.0]),
+        "action": np.zeros(4),
+        "throttle": 0.35,
+    }
+    calm_reward, _, _, _ = NativeSkySimEnv.calculate_reward(
+        velocity=np.zeros(3), angular_velocity=np.zeros(3), **common
+    )
+    moving_reward, moving_terms, _, _ = NativeSkySimEnv.calculate_reward(
+        velocity=np.array([2.0, 2.0, 0.0]),
+        angular_velocity=np.array([1.0, 0.0, 0.0]),
+        **common
+    )
+    assert moving_reward < calm_reward
+    assert moving_terms["angular_rate_penalty"] < 0
+
+
+def test_crash_gets_explicit_terminal_penalty_and_reason():
+    reward, terms, crashed, reason = NativeSkySimEnv.calculate_reward(
+        position=np.array([0.0, 0.1, 0.0]),
+        velocity=np.zeros(3),
+        attitude=np.zeros(3),
+        angular_velocity=np.zeros(3),
+        target=np.array([0.0, 3.0, 0.0]),
+        action=np.zeros(4),
+        throttle=0.35,
+    )
+    assert crashed
+    assert reason == "ground_contact"
+    assert terms["crash_penalty"] == -100.0
+    assert reward < -100.0
