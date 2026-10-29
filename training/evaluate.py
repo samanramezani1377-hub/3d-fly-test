@@ -27,12 +27,12 @@ def main(argv=None):
 
     try:
         from stable_baselines3 import PPO
-        from native_env import NativeSkySimEnv
+        from native_env import NativeSkySimEnv, PolicyObservationWrapper
     except ImportError as exc:
         raise SystemExit("Install training/requirements.txt and build the native core.") from exc
 
     target = (args.target_x, args.target_y, args.target_z)
-    env = NativeSkySimEnv(target=target, max_steps=args.max_steps)
+    env = PolicyObservationWrapper(NativeSkySimEnv(target=target, max_steps=args.max_steps))
     model = PPO.load(str(args.model), device="auto")
     episode_results = []
     try:
