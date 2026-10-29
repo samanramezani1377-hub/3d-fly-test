@@ -73,9 +73,9 @@ The browser tier runs Python through Pyodide and is intended for classical/light
 
 ## Experimental AI training (PPO / Colab)
 
-The `training/` folder contains an experimental PPO training script, evaluation script, and a Google Colab notebook at `notebooks/colab_train_ppo.ipynb`.
+The `training/` folder contains a native build of the same pinned C++ `DroneCore` source files used for the browser WebAssembly build, a Gymnasium adapter, PPO training/evaluation scripts, tests, and a Google Colab notebook at `notebooks/colab_train_ppo.ipynb`. The native build applies the same project config patch as the browser build and avoids the separate Godot training backend.
 
-**Backend limitation:** the current training scaffold talks to the upstream Godot headless Gymnasium server. It is not yet connected to the same C++ physics core compiled to WebAssembly for this browser demo, so results are infrastructure prototypes only—not browser-equivalent or aircraft-specific controller results. The placeholder physical values in `config/drone.json` are left unchanged. See [training documentation](training/README.md) before running it.
+**Important:** shared source does not automatically guarantee bit-for-bit native/WASM parity; regression comparisons are still required. The simulation is not validated against the final physical quadcopter. The placeholder values in `config/drone.json` remain unchanged. See [training documentation](training/README.md) before running it.
 
 ## Upstream
 
