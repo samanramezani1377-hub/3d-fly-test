@@ -50,6 +50,7 @@ def rank(report: dict) -> tuple:
         -_metric(report, "mean_absolute_final_altitude_error_m", float("inf")),
         _metric(report, "mean_hover_stable_fraction", 0.0),
         -_metric(report, "mean_absolute_vertical_speed_during_flight_mps", float("inf")),
+        -_metric(report, "mean_horizontal_error_during_flight_m", float("inf")),
         _metric(report, "mean_return", float("-inf")),
     )
 
@@ -120,6 +121,7 @@ def main() -> None:
             "takeoff_success_rate descending", "mean_absolute_final_altitude_error_m ascending",
             "mean_hover_stable_fraction descending",
             "mean_absolute_vertical_speed_during_flight_mps ascending",
+            "mean_horizontal_error_during_flight_m ascending",
             "mean_return descending (tie-breaker)",
         ],
         "candidates": stage1_candidates,
