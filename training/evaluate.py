@@ -1,4 +1,4 @@
-"""Evaluate an experimental PPO model against the upstream SkySim server."""
+"""Evaluate a saved PPO model against the native DroneCore Gymnasium environment."""
 from __future__ import annotations
 
 import argparse
@@ -10,28 +10,30 @@ import numpy as np
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", type=int, default=5557)
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--episodes", type=int, default=10)
     parser.add_argument("--seed", type=int, default=1000)
+    parser.add_argument("--target-x", type=float, default=0.0)
+    parser.add_argument("--target-y", type=float, default=3.0)
+    parser.add_argument("--target-z", type=float, default=0.0)
+    parser.add_argument("--max-steps", type=int, default=1500)
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args(argv)
 
-    if args.episodes <= 0:
-        raise SystemExit("--episodes must be positive")
+    if args.episodes <= 0 or args.max_steps <= 0:
+        raise SystemExit("--episodes and --max-steps must be positive")
     if not args.model.exists():
         raise SystemExit(f"Model not found: {args.model}")
 
     try:
         from stable_baselines3 import PPO
-        from skysim import SkySimEnv, HoverTask
+        from native_env import NativeSkySimEnv
     except ImportError as exc:
-        raise SystemExit("Install training requirements and upstream skysim[rl].") from exc
+        raise SystemExit("Install training/requirements.txt and build the native core.") from exc
 
-    env = SkySimEnv(
-        port=args.port,
-        task=HoverTask(target=(0.0, 3.0, 0.0)),
-        max_steps=1500,
+    env = NativeSkySimEnv(
+        target=(args.target_x, args.target_y, args.target_z),
+        max_steps=args.max_steps,
     )
     model = PPO.load(str(args.model), device="auto")
     episode_results = []
@@ -53,16 +55,18 @@ def main(argv=None):
                 "steps": steps,
                 "terminated": bool(terminated),
                 "truncated": bool(truncated),
+                "final_position_xyz_m": info.get("position_xyz_m"),
             })
     finally:
         env.close()
 
     returns = [row["return"] for row in episode_results]
     report = {
-        "backend": "upstream-skysim-godot-headless",
+        "backend": "native-drone-core",
+        "browser_core_same_cpp_sources": True,
         "backend_warning": (
-            "Not verified equivalent to browser WebAssembly physics; not validated "
-            "for the physical aircraft."
+            "Native and WASM builds use the same pinned C++ sources and config patch, "
+            "but numerical parity still requires regression tests; this is not sim-to-real validation."
         ),
         "model": str(args.model),
         "episodes": args.episodes,
@@ -73,7 +77,7 @@ def main(argv=None):
     rendered = json.dumps(report, indent=2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(rendered + "\n", encoding="utf-8")
+        args.output.write_text(rendered + "\\n", encoding="utf-8")
     print(rendered)
 
 
