@@ -140,8 +140,8 @@ def main() -> None:
         "stage1_independent_seeds": [42, 43],
         "stages_2_to_5_continue_from_previous_selected_checkpoint": True,
         "selection_metric": [
-            "hover_success_rate descending", "takeoff_success_rate descending",
-            "crash_rate ascending", "mean_absolute_final_altitude_error_m ascending",
+            "hover_success_rate descending", "crash_rate ascending",
+            "takeoff_success_rate descending", "mean_absolute_final_altitude_error_m ascending",
             "mean_hover_stable_fraction descending",
             "mean_absolute_vertical_speed_during_flight_mps ascending",
             "mean_return descending (tie-breaker)",
