@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ctypes
+import json
 from pathlib import Path
 
 import gymnasium as gym
@@ -53,6 +54,8 @@ class NativeSkySimEnv(gym.Env):
         self.core.skysim_arm.argtypes = [ptr, ctypes.c_int]
         self.core.skysim_set_attitude.argtypes = [ptr, dbl, dbl, dbl, dbl]
         self.core.skysim_set_wind.argtypes = [ptr, dbl, dbl, dbl]
+        self._config_path = Path(__file__).resolve().parents[1] / "config" / "drone.json"
+        self._config = json.loads(self._config_path.read_text(encoding="utf-8"))
         self.core.skysim_step.argtypes = [ptr, dbl]
         self.core.skysim_get_obs.argtypes = [ptr, ctypes.POINTER(dbl)]
         self.core.skysim_altitude.argtypes = [ptr]
@@ -81,6 +84,8 @@ class NativeSkySimEnv(gym.Env):
         super().reset(seed=seed)
         # Reset to a fixed initial state for reproducible comparisons.
         self.core.skysim_reset(self.handle, 0.0, 2.0, 0.0)
+        wind = self._config.get("wind_mps", {})
+        self.core.skysim_set_wind(self.handle, float(wind.get("x", 0)), float(wind.get("y", 0)), float(wind.get("z", 0)))
         self.core.skysim_arm(self.handle, 1)
         self._step_count = 0
         obs = self._observation()
