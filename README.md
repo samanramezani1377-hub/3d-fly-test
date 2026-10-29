@@ -26,6 +26,7 @@ Key fields:
 - `rotor_radius_m`: propeller radius, not diameter
 - `arm_length_m`: centre-to-motor distance
 - `motor_kv_rpm_per_volt`, `max_voltage_v`
+- `battery_cells`, `battery_capacity_mah`, `battery_internal_resistance_ohm`
 - `inertia_kg_m2`: diagonal moments of inertia in simulator body axes
 - `wind_mps`: world-frame wind vector
 - `visual`: dimensions for the simple fallback model
@@ -51,7 +52,7 @@ The browser tier runs Python through Pyodide and is intended for classical/light
 - This is a simulation and software-development setup, not proof that a real aircraft is safe to fly.
 - The browser simulator currently models a quad-X. Changing the GLB changes the displayed shape only. The rotor layout and physical parameters remain a simplified model.
 - Verify mass, rotor size, motor/prop performance, battery, inertia and centre of gravity before interpreting results as representative of a real drone.
-- The upstream SkySim source is fetched at a pinned commit during deployment; see `.github/workflows/pages.yml`.
+- The upstream SkySim source is fetched at a pinned commit during deployment; see `.github/workflows/pages.yml`. The pinned upstream revision omits its documented battery header, so `sim_support/battery.hpp` supplies a small deterministic compatibility battery model with configurable capacity, cell count and internal resistance.
 - SkySim is MIT-licensed; see `THIRD_PARTY_NOTICES.md`.
 
 ## Upstream
