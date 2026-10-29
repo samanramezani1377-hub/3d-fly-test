@@ -22,7 +22,7 @@ def rank(report):
         -_metric(report, "mean_absolute_final_altitude_error_m", float("inf")),
         _metric(report, "mean_hover_stable_fraction", 0.0),
         -_metric(report, "mean_absolute_vertical_speed_during_flight_mps", float("inf")),
-        -_metric(report, "mean_absolute_final_altitude_error_m", float("inf")),
+        -_metric(report, "mean_horizontal_error_during_flight_m", float("inf")),
         _metric(report, "mean_return", float("-inf")),
     )
 
@@ -104,7 +104,8 @@ def main(argv=None):
         keys = [
             "hover_success_rate", "takeoff_success_rate", "crash_rate",
             "mean_hover_stable_fraction", "mean_absolute_vertical_speed_during_flight_mps",
-            "mean_absolute_final_altitude_error_m", "mean_return",
+            "mean_horizontal_error_during_flight_m", "mean_absolute_final_altitude_error_m",
+            "mean_return",
         ]
         aggregate = {}
         for key in keys:
@@ -114,7 +115,10 @@ def main(argv=None):
                 continue
             weights = [
                 int(report.get("flight_episodes", 0))
-                if key == "mean_absolute_vertical_speed_during_flight_mps"
+                if key in {
+                    "mean_absolute_vertical_speed_during_flight_mps",
+                    "mean_horizontal_error_during_flight_m",
+                }
                 else int(report["episodes"])
                 for report in usable
             ]
@@ -143,6 +147,7 @@ def main(argv=None):
             "mean_absolute_final_altitude_error_m ascending",
             "mean_hover_stable_fraction descending",
             "mean_absolute_vertical_speed_during_flight_mps ascending",
+            "mean_horizontal_error_during_flight_m ascending",
             "mean_return descending (tie-breaker only)",
         ],
         "screening": {
