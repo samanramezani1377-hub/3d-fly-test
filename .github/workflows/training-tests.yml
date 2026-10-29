@@ -7,6 +7,7 @@ on:
       - "training/**"
       - "config/**"
       - "scripts/prepare_site.py"
+      - "scripts/patch_native_core.py"
       - "sim_support/**"
       - ".github/workflows/training-tests.yml"
   pull_request:
@@ -35,3 +36,14 @@ jobs:
         run: python training/build_native_core.py
       - name: Run training and native-core smoke tests
         run: python -m pytest training/tests -q
+      - name: Run independent throttle calibration
+        run: |
+          python training/diagnose_control.py --steps 250 --throttles -0.5 -0.3 -0.2 -0.1 0 0.1 0.2 0.5 --output training/runs/control-diagnostics-reset-isolated.json | tee throttle-calibration-summary.json
+      - name: Upload native diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-physics-diagnostics
+          path: |
+            training/runs/control-diagnostics-reset-isolated.json
+            throttle-calibration-summary.json
+          if-no-files-found: error
