@@ -9,212 +9,287 @@
     3.0,
     0.0
   ],
-  "mean_return": -14515.68095018802,
-  "std_return": 4893.852664968586,
+  "mean_return": -63.37033127689025,
+  "std_return": 2.618112514507039,
   "crash_rate": 1.0,
-  "mean_steps": 465.3,
-  "mean_absolute_final_altitude_error_m": 3.0324449479579925,
-  "mean_absolute_final_vertical_speed_mps": 1.665039250254631,
+  "hover_success_rate": 0.0,
+  "mean_hover_stable_fraction": 0.0,
+  "mean_steps": 75.0,
+  "mean_absolute_altitude_error_during_flight_m": 1.6772232255810362,
+  "mean_horizontal_error_during_flight_m": 0.17899391475668838,
+  "mean_absolute_vertical_speed_during_flight_mps": 1.2226162645852352,
+  "mean_absolute_final_altitude_error_m": 2.848576031625271,
+  "mean_absolute_final_vertical_speed_mps": 0.47749135494232176,
   "episode_results": [
     {
       "episode": 0,
       "seed": 1000,
-      "return": -14393.851264386465,
-      "steps": 254,
+      "return": -60.96774050394244,
+      "steps": 79,
       "terminated": true,
       "truncated": false,
       "crashed": true,
+      "crash_reason": "ground_contact",
+      "hover_stable_steps": 0,
+      "hover_stable_fraction": 0.0,
+      "episode_hover_success": false,
+      "mean_absolute_altitude_error_m": 1.659629171030431,
+      "mean_horizontal_error_m": 0.2309078922569805,
+      "mean_absolute_vertical_speed_mps": 1.1505786231424235,
       "final_position_xyz_m": [
-        9.696403503417969,
-        12.086748123168945,
-        -1.3604445457458496
+        -0.37575510144233704,
+        0.15000000596046448,
+        -0.19117499887943268
       ],
       "final_velocity_xyz_mps": [
-        1.2602218389511108,
-        8.400447845458984,
-        -1.4187453985214233
+        0.1770469844341278,
+        0.0,
+        -0.04354441538453102
       ],
-      "final_altitude_error_m": 9.086748123168945
+      "final_altitude_error_m": -2.8499999940395355
     },
     {
       "episode": 1,
       "seed": 1001,
-      "return": -15956.256516348238,
-      "steps": 366,
+      "return": -62.09175273343768,
+      "steps": 76,
       "terminated": true,
       "truncated": false,
       "crashed": true,
+      "crash_reason": "ground_contact",
+      "hover_stable_steps": 0,
+      "hover_stable_fraction": 0.0,
+      "episode_hover_success": false,
+      "mean_absolute_altitude_error_m": 1.681215165084914,
+      "mean_horizontal_error_m": 0.16705153887600988,
+      "mean_absolute_vertical_speed_mps": 1.2085578173987175,
       "final_position_xyz_m": [
-        9.094073295593262,
-        2.919736623764038,
-        7.836194038391113
+        -0.271208256483078,
+        0.15000000596046448,
+        -0.2128935307264328
       ],
       "final_velocity_xyz_mps": [
-        2.5073556900024414,
-        0.16688844561576843,
-        2.6408889293670654
+        -0.08444342017173767,
+        0.0,
+        -0.2534776031970978
       ],
-      "final_altitude_error_m": -0.08026337623596191
+      "final_altitude_error_m": -2.8499999940395355
     },
     {
       "episode": 2,
       "seed": 1002,
-      "return": -17342.931190955424,
-      "steps": 617,
+      "return": -61.556767419426635,
+      "steps": 78,
       "terminated": true,
       "truncated": false,
       "crashed": true,
+      "crash_reason": "ground_contact",
+      "hover_stable_steps": 0,
+      "hover_stable_fraction": 0.0,
+      "episode_hover_success": false,
+      "mean_absolute_altitude_error_m": 1.6617299983134637,
+      "mean_horizontal_error_m": 0.22839926027231167,
+      "mean_absolute_vertical_speed_mps": 1.1574873511130228,
       "final_position_xyz_m": [
-        -4.261213302612305,
-        0.1597447693347931,
-        4.451908588409424
+        -0.42841729521751404,
+        0.15000000596046448,
+        -0.20716780424118042
       ],
       "final_velocity_xyz_mps": [
-        -0.3731381297111511,
-        -5.156699180603027,
-        1.4489210844039917
+        -0.13752904534339905,
+        0.0,
+        -0.1707819700241089
       ],
-      "final_altitude_error_m": -2.840255230665207
+      "final_altitude_error_m": -2.8499999940395355
     },
     {
       "episode": 3,
       "seed": 1003,
-      "return": -20797.845813347747,
-      "steps": 573,
+      "return": -64.58962894470663,
+      "steps": 73,
       "terminated": true,
       "truncated": false,
       "crashed": true,
+      "crash_reason": "ground_contact",
+      "hover_stable_steps": 0,
+      "hover_stable_fraction": 0.0,
+      "episode_hover_success": false,
+      "mean_absolute_altitude_error_m": 1.7132834886034873,
+      "mean_horizontal_error_m": 0.15054532347042443,
+      "mean_absolute_vertical_speed_mps": 1.2511681147072822,
       "final_position_xyz_m": [
-        -10.586421966552734,
-        1.4907162189483643,
-        5.790895462036133
+        0.2936851978302002,
+        0.15000000596046448,
+        -0.1209966391324997
       ],
       "final_velocity_xyz_mps": [
-        -4.353300094604492,
-        -1.840111255645752,
-        -0.5942385196685791
+        0.13479334115982056,
+        0.0,
+        -0.3043295741081238
       ],
-      "final_altitude_error_m": -1.5092837810516357
+      "final_altitude_error_m": -2.8499999940395355
     },
     {
       "episode": 4,
       "seed": 1004,
-      "return": -16419.53810715286,
-      "steps": 541,
+      "return": -61.46382687997597,
+      "steps": 76,
       "terminated": true,
       "truncated": false,
       "crashed": true,
+      "crash_reason": "ground_contact",
+      "hover_stable_steps": 0,
+      "hover_stable_fraction": 0.0,
+      "episode_hover_success": false,
+      "mean_absolute_altitude_error_m": 1.675302503728553,
+      "mean_horizontal_error_m": 0.1427472168402562,
+      "mean_absolute_vertical_speed_mps": 1.2061533752436702,
       "final_position_xyz_m": [
-        -10.014593124389648,
+        -0.17781510949134827,
         0.15000000596046448,
-        2.682736873626709
+        -0.1568789780139923
       ],
       "final_velocity_xyz_mps": [
-        -0.7169687151908875,
+        0.29437941312789917,
         0.0,
-        -1.0381218194961548
+        -0.012429701164364815
       ],
       "final_altitude_error_m": -2.8499999940395355
     },
     {
       "episode": 5,
       "seed": 1005,
-      "return": -5184.334879395916,
-      "steps": 213,
+      "return": -62.43502218181261,
+      "steps": 76,
       "terminated": true,
       "truncated": false,
       "crashed": true,
+      "crash_reason": "ground_contact",
+      "hover_stable_steps": 0,
+      "hover_stable_fraction": 0.0,
+      "episode_hover_success": false,
+      "mean_absolute_altitude_error_m": 1.669987418149647,
+      "mean_horizontal_error_m": 0.18563417041966196,
+      "mean_absolute_vertical_speed_mps": 1.2005681256322485,
       "final_position_xyz_m": [
-        -2.9976608753204346,
+        -0.32839900255203247,
         0.15000000596046448,
-        3.9400694370269775
+        -0.19648659229278564
       ],
       "final_velocity_xyz_mps": [
-        -0.2871025502681732,
+        -0.05683138594031334,
         0.0,
-        -1.824019432067871
+        -0.1957508772611618
       ],
       "final_altitude_error_m": -2.8499999940395355
     },
     {
       "episode": 6,
       "seed": 1006,
-      "return": -11867.93566744542,
-      "steps": 504,
+      "return": -65.61405609622963,
+      "steps": 72,
       "terminated": true,
       "truncated": false,
       "crashed": true,
+      "crash_reason": "ground_contact",
+      "hover_stable_steps": 0,
+      "hover_stable_fraction": 0.0,
+      "episode_hover_success": false,
+      "mean_absolute_altitude_error_m": 1.7055563278910186,
+      "mean_horizontal_error_m": 0.14592295622019202,
+      "mean_absolute_vertical_speed_mps": 1.2726088868350618,
       "final_position_xyz_m": [
-        -6.797610282897949,
+        0.30435416102409363,
         0.15000000596046448,
-        -0.20322127640247345
+        -0.11625687777996063
       ],
       "final_velocity_xyz_mps": [
-        -0.5416463613510132,
+        0.2810419797897339,
         0.0,
-        -1.6039737462997437
+        -0.22751988470554352
       ],
       "final_altitude_error_m": -2.8499999940395355
     },
     {
       "episode": 7,
       "seed": 1007,
-      "return": -11712.301015659948,
-      "steps": 625,
+      "return": -70.0871113313983,
+      "steps": 66,
       "terminated": true,
       "truncated": false,
       "crashed": true,
+      "crash_reason": "ground_contact",
+      "hover_stable_steps": 0,
+      "hover_stable_fraction": 0.0,
+      "episode_hover_success": false,
+      "mean_absolute_altitude_error_m": 1.6944021528417414,
+      "mean_horizontal_error_m": 0.11370128058550354,
+      "mean_absolute_vertical_speed_mps": 1.3955087203984007,
       "final_position_xyz_m": [
-        -1.6044466495513916,
-        0.15000000596046448,
-        6.76365852355957
+        0.17214588820934296,
+        0.1579284816980362,
+        -0.1298169493675232
       ],
       "final_velocity_xyz_mps": [
-        -0.10109634697437286,
-        0.0,
-        1.585858941078186
+        0.2318696677684784,
+        -2.491682291030884,
+        -0.25307661294937134
       ],
-      "final_altitude_error_m": -2.8499999940395355
+      "final_altitude_error_m": -2.842071518301964
     },
     {
       "episode": 8,
       "seed": 1008,
-      "return": -9362.100686918897,
-      "steps": 447,
+      "return": -62.495775666932275,
+      "steps": 76,
       "terminated": true,
       "truncated": false,
       "crashed": true,
+      "crash_reason": "ground_contact",
+      "hover_stable_steps": 0,
+      "hover_stable_fraction": 0.0,
+      "episode_hover_success": false,
+      "mean_absolute_altitude_error_m": 1.6713449115815915,
+      "mean_horizontal_error_m": 0.18331864595720332,
+      "mean_absolute_vertical_speed_mps": 1.2016798148029728,
       "final_position_xyz_m": [
-        -4.397524356842041,
+        -0.32674503326416016,
         0.15000000596046448,
-        3.5519604682922363
+        -0.20925132930278778
       ],
       "final_velocity_xyz_mps": [
-        -2.9075684547424316,
+        -0.145173579454422,
         0.0,
-        1.796441912651062
+        -0.2361389547586441
       ],
       "final_altitude_error_m": -2.8499999940395355
     },
     {
       "episode": 9,
       "seed": 1009,
-      "return": -22119.71436026929,
-      "steps": 513,
+      "return": -62.40163101104043,
+      "steps": 78,
       "terminated": true,
       "truncated": false,
       "crashed": true,
+      "crash_reason": "ground_contact",
+      "hover_stable_steps": 0,
+      "hover_stable_fraction": 0.0,
+      "episode_hover_success": false,
+      "mean_absolute_altitude_error_m": 1.6397811185855131,
+      "mean_horizontal_error_m": 0.24171086266834016,
+      "mean_absolute_vertical_speed_mps": 1.1818518165785532,
       "final_position_xyz_m": [
-        10.897820472717285,
-        5.557898998260498,
-        -5.027143478393555
+        -0.38855671882629395,
+        0.15631115436553955,
+        -0.16370035707950592
       ],
       "final_velocity_xyz_mps": [
-        2.1496634483337402,
-        1.0862457752227783,
-        -2.290044069290161
+        0.24193274974822998,
+        -2.283231258392334,
+        -0.03069191426038742
       ],
-      "final_altitude_error_m": 2.557898998260498
+      "final_altitude_error_m": -2.8436888456344604
     }
   ]
 }
