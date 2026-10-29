@@ -148,6 +148,16 @@ The browser page now includes a recorder that samples simulator telemetry at app
 
 Captured samples include simulation time, position and velocity, attitude and angular rates, altitude, vertical speed, thrust, commanded control values, armed state, and controller mode. This feature is implemented in the preparation script and must still be verified in a successful deployed browser session. It does not yet calculate pass/fail or derived performance metrics automatically.
 
+### Recorder correction and controller-axis findings (2026-10-29)
+
+The recorder patch now captures the source text from the JS editor when **Run script** compiles it and from the Python editor when **Run Python** successfully compiles it. JSON metadata uses the active controller source rather than always copying the build-time Python default. Samples record the effective execution path (JS, Python, or keyboard fallback), plus the source mode. The duplicated build-time `controller_source` field is excluded from `drone_config` to avoid presenting it as the active source.
+
+This is a source-code correction only. It is **not verified until a new Pages build succeeds and a fresh browser recording is inspected**. The existing `baseline-hover` JSON was created before this correction and must not be treated as corrected retroactively.
+
+The pinned upstream physics source documents a world frame with **Y up**, **X right**, and **-Z forward**. The observation vector is position XYZ, velocity XYZ, Euler roll/pitch/yaw, and body angular rates. Therefore the current Python policy's use of `obs[1]` / `obs[4]` for altitude / vertical speed is consistent with the inspected source's world-Y-up convention. The current default JS demo policy, however, returns zero roll, pitch, and yaw-rate commands; it primarily tests altitude response and does not actively hold horizontal position. Horizontal drift in that JS demo is therefore not evidence of a defect in our custom airframe.
+
+**Physical target model remains intentionally deferred.** Do not change the placeholder values in `config/drone.json` or claim they represent the user's aircraft until the real physical model and its measurements are ready.
+
 ## 9. Known limitations and risks
 
 1. **GLB import is visual-only.** It does not turn the mesh into a complete physics model.
