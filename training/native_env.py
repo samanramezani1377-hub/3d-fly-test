@@ -154,9 +154,19 @@ class NativeSkySimEnv(gym.Env):
 
         altitude_term = 2.0 * (altitude_score - 0.5)
         horizontal_term = 0.5 * (horizontal_score - 0.5)
-        vertical_speed_penalty = 0.12 * min(float(velocity[1] ** 2), 16.0)
+        # Penalize runaway vertical/horizontal speed without a hard cap.
+        # Previously, 4 m/s and 8 m/s vertical speed received the same penalty.
+        abs_vertical_speed = abs(float(velocity[1]))
+        vertical_speed_penalty = (
+            0.12 * abs_vertical_speed ** 2
+            + 0.20 * max(abs_vertical_speed - 2.0, 0.0) ** 2
+        )
         horizontal_speed_sq = float(velocity[0] ** 2 + velocity[2] ** 2)
-        horizontal_speed_penalty = 0.04 * min(horizontal_speed_sq, 25.0)
+        horizontal_speed = float(np.sqrt(horizontal_speed_sq))
+        horizontal_speed_penalty = (
+            0.04 * horizontal_speed_sq
+            + 0.08 * max(horizontal_speed - 2.0, 0.0) ** 2
+        )
         attitude_penalty = 0.08 * min(float(np.dot(attitude, attitude)), 9.0)
         angular_rate_penalty = 0.03 * min(float(np.dot(angular_velocity, angular_velocity)), 25.0)
         action_penalty = 0.01 * float(np.dot(action[:3], action[:3]))
