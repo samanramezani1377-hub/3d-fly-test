@@ -61,3 +61,10 @@ Each run is stored under training/runs/<run-name>/ with periodic PPO checkpoints
 ## Physical model boundary
 
 config/drone.json still contains placeholder values until the actual aircraft is measured. The native build applies the current configuration but does not infer mass, inertia, motor curves, or aerodynamics from a GLB. Do not treat these PPO results as specific to the final physical quadcopter or as safe for real flight.
+
+
+## Aircraft-specific preflight model
+
+The imported `smooth2-parametric` CAD model and engineering metadata live under `assets/preflight/`. Read the [preflight asset index](../assets/preflight/README.md), [analysis plan](../assets/preflight/ANALYSIS_PLAN.md), and [data dictionary](../assets/preflight/DATA_DICTIONARY.md) before using aircraft-specific parameters.
+
+The current SkySim/PPO configuration is not automatically derived from this CAD. Do not copy design dimensions into mass, inertia, rotor thrust or motor parameters without validating the STEP geometry, material/density, exact motor/ESC/battery and rotor performance data. The preflight gates must pass before treating the model as the training plant.
