@@ -112,6 +112,7 @@ class NativeSkySimEnv(gym.Env):
         self._ground_wait_steps = 0
         self._flight_phase = "grounded"
         obs = self._observation()
+        self._previous_altitude_error = abs(float(self.target[1] - obs[1]))
         return obs, {
             "target_xyz_m": self.target.tolist(),
             "backend": "native-drone-core",
@@ -132,6 +133,7 @@ class NativeSkySimEnv(gym.Env):
         has_taken_off=True,
         ground_wait_steps=0,
         takeoff_bonus=0.0,
+        altitude_progress_reward=0.0,
     ):
         """Return a shaped reward and transparent signed component breakdown.
 
@@ -186,11 +188,13 @@ class NativeSkySimEnv(gym.Env):
 
         crash_penalty = 100.0 if crashed else 0.0
         # Increasing but capped penalty discourages waiting on the ground.
-        ground_wait_penalty = min(0.01 * max(int(ground_wait_steps), 0), 0.5) if not has_taken_off else 0.0
+        # Staying on the ground must not be a cheap local optimum.
+        ground_wait_penalty = min(0.02 * max(int(ground_wait_steps), 0), 2.0) if not has_taken_off else 0.0
         reward = (
             altitude_term
             + horizontal_term
             + float(takeoff_bonus)
+            + float(altitude_progress_reward)
             - ground_wait_penalty
             - vertical_speed_penalty
             - horizontal_speed_penalty
@@ -212,6 +216,7 @@ class NativeSkySimEnv(gym.Env):
             "crash_penalty": float(-crash_penalty),
             "ground_wait_penalty": float(-ground_wait_penalty),
             "takeoff_bonus": float(takeoff_bonus),
+            "altitude_progress_reward": float(altitude_progress_reward),
             "altitude_error_m": float(altitude_error),
             "horizontal_error_m": float(horizontal_error),
             "altitude_score": float(altitude_score),
@@ -263,6 +268,9 @@ class NativeSkySimEnv(gym.Env):
         else:
             self._flight_phase = "airborne"
 
+        altitude_progress_reward = float(np.clip(
+            1.5 * (self._previous_altitude_error - altitude_error), -0.5, 0.5
+        ))
         reward, reward_components, crashed, crash_reason = self.calculate_reward(
             position=position,
             velocity=velocity,
@@ -274,6 +282,7 @@ class NativeSkySimEnv(gym.Env):
             throttle_center=self.throttle_center,
             has_taken_off=self._has_taken_off,
             ground_wait_steps=self._ground_wait_steps,
+            altitude_progress_reward=altitude_progress_reward,
             takeoff_bonus=(
                 2.0
                 if (
@@ -285,6 +294,7 @@ class NativeSkySimEnv(gym.Env):
                 else 0.0
             ),
         )
+        self._previous_altitude_error = altitude_error
         if crashed:
             self._flight_phase = "crashed"
 
