@@ -6,7 +6,7 @@ This folder provides a native C++ build of SkySim DroneCore, a Gymnasium adapter
 
 - PPO actions now use a symmetric [-1, 1] action space. The old throttle space [0, 1] interacted badly with PPO's zero-centered Gaussian actions: negative samples were clipped to zero, and the trained policy collapsed toward zero throttle.
 - The throttle action is mapped to a narrower simulator range (0.20–0.50) around a hover-centered starting estimate (0.35), reducing early exploration into extreme motor commands. This estimate comes from the repository's diagnostic sweep and is a simulation-specific starting point, not a measured physical flight value.
-- Reward shaping uses bounded altitude/horizontal proximity scores, capped velocity and attitude penalties, and an explicit crash penalty. Evaluation reports stable-hover fraction and success rate, not only episode return.
+- Reward shaping centers altitude/horizontal proximity terms so sufficiently poor position/altitude can receive negative reward rather than a positive near-ground survival bonus; it penalizes linear speed, attitude, angular rates, and excessive control input, and applies an explicit terminal crash penalty. Each step exposes a `reward_components` breakdown for debugging. Evaluation reports stable-hover fraction and success rate, not only episode return.
 - Training defaults to 50,000 timesteps, saves checkpoints every 5,000 steps, and evaluates every 5,000 steps across 10 episodes. The best evaluated model and the final model are saved separately.
 
 ## Backend architecture
