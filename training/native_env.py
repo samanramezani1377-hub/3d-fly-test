@@ -103,6 +103,88 @@ class NativeSkySimEnv(gym.Env):
         self._step_count = 0
         return self._observation(), {"target_xyz_m": self.target.tolist(), "backend": "native-drone-core"}
 
+    @staticmethod
+    def calculate_reward(
+        position,
+        velocity,
+        attitude,
+        angular_velocity,
+        target,
+        action,
+        throttle,
+        throttle_center=0.35,
+    ):
+        """Return a shaped reward and transparent signed component breakdown.
+
+        Positive terms reward proximity to the target. Centering both proximity
+        scores at 0.5 makes sufficiently poor altitude/position errors negative
+        instead of granting a positive survival bonus near the ground.
+        """
+        position = np.asarray(position, dtype=np.float64)
+        velocity = np.asarray(velocity, dtype=np.float64)
+        attitude = np.asarray(attitude, dtype=np.float64)
+        angular_velocity = np.asarray(angular_velocity, dtype=np.float64)
+        target = np.asarray(target, dtype=np.float64)
+        action = np.asarray(action, dtype=np.float64)
+
+        position_error = position - target
+        altitude_error = abs(float(position_error[1]))
+        horizontal_error = float(np.linalg.norm(position_error[[0, 2]]))
+        altitude_score = float(np.exp(-altitude_error / 0.75))
+        horizontal_score = float(np.exp(-horizontal_error / 1.0))
+
+        altitude_term = 2.0 * (altitude_score - 0.5)
+        horizontal_term = 0.5 * (horizontal_score - 0.5)
+        vertical_speed_penalty = 0.12 * min(float(velocity[1] ** 2), 16.0)
+        horizontal_speed_sq = float(velocity[0] ** 2 + velocity[2] ** 2)
+        horizontal_speed_penalty = 0.04 * min(horizontal_speed_sq, 25.0)
+        attitude_penalty = 0.08 * min(float(np.dot(attitude, attitude)), 9.0)
+        angular_rate_penalty = 0.03 * min(float(np.dot(angular_velocity, angular_velocity)), 25.0)
+        action_penalty = 0.01 * float(np.dot(action[:3], action[:3]))
+        throttle_penalty = 0.05 * float((float(throttle) - throttle_center) ** 2)
+
+        crashed = bool(
+            position[1] <= 0.16
+            or position[1] > 12.0
+            or np.linalg.norm(position[[0, 2]]) > 12.0
+        )
+        crash_reason = None
+        if position[1] <= 0.16:
+            crash_reason = "ground_contact"
+        elif position[1] > 12.0:
+            crash_reason = "ceiling"
+        elif np.linalg.norm(position[[0, 2]]) > 12.0:
+            crash_reason = "horizontal_boundary"
+
+        crash_penalty = 100.0 if crashed else 0.0
+        reward = (
+            altitude_term
+            + horizontal_term
+            - vertical_speed_penalty
+            - horizontal_speed_penalty
+            - attitude_penalty
+            - angular_rate_penalty
+            - action_penalty
+            - throttle_penalty
+            - crash_penalty
+        )
+        components = {
+            "altitude_term": float(altitude_term),
+            "horizontal_term": float(horizontal_term),
+            "vertical_speed_penalty": float(-vertical_speed_penalty),
+            "horizontal_speed_penalty": float(-horizontal_speed_penalty),
+            "attitude_penalty": float(-attitude_penalty),
+            "angular_rate_penalty": float(-angular_rate_penalty),
+            "action_penalty": float(-action_penalty),
+            "throttle_penalty": float(-throttle_penalty),
+            "crash_penalty": float(-crash_penalty),
+            "altitude_error_m": float(altitude_error),
+            "horizontal_error_m": float(horizontal_error),
+            "altitude_score": float(altitude_score),
+            "horizontal_score": float(horizontal_score),
+        }
+        return float(reward), components, crashed, crash_reason
+
     def step(self, action):
         action, throttle = self.map_action(action, self.throttle_center, self.throttle_span)
         self.core.skysim_set_attitude(
@@ -127,42 +209,22 @@ class NativeSkySimEnv(gym.Env):
             or np.linalg.norm(position[[0, 2]]) > 12.0
         )
 
-        # Bounded shaping prevents squared position error from dominating every
-        # timestep and makes sustained proximity to the target more valuable
-        # than briefly surviving near the ground. The terminal crash penalty
-        # remains large relative to any single step reward.
         altitude_error = abs(float(position_error[1]))
         horizontal_error = float(np.sqrt(horizontal_error_sq))
-        altitude_score = float(np.exp(-altitude_error / 0.75))
-        horizontal_score = float(np.exp(-horizontal_error / 1.0))
-        vertical_speed_penalty = 0.12 * min(float(velocity[1] ** 2), 16.0)
-        horizontal_speed_sq = float(velocity[0] ** 2 + velocity[2] ** 2)
-        horizontal_speed_penalty = 0.04 * min(horizontal_speed_sq, 25.0)
-        attitude_penalty = 0.08 * min(float(np.dot(attitude, attitude)), 9.0)
-        action_penalty = 0.01 * float(np.dot(action[:3], action[:3]))
-        throttle_penalty = 0.05 * float((throttle - self.throttle_center) ** 2)
-        reward = (
-            0.05
-            + 2.0 * altitude_score
-            + 0.5 * horizontal_score
-            - vertical_speed_penalty
-            - horizontal_speed_penalty
-            - attitude_penalty
-            - action_penalty
-            - throttle_penalty
+        angular_velocity = obs[9:12].astype(np.float64)
+        reward, reward_components, crashed, crash_reason = self.calculate_reward(
+            position=position,
+            velocity=velocity,
+            attitude=attitude,
+            angular_velocity=angular_velocity,
+            target=self.target,
+            action=action,
+            throttle=throttle,
+            throttle_center=self.throttle_center,
         )
-        if crashed:
-            reward -= 100.0
 
         terminated = crashed
         truncated = self._step_count >= self.max_steps
-        crash_reason = None
-        if position[1] <= 0.16:
-            crash_reason = "ground_contact"
-        elif position[1] > 12.0:
-            crash_reason = "ceiling"
-        elif np.linalg.norm(position[[0, 2]]) > 12.0:
-            crash_reason = "horizontal_boundary"
         speed_norm = float(np.linalg.norm(velocity))
         hover_stable = bool(
             altitude_error <= 0.35
@@ -180,6 +242,9 @@ class NativeSkySimEnv(gym.Env):
             "crashed": crashed,
             "crash_reason": crash_reason,
             "hover_stable": hover_stable,
+            "reward_components": reward_components,
+            "reward_total": float(reward),
+            "angular_velocity_xyz_rads": angular_velocity.tolist(),
             "backend": "native-drone-core",
         }
         return obs, float(reward), terminated, truncated, info
