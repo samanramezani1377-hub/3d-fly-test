@@ -62,7 +62,7 @@ def test_reward_prefers_target_altitude_and_position_to_low_hover():
         position=np.array([0.0, 3.0, 0.0]), **common
     )
     low_reward, _, low_crashed, _ = NativeSkySimEnv.calculate_reward(
-        position=np.array([0.0, 0.2, 0.0]), **common
+        position=np.array([0.0, 0.2, 0.0]), has_taken_off=False, **common
     )
     assert not target_crashed
     assert not low_crashed
