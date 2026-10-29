@@ -164,7 +164,7 @@ if (window.DRONE_CONFIG && window.DRONE_CONFIG.model_url && THREE.GLTFLoader) {
 
     html = replace_once(
         html,
-        r'pySetPolicy\\(\\$\\("pycode"\\)\\.value\\);\\s*// \\(re\\)compiles policy\\(\\); clears its globals\\s*pyPolicySet = true;',
+        r'pySetPolicy\(\$\("pycode"\)\.value\);\s*// \(re\)compiles policy\(\); clears its globals\s*pyPolicySet = true;',
         'const source = $("pycode").value;\n    pySetPolicy(source);      // (re)compiles policy(); clears its globals\n    activeControllerSource = source;\n    activeControllerSourceMode = "python";\n    pyPolicySet = true;',
         "Python controller source tracking",
     )
