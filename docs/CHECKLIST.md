@@ -13,7 +13,9 @@ Use this checklist as the source of truth for project progress. Check an item on
 - [x] Add GitHub Actions workflow for build and GitHub Pages deployment.
 - [x] Add a compatibility battery header for the missing upstream dependency.
 - [ ] Confirm GitHub Pages source is set to **GitHub Actions**.
-- [ ] Get a fully successful GitHub Actions run.
+- [x] Confirm the source checkout, Emscripten setup, configuration patch, WebAssembly build, Pages artifact preparation, and artifact upload succeed in GitHub Actions.
+- [ ] Enable GitHub Pages with **Source: GitHub Actions** (the previous run stopped at deployment because Pages is not enabled yet).
+- [ ] Get a fully successful GitHub Actions run after enabling Pages.
 - [ ] Open the deployed site on desktop and Android.
 - [ ] Confirm no JavaScript, WebAssembly, or network errors in browser developer tools.
 - [ ] Confirm a push to `main` starts a deployment.
@@ -104,8 +106,8 @@ Use this checklist as the source of truth for project progress. Check an item on
 
 ## Next 5 actions (recommended order)
 
-1. [ ] Open [GitHub Actions](https://github.com/samanramezani1377-hub/3d-fly-test/actions) and confirm the latest deployment run succeeds.
-2. [ ] Enable GitHub Pages with **Source: GitHub Actions** if not already enabled.
+1. [ ] Open [GitHub Pages settings](https://github.com/samanramezani1377-hub/3d-fly-test/settings/pages) and set **Source: GitHub Actions**.
+2. [ ] Open [GitHub Actions](https://github.com/samanramezani1377-hub/3d-fly-test/actions) and confirm the new deployment run succeeds.
 3. [ ] Open the published site and verify the baseline simulator and controller manually.
 4. [ ] Fix any build or runtime issues before adding the real CAD model.
 5. [ ] Export the current drone CAD as GLB and upload it to `models/current/drone.glb`; then begin measuring the real physical parameters.
