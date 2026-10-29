@@ -18,7 +18,10 @@ BACKEND_WARNING = (
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--timesteps", type=int, default=50_000)
+    parser.add_argument("--timesteps", type=int, default=50_000, help="Total environment transitions across all workers")
+    parser.add_argument("--n-envs", type=int, default=1, help="Parallel environments feeding one shared PPO policy")
+    parser.add_argument("--n-steps", type=int, default=1024, help="Rollout steps per environment before each PPO update")
+    parser.add_argument("--batch-size", type=int, default=64, help="PPO minibatch size; must divide n-envs * n-steps")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--target-x", type=float, default=0.0)
     parser.add_argument("--target-y", type=float, default=3.0)
@@ -34,8 +37,11 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
-    if min(args.timesteps, args.max_steps, args.save_freq, args.eval_freq, args.eval_episodes) <= 0:
-        raise SystemExit("timesteps, max-steps, save-freq, eval-freq, and eval-episodes must be positive")
+    if min(args.timesteps, args.n_envs, args.n_steps, args.batch_size, args.max_steps, args.save_freq, args.eval_freq, args.eval_episodes) <= 0:
+        raise SystemExit("timesteps, n-envs, n-steps, batch-size, max-steps, save-freq, eval-freq, and eval-episodes must be positive")
+    rollout_size = args.n_envs * args.n_steps
+    if rollout_size < 2 or args.batch_size > rollout_size or rollout_size % args.batch_size != 0:
+        raise SystemExit("n-envs * n-steps must be >= 2 and evenly divisible by batch-size")
     if not args.run_name or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for c in args.run_name):
         raise SystemExit("--run-name may contain only letters, numbers, '-' and '_'")
 
@@ -43,6 +49,7 @@ def main(argv=None):
         from stable_baselines3 import PPO
         from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
         from stable_baselines3.common.monitor import Monitor
+        from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
         from stable_baselines3.common.env_checker import check_env
         from native_env import NativeSkySimEnv
     except ImportError as exc:
@@ -58,13 +65,48 @@ def main(argv=None):
     run_dir.mkdir(parents=True, exist_ok=True)
     target = (args.target_x, args.target_y, args.target_z)
 
-    raw_env = NativeSkySimEnv(target=target, max_steps=args.max_steps)
-    check_env(raw_env, warn=True)
-    raw_env.reset(seed=args.seed)
-    env = Monitor(raw_env, filename=str(run_dir / "monitor.csv"))
+    # Check the Gymnasium contract in the parent process, then close this instance
+    # before workers start. Each worker creates its own native C-API handle.
+    checker_env = NativeSkySimEnv(target=target, max_steps=args.max_steps)
+    try:
+        check_env(checker_env, warn=True)
+    finally:
+        checker_env.close()
+
+    def make_env(rank):
+        def _init():
+            worker_env = NativeSkySimEnv(target=target, max_steps=args.max_steps)
+            return Monitor(worker_env, filename=str(run_dir / f"monitor-{rank}.csv"))
+        return _init
+
+    if args.n_envs == 1:
+        env = DummyVecEnv([make_env(0)])
+    else:
+        # Each worker owns an independent simulator instance, but all experiences
+        # update the same PPO model. "spawn" avoids inheriting native-library state.
+        env = SubprocVecEnv([make_env(i) for i in range(args.n_envs)], start_method="spawn")
+    env.seed(args.seed)
 
     eval_raw_env = NativeSkySimEnv(target=target, max_steps=args.max_steps)
     eval_env = Monitor(eval_raw_env, filename=str(run_dir / "evaluation-monitor.csv"))
+    # SB3 callback frequencies count VecEnv calls, each of which advances n_envs steps.
+    checkpoint_callback = CheckpointCallback(
+        save_freq=max(args.save_freq // args.n_envs, 1),
+        save_path=str(run_dir / "checkpoints"),
+        name_prefix="ppo_hover",
+        save_replay_buffer=False,
+        save_vecnormalize=False,
+    )
+    eval_callback = EvalCallback(
+        eval_env,
+        best_model_save_path=str(run_dir / "best"),
+        log_path=str(run_dir / "evaluation"),
+        eval_freq=max(args.eval_freq // args.n_envs, 1),
+        n_eval_episodes=args.eval_episodes,
+        deterministic=True,
+        render=False,
+        warn=True,
+    )
 
     metadata = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -72,10 +114,16 @@ def main(argv=None):
         "algorithm": "PPO",
         "seed": args.seed,
         "timesteps_requested": args.timesteps,
+        "parallel_environments": args.n_envs,
+        "shared_policy": True,
+        "rollout_size_per_update": rollout_size,
+        "ppo_n_steps_per_environment": args.n_steps,
+        "ppo_batch_size": args.batch_size,
+        "expected_ppo_updates_approx": args.timesteps // rollout_size,
         "max_steps_per_episode": args.max_steps,
         "target_xyz_m": list(target),
-        "checkpoint_frequency": args.save_freq,
-        "evaluation_frequency": args.eval_freq,
+        "checkpoint_frequency_total_transitions": args.save_freq,
+        "evaluation_frequency_total_transitions": args.eval_freq,
         "evaluation_episodes": args.eval_episodes,
         "action_space": "symmetric [-1, 1]; throttle restricted to 0.20..0.50 around hover estimate (0.35)",
         "reward": "bounded exponential altitude/horizontal proximity scores, capped speed/attitude penalties, explicit crash penalty -100",
@@ -88,30 +136,12 @@ def main(argv=None):
     }
     (run_dir / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
-    checkpoint_callback = CheckpointCallback(
-        save_freq=args.save_freq,
-        save_path=str(run_dir / "checkpoints"),
-        name_prefix="ppo_hover",
-        save_replay_buffer=False,
-        save_vecnormalize=False,
-    )
-    eval_callback = EvalCallback(
-        eval_env,
-        best_model_save_path=str(run_dir / "best"),
-        log_path=str(run_dir / "evaluation"),
-        eval_freq=args.eval_freq,
-        n_eval_episodes=args.eval_episodes,
-        deterministic=True,
-        render=False,
-        warn=True,
-    )
-
     model = PPO(
         "MlpPolicy",
         env,
         learning_rate=3e-4,
-        n_steps=1024,
-        batch_size=64,
+        n_steps=args.n_steps,
+        batch_size=args.batch_size,
         n_epochs=10,
         gamma=0.99,
         gae_lambda=0.95,
