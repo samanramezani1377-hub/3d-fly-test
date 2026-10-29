@@ -1,6 +1,6 @@
 # 3D Fly Test — Project Goals, Architecture, Status, and Roadmap
 
-**Status date:** 2026-10-29  
+**Status date:** 2026-10-30  
 **Repository:** https://github.com/samanramezani1377-hub/3d-fly-test  
 **Upstream simulator:** https://github.com/vishwagw/Sky-Sim-drone-simulator-3.0
 
@@ -157,6 +157,16 @@ This is a source-code correction only. It is **not verified until a new Pages bu
 The pinned upstream physics source documents a world frame with **Y up**, **X right**, and **-Z forward**. The observation vector is position XYZ, velocity XYZ, Euler roll/pitch/yaw, and body angular rates. Therefore the current Python policy's use of `obs[1]` / `obs[4]` for altitude / vertical speed is consistent with the inspected source's world-Y-up convention. The current default JS demo policy, however, returns zero roll, pitch, and yaw-rate commands; it primarily tests altitude response and does not actively hold horizontal position. Horizontal drift in that JS demo is therefore not evidence of a defect in our custom airframe.
 
 **Physical target model remains intentionally deferred.** Do not change the placeholder values in `config/drone.json` or claim they represent the user's aircraft until the real physical model and its measurements are ready.
+
+## 8A. PPO training pipeline status (2026-10-30)
+
+The production CPU training workflow is `.github/workflows/ppo-cpu-two-stage.yml`, which runs the five-stage chain in `training/run_five_stage.py`. The production settings are four parallel environments per training process. Stage 1 compares independent seeds 42 and 40 concurrently (four environments per seed, eight simulator environments total); stages 2–5 each continue from the previous selected checkpoint using four environments. The five-stage workflow does not invoke the standalone 1/4/8-environment benchmark.
+
+Evaluation metrics named "during flight" are calculated only from steps after the environment has latched takeoff. A successful-hover episode must take off, avoid a crash, accumulate at least five seconds of stable-hover samples, and have stable-hover samples in at least 80% of its airborne steps. If no takeoff occurs, flight-only error metrics are null rather than misleadingly measuring grounded steps. The checkpoint selector treats unavailable flight metrics as worst-case for ranking, and the standalone parallel-environment quality gate refuses to compare a flight-only metric when either side has no airborne data.
+
+The five-stage workflow artifact list includes both Stage 1 seed folders (42 and 40) and no longer requests the removed benchmark outputs. The standalone benchmark scripts and workflow remain available for explicitly requested experiments; they do not change production settings.
+
+These changes improve software measurement and checkpoint selection. They do not establish physical-model accuracy, native/WASM numerical parity, or real-flight readiness. The drone configuration still contains placeholders pending verified aircraft measurements.
 
 ## 9. Known limitations and risks
 
