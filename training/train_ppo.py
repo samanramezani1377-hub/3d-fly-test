@@ -11,8 +11,8 @@ import numpy as np
 
 UPSTREAM_REVISION = "a31864f999418531775980b879979ce4c57e791d"
 BACKEND_WARNING = (
-    "Godot headless Gymnasium backend; not verified equivalent to browser WebAssembly "
-    "physics and not validated for the user's physical aircraft."
+    "Native build shares pinned DroneCore C++ sources with browser WASM; numerical parity "
+    "still requires regression tests and this is not sim-to-real validation."
 )
 
 
