@@ -53,7 +53,7 @@ def main(argv=None):
         from stable_baselines3.common.monitor import Monitor
         from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
         from stable_baselines3.common.env_checker import check_env
-        from native_env import NativeSkySimEnv
+        from native_env import NativeSkySimEnv, PolicyObservationWrapper
     except ImportError as exc:
         raise SystemExit(
             "Missing dependencies. Install training/requirements.txt. Build the native core "
@@ -69,7 +69,7 @@ def main(argv=None):
 
     # Check the Gymnasium contract in the parent process, then close this instance
     # before workers start. Each worker creates its own native C-API handle.
-    checker_env = NativeSkySimEnv(target=target, max_steps=args.max_steps)
+    checker_env = PolicyObservationWrapper(NativeSkySimEnv(target=target, max_steps=args.max_steps))
     try:
         check_env(checker_env, warn=True)
     finally:
@@ -77,7 +77,7 @@ def main(argv=None):
 
     def make_env(rank):
         def _init():
-            worker_env = NativeSkySimEnv(target=target, max_steps=args.max_steps)
+            worker_env = PolicyObservationWrapper(NativeSkySimEnv(target=target, max_steps=args.max_steps))
             return Monitor(worker_env, filename=str(run_dir / f"monitor-{rank}.csv"))
         return _init
 
@@ -89,7 +89,7 @@ def main(argv=None):
         env = SubprocVecEnv([make_env(i) for i in range(args.n_envs)], start_method="spawn")
     env.seed(args.seed)
 
-    eval_raw_env = NativeSkySimEnv(target=target, max_steps=args.max_steps)
+    eval_raw_env = PolicyObservationWrapper(NativeSkySimEnv(target=target, max_steps=args.max_steps))
     eval_env = Monitor(eval_raw_env, filename=str(run_dir / "evaluation-monitor.csv"))
     # SB3 callback frequencies count VecEnv calls, each of which advances n_envs steps.
     checkpoint_callback = CheckpointCallback(
@@ -128,7 +128,9 @@ def main(argv=None):
         "evaluation_frequency_total_transitions": args.eval_freq,
         "evaluation_episodes": args.eval_episodes,
         "training_device": args.device,
-        "action_space": "symmetric [-1, 1]; throttle restricted to 0.20..0.50 around hover estimate (0.35)",
+        "action_space": "symmetric [-1, 1]; throttle mapped to 0.20..0.50 around estimate (0.35)",
+        "policy_observation": "target-relative position / 12 m; linear velocity / 8 m/s; Euler angles / pi rad; angular velocity / 10 rad/s; physical env info remains in SI units",
+        "policy_network": {"actor_layers": [128, 128], "critic_layers": [128, 128], "activation": "tanh"},
         "reward": "bounded exponential altitude/horizontal proximity scores, capped speed/attitude penalties, explicit crash penalty -100",
         "backend": "native-drone-core",
         "browser_core_same_cpp_sources": True,
@@ -169,6 +171,8 @@ def main(argv=None):
             seed=args.seed,
             tensorboard_log=str(run_dir / "tensorboard"),
             device=args.device,
+            policy_kwargs={"net_arch": {"pi": [128, 128], "vf": [128, 128]}},
+            activation_fn=__import__("torch").nn.Tanh,
         )
     try:
         model.learn(total_timesteps=args.timesteps, callback=[checkpoint_callback, eval_callback])
