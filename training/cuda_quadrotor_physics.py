@@ -143,7 +143,12 @@ class CudaQuadrotorPhysics:
         voc_cell = 3.3 + 0.9*self.soc.clamp(0,1)
         voc = voc_cell*self.cells
         disc = (voc.square()-4*self.resistance*self.motor_power).clamp_min(0)
-        amps = torch.where(self.resistance>1e-9, (voc-torch.sqrt(disc))/(2*self.resistance), self.motor_power/voc.clamp_min(1e-6))
+        # Resistance is a Python scalar, so branch in Python rather than passing
+        # a bool to torch.where (which requires a tensor condition).
+        if self.resistance > 1e-9:
+            amps = (voc-torch.sqrt(disc))/(2*self.resistance)
+        else:
+            amps = self.motor_power/voc.clamp_min(1e-6)
         self.current = amps.clamp_min(0)
         self.battery_voltage = (voc-self.current*self.resistance).clamp_min(0)
         self.soc = (self.soc-self.current*self.dt/(self.capacity_mah*3.6)).clamp(0,1)
