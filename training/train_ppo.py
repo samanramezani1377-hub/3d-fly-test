@@ -131,7 +131,7 @@ def main(argv=None):
         "action_space": "symmetric [-1, 1]; throttle mapped to 0.20..0.50 around estimate (0.35)",
         "policy_observation": "target-relative position / 12 m; linear velocity / 8 m/s; Euler angles / pi rad; angular velocity / 10 rad/s; physical env info remains in SI units",
         "policy_network": {"actor_layers": [128, 128], "critic_layers": [128, 128], "activation": "tanh"},
-        "reward": "bounded exponential altitude/horizontal proximity scores, capped speed/attitude penalties, explicit crash penalty -100",
+        "reward": "bounded exponential altitude/horizontal proximity scores, uncapped runaway-speed penalties, capped attitude/rate penalties, explicit crash penalty -100",
         "backend": "native-drone-core",
         "browser_core_same_cpp_sources": True,
         "upstream_revision_expected": UPSTREAM_REVISION,
@@ -171,8 +171,10 @@ def main(argv=None):
             seed=args.seed,
             tensorboard_log=str(run_dir / "tensorboard"),
             device=args.device,
-            policy_kwargs={"net_arch": {"pi": [128, 128], "vf": [128, 128]}},
-            activation_fn=__import__("torch").nn.Tanh,
+            policy_kwargs={
+                "net_arch": {"pi": [128, 128], "vf": [128, 128]},
+                "activation_fn": __import__("torch").nn.Tanh,
+            },
         )
     try:
         model.learn(total_timesteps=args.timesteps, callback=[checkpoint_callback, eval_callback])
