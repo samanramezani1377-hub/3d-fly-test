@@ -16,7 +16,7 @@ class NativeSkySimEnv(gym.Env):
     Observation: [x,y,z,vx,vy,vz,roll,pitch,yaw,wx,wy,wz].
     Action is symmetric [-1, 1] on every dimension so PPO does not clip a
     zero-centered Gaussian throttle distribution to zero. Throttle is mapped
-    to 0.20..0.50 around the initial hover estimate (0.35) from the control sweep.
+    to 0.20..0.50 around a configurable throttle bias. The default 0.35 is not assumed to be a calibrated hover throttle.
     """
 
     metadata = {"render_modes": []}
@@ -137,9 +137,10 @@ class NativeSkySimEnv(gym.Env):
     ):
         """Return a shaped reward and transparent signed component breakdown.
 
-        Positive terms reward proximity to the target. Centering both proximity
-        scores at 0.5 makes sufficiently poor altitude/position errors negative
-        instead of granting a positive survival bonus near the ground.
+        Exponential proximity scores stay non-negative so a distant but safe
+        state is not made artificially worse than terminating early in a crash.
+        Hovering at the target still earns substantially more than remaining
+        grounded, while velocity and attitude penalties discourage instability.
         """
         position = np.asarray(position, dtype=np.float64)
         velocity = np.asarray(velocity, dtype=np.float64)
@@ -154,8 +155,13 @@ class NativeSkySimEnv(gym.Env):
         altitude_score = float(np.exp(-altitude_error / 0.75))
         horizontal_score = float(np.exp(-horizontal_error / 1.0))
 
-        altitude_term = 2.0 * (altitude_score - 0.5)
-        horizontal_term = 0.5 * (horizontal_score - 0.5)
+        # Keep every non-crashed state reward non-negative at rest. The old
+        # centered scores made distant states strongly negative, so PPO could
+        # improve discounted return by ending an episode in a crash rather than
+        # continuing to control the vehicle. Absolute proximity scores preserve
+        # a clear gradient toward the target while making survival valuable.
+        altitude_term = 2.0 * altitude_score
+        horizontal_term = 0.5 * horizontal_score
         # Penalize runaway vertical/horizontal speed without a hard cap.
         # Previously, 4 m/s and 8 m/s vertical speed received the same penalty.
         abs_vertical_speed = abs(float(velocity[1]))
@@ -187,9 +193,10 @@ class NativeSkySimEnv(gym.Env):
             crash_reason = "horizontal_boundary"
 
         crash_penalty = 100.0 if crashed else 0.0
-        # Increasing but capped penalty discourages waiting on the ground.
-        # Staying on the ground must not be a cheap local optimum.
-        ground_wait_penalty = min(0.015 * max(int(ground_wait_steps), 0), 0.75) if not has_taken_off else 0.0
+        # A small bounded delay cost discourages idle resets without making
+        # the grounded state itself strongly negative (which can reward early
+        # terminal crashes under discounted return).
+        ground_wait_penalty = min(0.005 * max(int(ground_wait_steps), 0), 0.05) if not has_taken_off else 0.0
         reward = (
             altitude_term
             + horizontal_term

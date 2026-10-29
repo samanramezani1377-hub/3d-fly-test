@@ -131,7 +131,7 @@ def main(argv=None):
         "action_space": "symmetric [-1, 1]; throttle mapped to 0.20..0.50 around estimate (0.35)",
         "policy_observation": "target-relative position / 12 m; linear velocity / 8 m/s; Euler angles / pi rad; angular velocity / 10 rad/s; physical env info remains in SI units",
         "policy_network": {"actor_layers": [128, 128], "critic_layers": [128, 128], "activation": "tanh"},
-        "reward": "bounded exponential altitude/horizontal proximity scores, uncapped runaway-speed penalties, capped attitude/rate penalties, explicit crash penalty -100",
+        "reward": "non-negative exponential altitude/horizontal proximity scores, bounded ground-wait penalty, runaway-speed penalties, capped attitude/rate penalties, explicit crash penalty -100; safe survival must beat early termination",
         "backend": "native-drone-core",
         "browser_core_same_cpp_sources": True,
         "upstream_revision_expected": UPSTREAM_REVISION,

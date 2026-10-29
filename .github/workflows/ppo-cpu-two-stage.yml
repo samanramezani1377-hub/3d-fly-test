@@ -59,6 +59,7 @@ jobs:
       - name: Verify CPU-only runtime and validate observations/actions
         run: |
           python -m compileall -q training
+          python -m unittest training.test_reward_design
           python - <<'PY'
           import torch
           print("PyTorch:", torch.__version__)
@@ -66,7 +67,7 @@ jobs:
           print("Training device: CPU (explicit)")
           PY
           python training/validate_observations.py | tee observation-validation.json
-          python training/diagnose_control.py --steps 100 --throttles -1 -0.5 0 0.5 1 --output training/runs/control-diagnostics.json | tee control-diagnostics-summary.json
+          python training/diagnose_control.py --steps 250 --throttles -0.5 -0.3 -0.2 -0.1 0 0.1 0.2 0.5 --output training/runs/control-diagnostics.json | tee control-diagnostics-summary.json
 
       - name: Run five chained training stages
         run: |

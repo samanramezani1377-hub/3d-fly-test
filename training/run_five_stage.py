@@ -30,9 +30,12 @@ def read_report(path: Path) -> dict:
 def rank(report: dict) -> tuple:
     # Never let return alone reward a policy that refuses to take off.
     return (
+        # First maximize actual stable hover, then minimize crashes. Takeoff
+        # rate is considered only after safety so a takeoff-then-crash policy
+        # cannot outrank a safer checkpoint merely because it left the ground.
         float(report.get("hover_success_rate", 0.0)),
-        float(report.get("takeoff_success_rate", 0.0)),
         -float(report.get("crash_rate", 1.0)),
+        float(report.get("takeoff_success_rate", 0.0)),
         -float(report.get("mean_absolute_final_altitude_error_m", float("inf"))),
         float(report.get("mean_hover_stable_fraction", 0.0)),
         -float(report.get("mean_absolute_vertical_speed_during_flight_mps", float("inf"))),
@@ -100,8 +103,8 @@ def main() -> None:
         "stage": 1, "selected_seed": winner["seed"],
         "selected_model": str(current),
         "selection_metric": [
-            "hover_success_rate descending", "takeoff_success_rate descending",
-            "crash_rate ascending", "mean_absolute_final_altitude_error_m ascending",
+            "hover_success_rate descending", "crash_rate ascending",
+            "takeoff_success_rate descending", "mean_absolute_final_altitude_error_m ascending",
             "mean_hover_stable_fraction descending",
             "mean_absolute_vertical_speed_during_flight_mps ascending",
             "mean_return descending (tie-breaker)",
@@ -137,8 +140,8 @@ def main() -> None:
         "stage1_independent_seeds": [42, 43],
         "stages_2_to_5_continue_from_previous_selected_checkpoint": True,
         "selection_metric": [
-            "hover_success_rate descending", "takeoff_success_rate descending",
-            "crash_rate ascending", "mean_absolute_final_altitude_error_m ascending",
+            "hover_success_rate descending", "crash_rate ascending",
+            "takeoff_success_rate descending", "mean_absolute_final_altitude_error_m ascending",
             "mean_hover_stable_fraction descending",
             "mean_absolute_vertical_speed_during_flight_mps ascending",
             "mean_return descending (tie-breaker)",
