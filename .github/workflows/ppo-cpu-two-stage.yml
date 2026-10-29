@@ -181,6 +181,7 @@ jobs:
           STAGE2_TIMESTEPS: "100000"
           EVAL_EPISODES: "10"
         run: |
+          set -o pipefail
           python training/train_ppo.py \
             --timesteps "$STAGE2_TIMESTEPS" \
             --seed 44 \
