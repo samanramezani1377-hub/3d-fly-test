@@ -1,0 +1,31 @@
+name: Training scaffold tests
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "training/**"
+      - ".github/workflows/training-tests.yml"
+  pull_request:
+    paths:
+      - "training/**"
+      - ".github/workflows/training-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-training-scaffold:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: training/requirements.txt
+      - name: Install test dependencies
+        run: python -m pip install pytest numpy
+      - name: Run offline scaffold tests
+        run: python -m pytest training/tests -q
