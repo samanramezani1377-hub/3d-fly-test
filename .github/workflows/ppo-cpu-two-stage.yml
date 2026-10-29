@@ -16,9 +16,6 @@ env:
   OPENBLAS_NUM_THREADS: "1"
   NUMEXPR_NUM_THREADS: "1"
   PYTHONUNBUFFERED: "1"
-  STAGE1_TIMESTEPS: "100000"
-  STAGE2_TIMESTEPS: "100000"
-  EVAL_EPISODES: "10"
 
 jobs:
   stage1:
@@ -66,8 +63,8 @@ jobs:
       - name: Train Stage 1 candidate
         env:
           SEED: ${{ matrix.seed }}
-          TIMESTEPS: ${{ env.STAGE1_TIMESTEPS }}
-          EVAL_EPISODES: ${{ env.EVAL_EPISODES }}
+          TIMESTEPS: "100000"
+          EVAL_EPISODES: "10"
         run: |
           python training/train_ppo.py \
             --timesteps "$TIMESTEPS" \
@@ -180,7 +177,7 @@ jobs:
       - name: Train Stage 2 on selected model (CPU)
         env:
           INITIAL_MODEL: ${{ steps.select.outputs.model }}
-          STAGE2_TIMESTEPS: ${{ env.STAGE2_TIMESTEPS }}
+          STAGE2_TIMESTEPS: "100000"
           EVAL_EPISODES: ${{ env.EVAL_EPISODES }}
         run: |
           python training/train_ppo.py \
