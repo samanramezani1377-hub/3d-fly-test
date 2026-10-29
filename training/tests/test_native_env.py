@@ -105,3 +105,66 @@ def test_crash_gets_explicit_terminal_penalty_and_reason():
     assert reason == "ground_contact_after_takeoff"
     assert terms["crash_penalty"] == -100.0
     assert reward < -100.0
+
+
+def test_ground_wait_penalty_increases_without_ground_crash_before_takeoff():
+    common = {
+        "position": np.array([0.0, 0.16, 0.0]),
+        "velocity": np.zeros(3),
+        "attitude": np.zeros(3),
+        "angular_velocity": np.zeros(3),
+        "target": np.array([0.0, 3.0, 0.0]),
+        "action": np.zeros(4),
+        "throttle": 0.35,
+        "has_taken_off": False,
+    }
+    early_reward, early_terms, early_crashed, _ = NativeSkySimEnv.calculate_reward(
+        ground_wait_steps=1, **common
+    )
+    late_reward, late_terms, late_crashed, _ = NativeSkySimEnv.calculate_reward(
+        ground_wait_steps=100, **common
+    )
+    assert not early_crashed and not late_crashed
+    assert early_terms["ground_wait_penalty"] < 0
+    assert late_terms["ground_wait_penalty"] < early_terms["ground_wait_penalty"]
+    assert late_reward < early_reward
+
+
+def test_ground_contact_is_crash_only_after_takeoff():
+    common = {
+        "position": np.array([0.0, 0.16, 0.0]),
+        "velocity": np.zeros(3),
+        "attitude": np.zeros(3),
+        "angular_velocity": np.zeros(3),
+        "target": np.array([0.0, 3.0, 0.0]),
+        "action": np.zeros(4),
+        "throttle": 0.35,
+    }
+    _, grounded_terms, grounded_crashed, grounded_reason = NativeSkySimEnv.calculate_reward(
+        has_taken_off=False, **common
+    )
+    _, airborne_terms, airborne_crashed, airborne_reason = NativeSkySimEnv.calculate_reward(
+        has_taken_off=True, **common
+    )
+    assert not grounded_crashed and grounded_reason is None
+    assert grounded_terms["crash_penalty"] == 0.0
+    assert airborne_crashed
+    assert airborne_reason == "ground_contact_after_takeoff"
+    assert airborne_terms["crash_penalty"] == -100.0
+
+
+def test_takeoff_bonus_is_reported_as_a_separate_reward_component():
+    reward, terms, crashed, reason = NativeSkySimEnv.calculate_reward(
+        position=np.array([0.0, 0.5, 0.0]),
+        velocity=np.array([0.0, 1.0, 0.0]),
+        attitude=np.zeros(3),
+        angular_velocity=np.zeros(3),
+        target=np.array([0.0, 3.0, 0.0]),
+        action=np.zeros(4),
+        throttle=0.35,
+        has_taken_off=True,
+        takeoff_bonus=2.0,
+    )
+    assert not crashed and reason is None
+    assert terms["takeoff_bonus"] == 2.0
+    assert np.isfinite(reward)
