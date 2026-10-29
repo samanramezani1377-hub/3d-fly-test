@@ -137,9 +137,10 @@ class NativeSkySimEnv(gym.Env):
     ):
         """Return a shaped reward and transparent signed component breakdown.
 
-        Positive terms reward proximity to the target. Centering both proximity
-        scores at 0.5 makes sufficiently poor altitude/position errors negative
-        instead of granting a positive survival bonus near the ground.
+        Exponential proximity scores stay non-negative so a distant but safe
+        state is not made artificially worse than terminating early in a crash.
+        Hovering at the target still earns substantially more than remaining
+        grounded, while velocity and attitude penalties discourage instability.
         """
         position = np.asarray(position, dtype=np.float64)
         velocity = np.asarray(velocity, dtype=np.float64)
