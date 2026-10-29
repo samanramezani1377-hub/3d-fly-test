@@ -32,6 +32,7 @@ def parse_args(argv=None):
     parser.add_argument("--save-freq", type=int, default=5_000)
     parser.add_argument("--eval-freq", type=int, default=5_000)
     parser.add_argument("--eval-episodes", type=int, default=10)
+    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto", help="Device for PPO neural-network updates; simulator physics remains on CPU")
     return parser.parse_args(argv)
 
 
@@ -60,6 +61,18 @@ def main(argv=None):
 
     random.seed(args.seed)
     np.random.seed(args.seed)
+
+    import torch
+    print(f"PyTorch: {torch.__version__}", flush=True)
+    print(f"CUDA available: {torch.cuda.is_available()}", flush=True)
+    if torch.cuda.is_available():
+        print(f"GPU: {torch.cuda.get_device_name(0)}", flush=True)
+        print(f"GPU VRAM GiB: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f}", flush=True)
+    if args.device == "cuda" and not torch.cuda.is_available():
+        raise SystemExit("--device cuda was requested, but PyTorch CUDA is unavailable.")
+    torch_device = "cuda" if args.device == "cuda" else ("cpu" if args.device == "cpu" else "auto")
+    print(f"PPO requested device: {torch_device}", flush=True)
+    print("NOTE: Native C++ DroneCore physics currently runs on CPU; only PPO neural-network updates use the selected device.", flush=True)
 
     run_dir = args.output_dir / args.run_name
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -133,6 +146,10 @@ def main(argv=None):
         "backend_warning": BACKEND_WARNING,
         "drone_config_used": True,
         "physical_aircraft_model_ready": False,
+        "ppo_device_requested": torch_device,
+        "cuda_available": torch.cuda.is_available(),
+        "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        "physics_device": "cpu-native-drone-core",
     }
     (run_dir / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
@@ -150,7 +167,7 @@ def main(argv=None):
         verbose=1,
         seed=args.seed,
         tensorboard_log=str(run_dir / "tensorboard"),
-        device="auto",
+        device=torch_device,
     )
     try:
         model.learn(total_timesteps=args.timesteps, callback=[checkpoint_callback, eval_callback])
