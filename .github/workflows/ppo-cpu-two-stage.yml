@@ -70,6 +70,11 @@ jobs:
           print("Training device: CPU (explicit)")
           PY
 
+      - name: Validate observation slots and action mapping
+        run: |
+          python training/validate_observations.py | tee observation-validation.json
+          python training/diagnose_control.py --steps 100 --throttles -1 -0.5 0 0.5 1 --output training/runs/control-diagnostics.json | tee control-diagnostics-summary.json
+
       - name: Train Stage 1 candidate
         env:
           SEED: ${{ matrix.seed }}
@@ -97,6 +102,9 @@ jobs:
           name: ppo-stage1-seed${{ matrix.seed }}
           path: |
             training/runs/ppo-hover-100k-seed${{ matrix.seed }}/
+            training/runs/control-diagnostics.json
+            observation-validation.json
+            control-diagnostics-summary.json
             ppo-seed${{ matrix.seed }}.log
           if-no-files-found: error
           retention-days: 14
@@ -341,6 +349,9 @@ jobs:
             stage1-selection.json
             stage1-seed42-evaluation.json
             stage1-seed43-evaluation.json
+            training/runs/control-diagnostics.json
+            observation-validation.json
+            control-diagnostics-summary.json
             final-model.zip
             final-model-selection.json
             stage1/
