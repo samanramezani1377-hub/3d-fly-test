@@ -22,6 +22,7 @@ Requires Python 3.10+ and a C++ compiler with C++20 support (for example, g++).
     python -m pip install -r training/requirements.txt
     python training/build_native_core.py
     python training/train_ppo.py --timesteps 50000 --seed 42 --run-name ppo-hover-50000 --save-freq 5000 --eval-freq 5000
+    python training/evaluate.py --model training/runs/ppo-hover-50000/final_model.zip --episodes 10
 
 ## Production five-stage CPU training
 
@@ -40,7 +41,6 @@ Run locally after building the native core:
     python training/run_five_stage.py
 
 The GitHub Actions workflow installs CPU-only PyTorch and runs the five-stage chain. The full run can take several hours. The manifest records the selected seed/checkpoint at each stage and whether the final model meets the simulation-only eligibility gate.
-    python training/evaluate.py --model training/runs/ppo-hover-50000/final_model.zip --episodes 10
 
 ## Google Colab
 
