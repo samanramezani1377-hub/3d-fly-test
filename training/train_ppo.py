@@ -67,7 +67,12 @@ def main(argv=None):
 
     # Check the Gymnasium contract in the parent process, then close this instance
     # before workers start. Each worker creates its own native C-API handle.
-    check_env(NativeSkySimEnv(target=target, max_steps=args.max_steps), warn=True)
+    checker_env = NativeSkySimEnv(target=target, max_steps=args.max_steps)
+    try:
+        check_env(checker_env, warn=True)
+    finally:
+        checker_env.close()
+
     def make_env(rank):
         def _init():
             worker_env = NativeSkySimEnv(target=target, max_steps=args.max_steps)
