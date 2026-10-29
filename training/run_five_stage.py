@@ -106,7 +106,7 @@ def main() -> None:
 
     # Two seeds run concurrently; each uses 4 environments (8 workers total).
     with ThreadPoolExecutor(max_workers=2) as pool:
-        stage1_candidates = list(pool.map(train_and_evaluate_seed, (42, 43)))
+        stage1_candidates = list(pool.map(train_and_evaluate_seed, (42, 40)))
     winner = max(stage1_candidates, key=rank)
     current = Path(winner["model"]).resolve()
     stage_reports.append({
@@ -156,7 +156,7 @@ def main() -> None:
         "checkpoint_selection_screen_episodes": SCREENING_EPISODES,
         "checkpoint_selection_finalists": FINALIST_COUNT,
         "checkpoint_selection_final_episodes": SELECTION_EPISODES,
-        "stage1_independent_seeds": [42, 43],
+        "stage1_independent_seeds": [42, 40],
         "stages_2_to_5_continue_from_previous_selected_checkpoint": True,
         "selection_metric": [
             "hover_success_rate descending", "crash_rate ascending",
