@@ -5,6 +5,7 @@ import json
 import shutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +17,7 @@ EVAL_EPISODES = 5
 SELECTION_EPISODES = 10
 SCREENING_EPISODES = 2
 FINALIST_COUNT = 3
+PARALLEL_ENVS = 8
 CHECKPOINT_FREQ = 20_000
 EVAL_FREQ = 20_000
 
@@ -57,7 +59,7 @@ def evaluate(model: Path, output: Path, episodes: int = 20, seed: int = 2000) ->
     return read_report(output)
 
 
-def train(run_name: str, seed: int, initial_model: Path | None = None) -> Path:
+def train(run_name: str, seed: int, initial_model: Path | None = None, n_envs: int = PARALLEL_ENVS) -> Path:
     run_dir = RUNS / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     if initial_model is not None:
@@ -70,7 +72,7 @@ def train(run_name: str, seed: int, initial_model: Path | None = None) -> Path:
         sys.executable, "training/train_ppo.py",
         "--timesteps", str(STEPS), "--seed", str(seed),
         "--run-name", run_name, "--output-dir", "training/runs",
-        "--device", "cpu", "--n-envs", "1", "--n-steps", "1024",
+        "--device", "cpu", "--n-envs", str(n_envs), "--n-steps", "1024",
         "--batch-size", "64", "--save-freq", str(CHECKPOINT_FREQ),
         "--eval-freq", str(EVAL_FREQ), "--eval-episodes", str(EVAL_EPISODES),
     ]
@@ -94,16 +96,17 @@ def main() -> None:
     stage_reports: list[dict] = []
 
     # Stage 1 explores two independent seeds; choose the better evaluated checkpoint.
-    stage1_candidates = []
-    for seed in (42, 43):
+    def train_and_evaluate_seed(seed: int) -> dict:
         name = f"ppo-stage1-seed{seed}"
-        model = train(name, seed)
+        model = train(name, seed, n_envs=4)
         report_path = RUNS / name / "matched-seed-evaluation.json"
         report = evaluate(model, report_path)
-        stage1_candidates.append({
-            "stage": 1, "seed": seed, "model": str(model),
-            "evaluation": str(report_path), **report,
-        })
+        return {"stage": 1, "seed": seed, "model": str(model),
+                "evaluation": str(report_path), **report}
+
+    # Two seeds run concurrently; their combined simulator-worker count is 8.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        stage1_candidates = list(pool.map(train_and_evaluate_seed, (42, 43)))
     winner = max(stage1_candidates, key=rank)
     current = Path(winner["model"]).resolve()
     stage_reports.append({
@@ -144,6 +147,9 @@ def main() -> None:
     manifest = {
         "training_stages": 5,
         "environment_steps_per_training_run": STEPS,
+        "parallel_environments_default": PARALLEL_ENVS,
+        "stage1_parallel_seed_workers": 2,
+        "stage1_parallel_environments_per_seed": 4,
         "periodic_evaluation_episodes": EVAL_EPISODES,
         "checkpoint_frequency_transitions": CHECKPOINT_FREQ,
         "periodic_evaluation_frequency_transitions": EVAL_FREQ,
