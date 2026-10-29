@@ -97,14 +97,14 @@ class CudaQuadrotorPhysics:
         total_thrust_cmd = self.mass*self.g*(throttle/0.35)
         # Quad-X mixer: alternating rotor directions; normalized thrust allocation.
         # Collective is distributed with bounded roll/pitch/yaw differentials.
-        roll_delta = moments[:,0] / (2*self.arm)
-        pitch_delta = moments[:,1] / (2*self.arm)
-        yaw_delta = moments[:,2] / (4*0.015)
+        roll_delta = (moments[:,0] / (2*self.arm))[:, None]
+        pitch_delta = (moments[:,1] / (2*self.arm))[:, None]
+        yaw_delta = (moments[:,2] / (4*0.015))[:, None]
         base = total_thrust_cmd[:,None] / 4
-        desired = torch.stack((base-roll_delta/2+pitch_delta/2-yaw_delta,
-                               base-roll_delta/2-pitch_delta/2+yaw_delta,
-                               base+roll_delta/2-pitch_delta/2-yaw_delta,
-                               base+roll_delta/2+pitch_delta/2+yaw_delta), -1).clamp_min(0)
+        desired = torch.cat((base-roll_delta/2+pitch_delta/2-yaw_delta,
+                             base-roll_delta/2-pitch_delta/2+yaw_delta,
+                             base+roll_delta/2-pitch_delta/2-yaw_delta,
+                             base+roll_delta/2+pitch_delta/2+yaw_delta), dim=1).clamp_min(0)
         # First-order motor/rotor response, no Python-side per-environment loop.
         tau_motor = 0.045
         motor_alpha = min(self.dt / tau_motor, 1.0)
