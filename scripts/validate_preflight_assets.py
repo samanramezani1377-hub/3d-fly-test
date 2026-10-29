@@ -31,7 +31,7 @@ def read_json(path: Path, errors: list[str]):
 
 def display_path(path: Path) -> str:
     try:
-        return str(display_path(path))
+        return str(path.relative_to(ROOT))
     except ValueError:
         return str(path)
 
