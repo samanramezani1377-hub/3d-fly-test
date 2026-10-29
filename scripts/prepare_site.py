@@ -158,8 +158,15 @@ if (window.DRONE_CONFIG && window.DRONE_CONFIG.model_url && THREE.GLTFLoader) {
     html = replace_once(
         html,
         r'userFn = new Function\("return \(" \+ \$\("code"\)\.value \+ "\\n; control\)"\)\(\);',
-        'userFn = new Function($("code").value + "\\n; return control;")();',
-        "JavaScript controller compilation",
+        'const source = $("code").value;\\n        userFn = new Function(source + "\\\\n; return control;")();\\n        activeControllerSource = source;\\n        activeControllerSourceMode = "script";',
+        "JavaScript controller compilation and source tracking",
+    )
+
+    html = replace_once(
+        html,
+        r'pySetPolicy\\(\\$\\("pycode"\\)\\.value\\);\\s*// \\(re\\)compiles policy\\(\\); clears its globals\\s*pyPolicySet = true;',
+        'const source = $("pycode").value;\\n    pySetPolicy(source);      // (re)compiles policy(); clears its globals\\n    activeControllerSource = source;\\n    activeControllerSourceMode = "python";\\n    pyPolicySet = true;',
+        "Python controller source tracking",
     )
 
     html = replace_once(
@@ -168,11 +175,21 @@ if (window.DRONE_CONFIG && window.DRONE_CONFIG.model_url && THREE.GLTFLoader) {
         r'''// ---------- structured flight-test recorder ----------
 const recorder = { active:false, startedAt:null, stoppedAt:null, scenario:"", samples:[], lastSampleAt:-Infinity, runId:null };
 let lastCommand = [0,0,0,0];
+let activeControllerSource = null;
+let activeControllerSourceMode = null;
+function effectiveControllerMode() {
+  if (mode === "script" && userFn) return "script";
+  if (mode === "python" && pyReady && pyPolicySet) return "python";
+  return "keyboard";
+}
 function recorderStatus(message) {
   document.getElementById("recordStatus").textContent = message;
 }
 function recorderMeta() {
   const cfg = window.DRONE_CONFIG || {};
+  const droneConfig = JSON.parse(JSON.stringify(cfg));
+  delete droneConfig.controller_source;
+  const effectiveMode = effectiveControllerMode();
   return {
     schema_version: 1,
     run_id: recorder.runId,
@@ -184,9 +201,11 @@ function recorderMeta() {
     build: cfg.build_info || {},
     simulator: "SkySim browser WebAssembly core",
     simulator_revision: (cfg.build_info || {}).upstream_ref || "unknown",
-    controller_mode: mode,
-    controller_source: cfg.controller_source || null,
-    drone_config: cfg,
+    controller_mode: effectiveMode,
+    controller_source_mode: effectiveMode === "keyboard" ? null : activeControllerSourceMode,
+    controller_source_matches_mode: effectiveMode === "keyboard" ? null : activeControllerSourceMode === effectiveMode,
+    controller_source: effectiveMode === "keyboard" ? null : activeControllerSource,
+    drone_config: droneConfig,
     recording_rate_hz: 20,
     notes: "Simulation telemetry only; visual GLB does not define physics. Not a real-flight safety validation."
   };
@@ -223,7 +242,8 @@ function captureSample(simTime) {
     timestamp_utc: new Date().toISOString(),
     sim_time_s: Number(simTime.toFixed(4)),
     armed: !!armed,
-    controller_mode: mode,
+    controller_mode: effectiveControllerMode(),
+    controller_source_mode: effectiveControllerMode() === "keyboard" ? null : activeControllerSourceMode,
     x_m:o.pos[0], y_m:o.pos[1], z_m:o.pos[2],
     vx_mps:o.vel[0], vy_mps:o.vel[1], vz_mps:o.vel[2],
     roll_rad:o.euler[0], pitch_rad:o.euler[1], yaw_rad:o.euler[2],
