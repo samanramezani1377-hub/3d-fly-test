@@ -138,3 +138,17 @@ Workflow در شاخهٔ `demo` اجرا می‌شود، ساخت هندسه و 
 - تاج و پوستهٔ پایینی فعلاً فقط از هم جدا شده‌اند؛ روش سرهم‌کردن را تا دستور بعدی طراحی نکن.
 - مدل را از صفر ننویس؛ کد موجود را در صورت نیاز با تغییرات مشخص و محدود اصلاح کن.
 - نتیجه‌ای را که واقعاً آزموده نشده، معتبر یا آمادهٔ ساخت اعلام نکن.
+
+
+## Preflight analysis handoff
+
+This imported geometry is now consumed from the `3d-fly-test` repository. See:
+
+- [Preflight asset index](../README.md)
+- [Aerodynamic and flight-dynamics analysis plan](../ANALYSIS_PLAN.md)
+- [Preflight data dictionary](../DATA_DICTIONARY.md)
+- [Structural asset validator](../../../scripts/validate_preflight_assets.py)
+
+**Known discrepancies requiring CAD-kernel remeasurement:** the current validation report records an assembly bounding box of approximately 271.89 × 271.86 × 49.94 mm, while older notes mention an approximately 247 mm footprint. The report records a propeller diameter of 74.802 mm, while the design overview earlier in this document records 63.5 mm. Do not use either pair as a trusted physical dimension until the exported STEP solids are reopened and measured with a documented unit/transform convention.
+
+The structural validator does not certify BREP validity, watertightness, mass properties, aerodynamic performance, physical fit or flight readiness.
