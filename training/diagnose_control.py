@@ -13,7 +13,8 @@ import numpy as np
 
 
 def run_throttle_probe(env, throttle: float, steps: int) -> dict:
-    obs, reset_info = env.reset(seed=123)
+    obs, _ = env.reset(seed=123)
+    initial_position = [float(obs[0]), float(obs[1]), float(obs[2])]
     trace = []
     for step in range(steps):
         action = np.array([0.0, 0.0, 0.0, throttle], dtype=np.float32)
@@ -41,8 +42,7 @@ def run_throttle_probe(env, throttle: float, steps: int) -> dict:
     return {
         "throttle": float(throttle),
         "steps_run": len(trace),
-        "initial_position_xyz_m": [float(x) for x in reset_info.get("target_xyz_m", [])]
-            if False else [0.0, 2.0, 0.0],
+        "initial_position_xyz_m": initial_position,
         "final_position_xyz_m": [last.get("x_m"), last.get("altitude_m"), last.get("z_m")],
         "final_velocity_xyz_mps": [last.get("vx_mps"), last.get("vertical_speed_mps"), last.get("vz_mps")],
         "terminated": last.get("terminated"),
