@@ -1,0 +1,76 @@
+name: Deploy SkySim flight test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "config/**"
+      - "controllers/**"
+      - "models/**"
+      - "scripts/**"
+      - "README.md"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: sky-sim-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout this configuration repository
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned SkySim source
+        uses: actions/checkout@v4
+        with:
+          repository: vishwagw/Sky-Sim-drone-simulator-3.0
+          ref: a31864f999418531775980b879979ce4c57e791d
+          path: upstream
+
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.64
+          actions-cache-folder: emsdk-cache
+
+      - name: Apply this repository's drone configuration and controller
+        run: python3 scripts/prepare_site.py --upstream upstream
+
+      - name: Build SkySim WebAssembly physics core
+        run: |
+          chmod +x upstream/web/build_wasm.sh
+          upstream/web/build_wasm.sh
+          cp upstream/web/public/skysim_core.* upstream/web/
+
+      - name: Prepare Pages artifact
+        run: |
+          mkdir -p _site
+          cp -a upstream/web/. _site/
+          cp upstream/LICENSE _site/THIRD_PARTY_LICENSE_SKYSIM.txt
+          touch _site/.nojekyll
+          test -s _site/index.html
+          test -s _site/skysim_core.js
+          test -s _site/skysim_core.wasm
+          test -s _site/drone-config.js
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print deployed URL
+        run: echo "SkySim deployed. Open the GitHub Pages URL from the github-pages environment."
