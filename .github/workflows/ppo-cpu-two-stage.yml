@@ -153,39 +153,62 @@ jobs:
           name: ppo-stage1-seed43
           path: stage1/seed43
 
-      - name: Select best Stage 1 checkpoint using periodic evaluation
+      - name: Select Stage 1 checkpoint by flight stability
         id: select
         run: |
           python - <<'PY'
           import json
           import os
           from pathlib import Path
-          import numpy as np
+          import subprocess
+          import sys
+
+          def rank(report):
+              # Higher is better for success/stability; lower is better for crashes/errors.
+              return (
+                  float(report["hover_success_rate"]),
+                  -float(report["crash_rate"]),
+                  float(report["mean_hover_stable_fraction"]),
+                  -float(report["mean_absolute_vertical_speed_during_flight_mps"]),
+                  -float(report["mean_absolute_final_altitude_error_m"]),
+                  float(report["mean_return"]),
+              )
 
           candidates = []
           for seed in (42, 43):
               root = Path(f"stage1/seed{seed}")
               models = list(root.rglob("best_model.zip"))
-              eval_files = list(root.rglob("evaluations.npz"))
-              if not models or not eval_files:
-                  raise SystemExit(f"Missing best checkpoint/evaluation data for seed {seed}")
-              with np.load(eval_files[0]) as data:
-                  results = np.asarray(data["results"], dtype=float)
-                  timesteps = np.asarray(data["timesteps"], dtype=int)
-              if results.size == 0:
-                  raise SystemExit(f"No evaluation results found for seed {seed}")
-              means = results.mean(axis=1)
-              idx = int(np.argmax(means))
+              if not models:
+                  raise SystemExit(f"Missing best checkpoint for seed {seed}")
+              model = models[0].resolve()
+              report_path = Path(f"stage1-seed{seed}-evaluation.json")
+              subprocess.run([
+                  sys.executable, "training/evaluate.py", "--model", str(model),
+                  "--episodes", "20", "--seed", "2000", "--output", str(report_path),
+              ], check=True)
+              report = json.loads(report_path.read_text())
               candidates.append({
                   "seed": seed,
-                  "model": str(models[0].resolve()),
-                  "best_mean_reward": float(means[idx]),
-                  "best_eval_timestep": int(timesteps[idx]),
+                  "model": str(model),
+                  "evaluation": str(report_path),
+                  "hover_success_rate": float(report["hover_success_rate"]),
+                  "crash_rate": float(report["crash_rate"]),
+                  "mean_hover_stable_fraction": float(report["mean_hover_stable_fraction"]),
+                  "mean_absolute_vertical_speed_during_flight_mps": float(report["mean_absolute_vertical_speed_during_flight_mps"]),
+                  "mean_absolute_final_altitude_error_m": float(report["mean_absolute_final_altitude_error_m"]),
+                  "mean_return": float(report["mean_return"]),
               })
 
-          selected = max(candidates, key=lambda item: item["best_mean_reward"])
+          selected = max(candidates, key=rank)
           Path("stage1-selection.json").write_text(json.dumps({
-              "selection_metric": "maximum mean periodic evaluation reward",
+              "selection_metric": [
+                  "hover_success_rate descending",
+                  "crash_rate ascending",
+                  "mean_hover_stable_fraction descending",
+                  "mean_absolute_vertical_speed_during_flight_mps ascending",
+                  "mean_absolute_final_altitude_error_m ascending",
+                  "mean_return descending (tie-breaker only)",
+              ],
               "candidates": candidates,
               "selected": selected,
           }, indent=2) + "\n")
@@ -246,6 +269,11 @@ jobs:
           candidates = [{
               "stage": "stage1",
               "model": "${{ steps.select.outputs.model }}",
+              "hover_success_rate": float(stage1_report["hover_success_rate"]),
+              "crash_rate": float(stage1_report["crash_rate"]),
+              "mean_hover_stable_fraction": float(stage1_report["mean_hover_stable_fraction"]),
+              "mean_absolute_vertical_speed_during_flight_mps": float(stage1_report["mean_absolute_vertical_speed_during_flight_mps"]),
+              "mean_absolute_final_altitude_error_m": float(stage1_report["mean_absolute_final_altitude_error_m"]),
               "mean_return": float(stage1_report["mean_return"]),
           }]
 
@@ -256,18 +284,49 @@ jobs:
               candidates.append({
                   "stage": "stage2",
                   "model": str(stage2_model),
+                  "hover_success_rate": float(report["hover_success_rate"]),
+                  "crash_rate": float(report["crash_rate"]),
+                  "mean_hover_stable_fraction": float(report["mean_hover_stable_fraction"]),
+                  "mean_absolute_vertical_speed_during_flight_mps": float(report["mean_absolute_vertical_speed_during_flight_mps"]),
+                  "mean_absolute_final_altitude_error_m": float(report["mean_absolute_final_altitude_error_m"]),
                   "mean_return": float(report["mean_return"]),
               })
 
-          winner = max(candidates, key=lambda item: item["mean_return"])
+          def rank(item):
+              return (
+                  item["hover_success_rate"],
+                  -item["crash_rate"],
+                  item["mean_hover_stable_fraction"],
+                  -item["mean_absolute_vertical_speed_during_flight_mps"],
+                  -item["mean_absolute_final_altitude_error_m"],
+                  item["mean_return"],
+              )
+
+          winner = max(candidates, key=rank)
           output = Path("final-model.zip")
           shutil.copy2(winner["model"], output)
+          deployment_eligible = (
+              winner["crash_rate"] == 0.0
+              and winner["hover_success_rate"] == 1.0
+          )
           manifest = {
-              "selection_metric": "mean return over 20 evaluation episodes with the same episode seeds",
+              "selection_metric": [
+                  "hover_success_rate descending",
+                  "crash_rate ascending",
+                  "mean_hover_stable_fraction descending",
+                  "mean_absolute_vertical_speed_during_flight_mps ascending",
+                  "mean_absolute_final_altitude_error_m ascending",
+                  "mean_return descending (tie-breaker only)",
+              ],
               "candidates": candidates,
               "selected": winner,
+              "deployment_eligible": deployment_eligible,
               "simulation_only": True,
-              "warning": "Not validated for real flight; verify physics parity and physical aircraft model first."
+              "warning": (
+                  "Not validated for real flight; verify physics parity and physical aircraft model first."
+                  if deployment_eligible else
+                  "No candidate met the zero-crash and 100% hover-success gate. This is only the least-unsafe simulation candidate; do not deploy."
+              ),
           }
           Path("final-model-selection.json").write_text(json.dumps(manifest, indent=2) + "\n")
           print(json.dumps(manifest, indent=2))
@@ -280,6 +339,8 @@ jobs:
           name: ppo-cpu-two-stage-results
           path: |
             stage1-selection.json
+            stage1-seed42-evaluation.json
+            stage1-seed43-evaluation.json
             final-model.zip
             final-model-selection.json
             stage1/
