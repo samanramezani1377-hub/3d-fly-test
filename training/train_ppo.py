@@ -66,10 +66,13 @@ def main(argv=None):
     eval_raw_env = NativeSkySimEnv(target=target, max_steps=args.max_steps)
     eval_env = Monitor(eval_raw_env, filename=str(run_dir / "evaluation-monitor.csv"))
 
+    policy_kwargs = {"net_arch": {"pi": [64, 64], "vf": [64, 64]}}
     metadata = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "run_name": args.run_name,
         "algorithm": "PPO",
+        "policy_architecture": {"policy": [64, 64], "value": [64, 64], "observation_features": 12, "action_dimensions": 4},
+        "expected_trainable_parameters": 10313,
         "seed": args.seed,
         "timesteps_requested": args.timesteps,
         "max_steps_per_episode": args.max_steps,
@@ -121,7 +124,15 @@ def main(argv=None):
         seed=args.seed,
         tensorboard_log=str(run_dir / "tensorboard"),
         device="auto",
+        policy_kwargs=policy_kwargs,
     )
+    parameter_count = sum(parameter.numel() for parameter in model.policy.parameters() if parameter.requires_grad)
+    if parameter_count != 10313:
+        raise RuntimeError(f"Unexpected PPO policy parameter count: expected 10313, got {parameter_count}")
+    print("PPO policy architecture: obs=12 -> actor 64 -> 64 -> 4 actions; critic 12 -> 64 -> 64 -> 1 value")
+    print(f"Trainable policy parameters: {parameter_count:,}")
+    metadata["actual_trainable_parameters"] = parameter_count
+    (run_dir / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     try:
         model.learn(total_timesteps=args.timesteps, callback=[checkpoint_callback, eval_callback])
         model.save(str(run_dir / "final_model"))
