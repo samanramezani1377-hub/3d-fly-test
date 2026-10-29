@@ -61,6 +61,7 @@ jobs:
       - name: Verify CPU-only runtime and validate observations/actions
         run: |
           python -m compileall -q training
+          python -m pytest -q training/tests/test_native_env.py
           python -m unittest training.test_reward_design
           python - <<'PY'
           import torch
