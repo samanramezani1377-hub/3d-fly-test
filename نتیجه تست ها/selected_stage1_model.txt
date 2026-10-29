@@ -1,0 +1,1 @@
+/content/3d-fly-test/training/runs/ppo-hover-100k-seed43/best/best_model.zip
