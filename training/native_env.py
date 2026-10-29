@@ -322,3 +322,29 @@ class NativeSkySimEnv(gym.Env):
         if not self._closed:
             self.core.skysim_destroy(self.handle)
             self._closed = True
+
+
+class PolicyObservationWrapper(gym.ObservationWrapper):
+    """Deterministically scale state features and express position relative to the target.
+
+    The underlying environment and info dictionaries retain physical SI units.
+    Only the observation sent to the policy is transformed, so evaluation metrics
+    and diagnostics continue to use physical measurements.
+    """
+
+    def __init__(self, env):
+        super().__init__(env)
+        self.observation_space = spaces.Box(
+            low=-np.inf, high=np.inf, shape=(12,), dtype=np.float32
+        )
+
+    def observation(self, observation):
+        obs = np.asarray(observation, dtype=np.float32).copy()
+        # Position becomes target-relative; normalize heterogeneous SI units.
+        obs[0:3] = (obs[0:3] - self.env.target.astype(np.float32)) / 12.0
+        obs[3:6] = obs[3:6] / 8.0
+        obs[6:9] = obs[6:9] / np.pi
+        obs[9:12] = obs[9:12] / 10.0
+        if obs.shape != (12,) or not np.all(np.isfinite(obs)):
+            raise ValueError(f"Invalid policy observation: shape={obs.shape}, values={obs}")
+        return obs
