@@ -17,7 +17,7 @@ EVAL_EPISODES = 5
 SELECTION_EPISODES = 10
 SCREENING_EPISODES = 2
 FINALIST_COUNT = 3
-PARALLEL_ENVS = 8
+PARALLEL_ENVS = 4
 CHECKPOINT_FREQ = 20_000
 EVAL_FREQ = 20_000
 
@@ -104,7 +104,7 @@ def main() -> None:
         return {"stage": 1, "seed": seed, "model": str(model),
                 "evaluation": str(report_path), **report}
 
-    # Two seeds run concurrently; their combined simulator-worker count is 8.
+    # Two seeds run concurrently; each uses 4 environments (8 workers total).
     with ThreadPoolExecutor(max_workers=2) as pool:
         stage1_candidates = list(pool.map(train_and_evaluate_seed, (42, 43)))
     winner = max(stage1_candidates, key=rank)
