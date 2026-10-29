@@ -80,6 +80,20 @@ jobs:
           set -o pipefail
           python training/run_five_stage.py 2>&1 | tee five-stage-training.log
 
+      - name: Print full result reports for direct log retrieval
+        if: always()
+        run: |
+          echo '===== FIVE-STAGE MANIFEST ====='
+          if [ -f training/runs/five-stage-training-manifest.json ]; then cat training/runs/five-stage-training-manifest.json; else echo 'Manifest not produced'; fi
+          echo '===== PARALLEL ENVIRONMENT BENCHMARK ====='
+          if [ -f training/runs/parallel-env-benchmark.json ]; then cat training/runs/parallel-env-benchmark.json; else echo 'Benchmark not produced'; fi
+          echo '===== OBSERVATION VALIDATION ====='
+          if [ -f observation-validation.json ]; then cat observation-validation.json; else echo 'Validation not produced'; fi
+          echo '===== CONTROL DIAGNOSTICS ====='
+          if [ -f training/runs/control-diagnostics.json ]; then cat training/runs/control-diagnostics.json; else echo 'Diagnostics not produced'; fi
+          echo '===== TRAINING LOG TAIL ====='
+          if [ -f five-stage-training.log ]; then tail -c 30000 five-stage-training.log; else echo 'Training log not produced'; fi
+
       - name: Upload models, stage reports, diagnostics, and logs
         if: always()
         uses: actions/upload-artifact@v4
