@@ -5,9 +5,9 @@ This folder provides a native C++ build of SkySim DroneCore, a Gymnasium adapter
 ## Important fixes in the current training version
 
 - PPO actions now use a symmetric [-1, 1] action space. The old throttle space [0, 1] interacted badly with PPO's zero-centered Gaussian actions: negative samples were clipped to zero, and the trained policy collapsed toward zero throttle.
-- The throttle action is mapped to the simulator using a hover-centered starting estimate (center 0.35, span 0.35). This estimate comes from the repository's diagnostic sweep and is a simulation-specific starting point, not a measured physical flight value.
-- Reward shaping explicitly accounts for altitude error, horizontal position error, velocity, attitude, and a large crash penalty.
-- Training defaults to 50,000 timesteps, saves checkpoints every 5,000 steps, and evaluates every 5,000 steps. The best evaluated model and the final model are saved separately.
+- The throttle action is mapped to a narrower simulator range (0.20–0.50) around a hover-centered starting estimate (0.35), reducing early exploration into extreme motor commands. This estimate comes from the repository's diagnostic sweep and is a simulation-specific starting point, not a measured physical flight value.
+- Reward shaping uses bounded altitude/horizontal proximity scores, capped velocity and attitude penalties, and an explicit crash penalty. Evaluation reports stable-hover fraction and success rate, not only episode return.
+- Training defaults to 50,000 timesteps, saves checkpoints every 5,000 steps, and evaluates every 5,000 steps across 10 episodes. The best evaluated model and the final model are saved separately.
 
 ## Backend architecture
 
@@ -30,7 +30,7 @@ Open [the 50,000-step Colab notebook](https://colab.research.google.com/github/s
 
 ## Run artifacts
 
-Each run is stored under training/runs/<run-name>/ with periodic PPO checkpoints, final_model.zip, a separately saved best/best_model.zip when evaluation runs, Monitor CSV files, TensorBoard logs, evaluation reports, and metadata.json. Large model weights are not committed automatically.
+Each run is stored under training/runs/<run-name>/ with periodic PPO checkpoints, final_model.zip, a separately saved best/best_model.zip when evaluation runs, Monitor CSV files, TensorBoard logs, evaluation reports with crash causes and hover-stability metrics, and metadata.json. Large model weights are not committed automatically.
 
 ## Interpreting results
 

@@ -28,7 +28,7 @@ def parse_args(argv=None):
     parser.add_argument("--output-dir", type=Path, default=Path("training/runs"))
     parser.add_argument("--save-freq", type=int, default=5_000)
     parser.add_argument("--eval-freq", type=int, default=5_000)
-    parser.add_argument("--eval-episodes", type=int, default=5)
+    parser.add_argument("--eval-episodes", type=int, default=10)
     return parser.parse_args(argv)
 
 
@@ -77,8 +77,8 @@ def main(argv=None):
         "checkpoint_frequency": args.save_freq,
         "evaluation_frequency": args.eval_freq,
         "evaluation_episodes": args.eval_episodes,
-        "action_space": "symmetric [-1, 1]; throttle biased around hover estimate (0.35)",
-        "reward": "altitude/position error + velocity/attitude penalties; explicit crash penalty",
+        "action_space": "symmetric [-1, 1]; throttle restricted to 0.20..0.50 around hover estimate (0.35)",
+        "reward": "bounded exponential altitude/horizontal proximity scores, capped speed/attitude penalties, explicit crash penalty -100",
         "backend": "native-drone-core",
         "browser_core_same_cpp_sources": True,
         "upstream_revision_expected": UPSTREAM_REVISION,
@@ -110,13 +110,13 @@ def main(argv=None):
         "MlpPolicy",
         env,
         learning_rate=3e-4,
-        n_steps=2048,
+        n_steps=1024,
         batch_size=64,
         n_epochs=10,
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
-        ent_coef=0.01,
+        ent_coef=0.005,
         verbose=1,
         seed=args.seed,
         tensorboard_log=str(run_dir / "tensorboard"),

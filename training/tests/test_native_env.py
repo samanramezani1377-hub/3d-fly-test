@@ -12,8 +12,8 @@ def test_symmetric_action_mapping_avoids_zero_throttle_bias():
     assert np.isclose(throttle, 0.35)
     _, min_throttle = NativeSkySimEnv.map_action(np.array([0.0, 0.0, 0.0, -1.0]))
     _, max_throttle = NativeSkySimEnv.map_action(np.array([0.0, 0.0, 0.0, 1.0]))
-    assert np.isclose(min_throttle, 0.0)
-    assert np.isclose(max_throttle, 0.70)
+    assert np.isclose(min_throttle, 0.20)
+    assert np.isclose(max_throttle, 0.50)
 
 
 def test_native_core_reset_and_step():

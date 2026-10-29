@@ -40,6 +40,10 @@ def main(argv=None):
             obs, _ = env.reset(seed=args.seed + episode)
             total_reward = 0.0
             steps = 0
+            hover_steps = 0
+            altitude_errors_during_flight = []
+            horizontal_errors_during_flight = []
+            vertical_speeds_during_flight = []
             terminated = truncated = False
             info = {}
             while not (terminated or truncated):
@@ -47,11 +51,16 @@ def main(argv=None):
                 obs, reward, terminated, truncated, info = env.step(action)
                 total_reward += float(reward)
                 steps += 1
+                altitude_errors_during_flight.append(abs(float(info.get("altitude_error_m", 0.0))))
+                horizontal_errors_during_flight.append(float(info.get("horizontal_error_m", 0.0)))
+                vertical_speeds_during_flight.append(abs(float(info.get("velocity_xyz_mps", [0, 0, 0])[1])))
+                hover_steps += int(bool(info.get("hover_stable", False)))
             final_position = info.get("position_xyz_m")
             final_velocity = info.get("velocity_xyz_mps")
             final_altitude_error = (
                 float(final_position[1] - args.target_y) if final_position is not None else None
             )
+            hover_fraction = hover_steps / max(steps, 1)
             episode_results.append({
                 "episode": episode,
                 "seed": args.seed + episode,
@@ -60,6 +69,13 @@ def main(argv=None):
                 "terminated": bool(terminated),
                 "truncated": bool(truncated),
                 "crashed": bool(info.get("crashed", False)),
+                "crash_reason": info.get("crash_reason"),
+                "hover_stable_steps": hover_steps,
+                "hover_stable_fraction": hover_fraction,
+                "episode_hover_success": bool(not info.get("crashed", False) and hover_fraction >= 0.8),
+                "mean_absolute_altitude_error_m": float(np.mean(altitude_errors_during_flight)),
+                "mean_horizontal_error_m": float(np.mean(horizontal_errors_during_flight)),
+                "mean_absolute_vertical_speed_mps": float(np.mean(vertical_speeds_during_flight)),
                 "final_position_xyz_m": final_position,
                 "final_velocity_xyz_mps": final_velocity,
                 "final_altitude_error_m": final_altitude_error,
@@ -89,7 +105,12 @@ def main(argv=None):
         "mean_return": float(np.mean(returns)),
         "std_return": float(np.std(returns)),
         "crash_rate": float(np.mean([row["crashed"] for row in episode_results])),
+        "hover_success_rate": float(np.mean([row["episode_hover_success"] for row in episode_results])),
+        "mean_hover_stable_fraction": float(np.mean([row["hover_stable_fraction"] for row in episode_results])),
         "mean_steps": float(np.mean([row["steps"] for row in episode_results])),
+        "mean_absolute_altitude_error_during_flight_m": float(np.mean([row["mean_absolute_altitude_error_m"] for row in episode_results])),
+        "mean_horizontal_error_during_flight_m": float(np.mean([row["mean_horizontal_error_m"] for row in episode_results])),
+        "mean_absolute_vertical_speed_during_flight_mps": float(np.mean([row["mean_absolute_vertical_speed_mps"] for row in episode_results])),
         "mean_absolute_final_altitude_error_m": float(np.mean(altitude_errors)) if altitude_errors else None,
         "mean_absolute_final_vertical_speed_mps": float(np.mean(vertical_speeds)) if vertical_speeds else None,
         "episode_results": episode_results,

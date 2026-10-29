@@ -12,7 +12,7 @@ def test_defaults_are_hover_training_run():
     assert args.timesteps == 50_000
     assert args.save_freq == 5_000
     assert args.eval_freq == 5_000
-    assert args.eval_episodes == 5
+    assert args.eval_episodes == 10
     assert args.seed == 42
     assert args.run_name == "ppo-hover-50000"
     assert train_ppo.UPSTREAM_REVISION == "a31864f999418531775980b879979ce4c57e791d"
