@@ -16,7 +16,7 @@ class NativeSkySimEnv(gym.Env):
     Observation: [x,y,z,vx,vy,vz,roll,pitch,yaw,wx,wy,wz].
     Action is symmetric [-1, 1] on every dimension so PPO does not clip a
     zero-centered Gaussian throttle distribution to zero. Throttle is mapped
-    to 0.20..0.50 around the initial hover estimate (0.35) from the control sweep.
+    to 0.20..0.50 around a configurable throttle bias. The default 0.35 is not assumed to be a calibrated hover throttle.
     """
 
     metadata = {"render_modes": []}
