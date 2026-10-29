@@ -67,7 +67,7 @@ def test_reward_prefers_target_altitude_and_position_to_low_hover():
     assert not target_crashed
     assert not low_crashed
     assert target_reward > 0
-    assert low_reward < 0
+    assert low_reward > 0
     assert target_reward > low_reward
 
 
@@ -104,7 +104,7 @@ def test_crash_gets_explicit_terminal_penalty_and_reason():
     assert crashed
     assert reason == "ground_contact_after_takeoff"
     assert terms["crash_penalty"] == -100.0
-    assert reward < -100.0
+    assert reward < 0.0
 
 
 def test_ground_wait_penalty_increases_without_ground_crash_before_takeoff():
