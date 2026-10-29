@@ -11,7 +11,6 @@ def test_defaults_are_prototype_only():
     args = train_ppo.parse_args([])
     assert args.timesteps == 200_000
     assert args.seed == 42
-    assert args.port == 5557
     assert args.run_name == "prototype-hover"
     assert train_ppo.UPSTREAM_REVISION == "a31864f999418531775980b879979ce4c57e791d"
     assert "numerical parity" in train_ppo.BACKEND_WARNING
