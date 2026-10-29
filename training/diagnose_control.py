@@ -74,6 +74,7 @@ def run_policy_probe(env, model_path: Path, steps: int) -> dict:
             "action_pitch": float(action[1]),
             "action_yaw_rate": float(action[2]),
             "action_throttle": float(action[3]),
+            "physical_throttle": float(info.get("throttle", 0.0)),
             "x_m": float(raw_obs[0]),
             "altitude_m": float(raw_obs[1]),
             "z_m": float(raw_obs[2]),
