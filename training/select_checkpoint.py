@@ -85,19 +85,18 @@ def main(argv=None):
     evaluated = []
     for index, candidate in enumerate(finalists):
         model_path = Path(candidate["model"])
-        report_path = report_dir / f"finalist-{index:03d}.json"
-        report = evaluate(model_path, report_path, args.episodes, args.seed)
-        evaluated.append({
-            "model": str(model_path),
-            "evaluation": str(report_path),
-            "hover_success_rate": float(report["hover_success_rate"]),
-            "takeoff_success_rate": float(report.get("takeoff_success_rate", 0.0)),
-            "crash_rate": float(report["crash_rate"]),
-            "mean_hover_stable_fraction": float(report["mean_hover_stable_fraction"]),
-            "mean_absolute_vertical_speed_during_flight_mps": float(report["mean_absolute_vertical_speed_during_flight_mps"]),
-            "mean_absolute_final_altitude_error_m": float(report["mean_absolute_final_altitude_error_m"]),
-            "mean_return": float(report["mean_return"]),
-        })
+        reports = []
+        seed_reports = []
+        for seed_offset in (0, 10_000):
+            seed_report_path = report_dir / f"finalist-{index:03d}-seed-{args.seed + seed_offset}.json"
+            reports.append(evaluate(model_path, seed_report_path, max(1, args.episodes // 2), args.seed + seed_offset))
+            seed_reports.append(str(seed_report_path))
+        keys = ["hover_success_rate", "takeoff_success_rate", "crash_rate",
+                "mean_hover_stable_fraction", "mean_absolute_vertical_speed_during_flight_mps",
+                "mean_absolute_final_altitude_error_m", "mean_return"]
+        aggregate = {key: sum(float(report.get(key, 0.0)) for report in reports) / len(reports) for key in keys}
+        evaluated.append({"model": str(model_path), "evaluation": seed_reports,
+                          "evaluation_seeds": [args.seed, args.seed + 10_000], **aggregate})
 
     winner = max(evaluated, key=rank)
     destination = run_dir / "best" / "best_model.zip"
