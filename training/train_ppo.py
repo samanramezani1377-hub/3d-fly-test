@@ -1,4 +1,4 @@
-"""PPO training using a native build of the same C++ DroneCore sources as browser WASM."""
+"""PPO training with checkpoints and periodic evaluation for the SkySim hover task."""
 from __future__ import annotations
 
 import argparse
@@ -18,28 +18,30 @@ BACKEND_WARNING = (
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--timesteps", type=int, default=200_000)
+    parser.add_argument("--timesteps", type=int, default=50_000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--target-x", type=float, default=0.0)
     parser.add_argument("--target-y", type=float, default=3.0)
     parser.add_argument("--target-z", type=float, default=0.0)
     parser.add_argument("--max-steps", type=int, default=1500)
-    parser.add_argument("--run-name", default="prototype-hover")
+    parser.add_argument("--run-name", default="ppo-hover-50000")
     parser.add_argument("--output-dir", type=Path, default=Path("training/runs"))
-    parser.add_argument("--save-freq", type=int, default=25_000)
+    parser.add_argument("--save-freq", type=int, default=5_000)
+    parser.add_argument("--eval-freq", type=int, default=5_000)
+    parser.add_argument("--eval-episodes", type=int, default=5)
     return parser.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
-    if args.timesteps <= 0 or args.max_steps <= 0 or args.save_freq <= 0:
-        raise SystemExit("--timesteps, --max-steps, and --save-freq must be positive")
+    if min(args.timesteps, args.max_steps, args.save_freq, args.eval_freq, args.eval_episodes) <= 0:
+        raise SystemExit("timesteps, max-steps, save-freq, eval-freq, and eval-episodes must be positive")
     if not args.run_name or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for c in args.run_name):
         raise SystemExit("--run-name may contain only letters, numbers, '-' and '_'")
 
     try:
         from stable_baselines3 import PPO
-        from stable_baselines3.common.callbacks import CheckpointCallback
+        from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
         from stable_baselines3.common.monitor import Monitor
         from stable_baselines3.common.env_checker import check_env
         from native_env import NativeSkySimEnv
@@ -56,61 +58,83 @@ def main(argv=None):
     run_dir.mkdir(parents=True, exist_ok=True)
     target = (args.target_x, args.target_y, args.target_z)
 
-    raw_env = NativeSkySimEnv(
-        target=target,
-        max_steps=args.max_steps,
-    )
+    raw_env = NativeSkySimEnv(target=target, max_steps=args.max_steps)
     check_env(raw_env, warn=True)
-    try:
-        raw_env.reset(seed=args.seed)
-    except TypeError:
-        # Compatibility with older Gymnasium wrappers; seed still recorded.
-        pass
+    raw_env.reset(seed=args.seed)
     env = Monitor(raw_env, filename=str(run_dir / "monitor.csv"))
+
+    eval_raw_env = NativeSkySimEnv(target=target, max_steps=args.max_steps)
+    eval_env = Monitor(eval_raw_env, filename=str(run_dir / "evaluation-monitor.csv"))
 
     metadata = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "run_name": args.run_name,
         "algorithm": "PPO",
         "seed": args.seed,
-        "timesteps": args.timesteps,
+        "timesteps_requested": args.timesteps,
         "max_steps_per_episode": args.max_steps,
         "target_xyz_m": list(target),
+        "checkpoint_frequency": args.save_freq,
+        "evaluation_frequency": args.eval_freq,
+        "evaluation_episodes": args.eval_episodes,
+        "action_space": "symmetric [-1, 1]; throttle biased around hover estimate (0.35)",
+        "reward": "altitude/position error + velocity/attitude penalties; explicit crash penalty",
         "backend": "native-drone-core",
         "browser_core_same_cpp_sources": True,
         "upstream_revision_expected": UPSTREAM_REVISION,
-        "backend_warning": "Uses the same pinned DroneCore C++ sources and project config patch as the browser WASM build, compiled natively. Native-vs-WASM numerical parity still requires regression testing.",
+        "backend_warning": BACKEND_WARNING,
         "drone_config_used": True,
         "physical_aircraft_model_ready": False,
     }
-    (run_dir / "metadata.json").write_text(
-        json.dumps(metadata, indent=2), encoding="utf-8"
-    )
+    (run_dir / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
-    callback = CheckpointCallback(
-        save_freq=max(1, args.save_freq),
+    checkpoint_callback = CheckpointCallback(
+        save_freq=args.save_freq,
         save_path=str(run_dir / "checkpoints"),
         name_prefix="ppo_hover",
         save_replay_buffer=False,
         save_vecnormalize=False,
     )
+    eval_callback = EvalCallback(
+        eval_env,
+        best_model_save_path=str(run_dir / "best"),
+        log_path=str(run_dir / "evaluation"),
+        eval_freq=args.eval_freq,
+        n_eval_episodes=args.eval_episodes,
+        deterministic=True,
+        render=False,
+        warn=True,
+    )
+
     model = PPO(
         "MlpPolicy",
         env,
+        learning_rate=3e-4,
+        n_steps=2048,
+        batch_size=64,
+        n_epochs=10,
+        gamma=0.99,
+        gae_lambda=0.95,
+        clip_range=0.2,
+        ent_coef=0.01,
         verbose=1,
         seed=args.seed,
         tensorboard_log=str(run_dir / "tensorboard"),
         device="auto",
     )
     try:
-        model.learn(total_timesteps=args.timesteps, callback=callback)
+        model.learn(total_timesteps=args.timesteps, callback=[checkpoint_callback, eval_callback])
         model.save(str(run_dir / "final_model"))
     finally:
         env.close()
+        eval_env.close()
 
-    print(f"Saved model: {run_dir / 'final_model.zip'}")
+    print(f"Saved final model: {run_dir / 'final_model.zip'}")
+    best_model = run_dir / "best" / "best_model.zip"
+    if best_model.exists():
+        print(f"Saved best evaluated model: {best_model}")
     print(f"Saved metadata: {run_dir / 'metadata.json'}")
-    print("NOTE: native and WASM builds share C++ sources; verify numerical parity before relying on results.")
+    print("Reminder: this is simulation-only; validate native/WASM parity and the physical model before any real flight.")
 
 
 if __name__ == "__main__":
