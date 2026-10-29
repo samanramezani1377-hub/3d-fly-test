@@ -1,12 +1,12 @@
 """CUDA smoke test for the experimental batched simulator and PPO model."""
 import torch
-from cuda_hover_batch import CudaHoverBatch
+from cuda_physics_env import CudaPhysicsHoverBatch
 from train_ppo_cuda import ActorCritic
 
 def main():
     assert torch.cuda.is_available(), "Run this test on a CUDA-enabled runner/Colab GPU."
     device = "cuda"
-    env = CudaHoverBatch(n_envs=40, device=device)
+    env = CudaPhysicsHoverBatch(n_envs=40, device=device)
     obs = env.observation()
     assert obs.device.type == "cuda" and obs.shape == (40, 12)
     model = ActorCritic().to(device)
@@ -22,7 +22,7 @@ def main():
         loss.backward()
         optimizer.step()
     torch.cuda.synchronize()
-    print("CUDA smoke test passed: 40 environments, physics/reward/rollouts/model update on CUDA.")
+    print("CUDA smoke test passed: 40 environments, four-rotor physics/reward/rollouts/model update on CUDA.")
     print("NOTE: this verifies device placement and finite values, not parity with DroneCore.")
 
 if __name__ == "__main__":
