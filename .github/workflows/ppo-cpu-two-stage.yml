@@ -66,6 +66,7 @@ jobs:
           TIMESTEPS: "100000"
           EVAL_EPISODES: "10"
         run: |
+          set -o pipefail
           python training/train_ppo.py \
             --timesteps "$TIMESTEPS" \
             --seed "$SEED" \
