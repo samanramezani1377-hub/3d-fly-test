@@ -50,12 +50,27 @@ def aggregate(reports: list[dict]) -> dict:
 
 def quality_gate(candidate: dict, baseline: dict) -> dict:
     # Tolerances are explicit practical non-inferiority margins, not statistical proof.
+    # Flight-only errors are incomparable if either model never took off; fail closed.
+    candidate_altitude = candidate.get("mean_absolute_altitude_error_during_flight_m")
+    baseline_altitude = baseline.get("mean_absolute_altitude_error_during_flight_m")
+    candidate_vertical = candidate.get("mean_absolute_vertical_speed_during_flight_mps")
+    baseline_vertical = baseline.get("mean_absolute_vertical_speed_during_flight_mps")
+    altitude_comparable = candidate_altitude is not None and baseline_altitude is not None
+    vertical_comparable = candidate_vertical is not None and baseline_vertical is not None
     checks = {
         "hover_success_within_5pp": candidate["hover_success_rate"] >= baseline["hover_success_rate"] - 0.05,
         "crash_rate_within_5pp": candidate["crash_rate"] <= baseline["crash_rate"] + 0.05,
         "takeoff_success_within_5pp": candidate["takeoff_success_rate"] >= baseline["takeoff_success_rate"] - 0.05,
-        "altitude_error_within_5pct_plus_5cm": candidate["mean_absolute_altitude_error_during_flight_m"] <= baseline["mean_absolute_altitude_error_during_flight_m"] * 1.05 + 0.05,
-        "vertical_speed_within_5pct_plus_5cm_s": candidate["mean_absolute_vertical_speed_during_flight_mps"] <= baseline["mean_absolute_vertical_speed_during_flight_mps"] * 1.05 + 0.05,
+        "altitude_error_available_for_comparison": altitude_comparable,
+        "altitude_error_within_5pct_plus_5cm": bool(
+            altitude_comparable
+            and candidate_altitude <= baseline_altitude * 1.05 + 0.05
+        ),
+        "vertical_speed_available_for_comparison": vertical_comparable,
+        "vertical_speed_within_5pct_plus_5cm_s": bool(
+            vertical_comparable
+            and candidate_vertical <= baseline_vertical * 1.05 + 0.05
+        ),
     }
     return {"checks": checks, "passed": all(checks.values())}
 
