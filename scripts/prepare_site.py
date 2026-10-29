@@ -65,7 +65,7 @@ def main():
     html = index_path.read_text(encoding="utf-8")
     html = replace_once(
         html,
-        r'<script src="https://cdnjs\\.cloudflare\\.com/ajax/libs/three\\.js/r128/three\\.min\\.js"></script>',
+        r'<script src="https:\\.cloudflare\\.com/ajax/libs/three\\.js/r128/three\\.min\\.js"></script>',
         '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>\\n<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>',
         "GLTF loader",
     )
