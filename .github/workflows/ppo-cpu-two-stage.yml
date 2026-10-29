@@ -352,10 +352,11 @@ jobs:
           manifest = {
               "selection_metric": [
                   "hover_success_rate descending",
+                  "takeoff_success_rate descending",
                   "crash_rate ascending",
+                  "mean_absolute_final_altitude_error_m ascending",
                   "mean_hover_stable_fraction descending",
                   "mean_absolute_vertical_speed_during_flight_mps ascending",
-                  "mean_absolute_final_altitude_error_m ascending",
                   "mean_return descending (tie-breaker only)",
               ],
               "candidates": candidates,
