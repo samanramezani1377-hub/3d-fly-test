@@ -1,13 +1,8 @@
-"""Experimental PPO training against the upstream SkySim Gymnasium server.
-
-This currently uses the upstream Godot headless backend, NOT this repository's
-browser WebAssembly physics core. See training/README.md before interpreting results.
-"""
+"""PPO training using a native build of the same C++ DroneCore sources as browser WASM."""
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import random
 from datetime import datetime, timezone
 from pathlib import Path
@@ -50,7 +45,7 @@ def main(argv=None):
         from stable_baselines3.common.callbacks import CheckpointCallback
         from stable_baselines3.common.monitor import Monitor
         from stable_baselines3.common.env_checker import check_env
-        from skysim import SkySimEnv, HoverTask
+        from native_env import NativeSkySimEnv
     except ImportError as exc:
         raise SystemExit(
             "Missing dependencies. Install training/requirements.txt and the pinned "
@@ -64,9 +59,8 @@ def main(argv=None):
     run_dir.mkdir(parents=True, exist_ok=True)
     target = (args.target_x, args.target_y, args.target_z)
 
-    raw_env = SkySimEnv(
-        port=args.port,
-        task=HoverTask(target=target),
+    raw_env = NativeSkySimEnv(
+        target=target,
         max_steps=args.max_steps,
     )
     check_env(raw_env, warn=True)
@@ -86,9 +80,10 @@ def main(argv=None):
         "max_steps_per_episode": args.max_steps,
         "target_xyz_m": list(target),
         "server_port": args.port,
-        "backend": "upstream-skysim-godot-headless",
+        "backend": "native-drone-core",
+        "browser_core_same_cpp_sources": True,
         "upstream_revision_expected": UPSTREAM_REVISION,
-        "backend_warning": BACKEND_WARNING,
+        "backend_warning": "Uses the same pinned DroneCore C++ sources and project config patch as the browser WASM build, compiled natively. Native-vs-WASM numerical parity still requires regression testing.",
         "drone_config_used": False,
         "physical_aircraft_model_ready": False,
     }
@@ -119,7 +114,7 @@ def main(argv=None):
 
     print(f"Saved model: {run_dir / 'final_model.zip'}")
     print(f"Saved metadata: {run_dir / 'metadata.json'}")
-    print(f"WARNING: {BACKEND_WARNING}")
+    print("NOTE: native and WASM builds share C++ sources; verify numerical parity before relying on results.")
 
 
 if __name__ == "__main__":
