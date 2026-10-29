@@ -126,7 +126,6 @@ class CudaHoverBatch:
         done = crashed | timeout
         # Reset completed rows on-device before producing the next observation.
         # The done mask prevents value bootstrapping across these resets.
-        if done.any():
-            self.reset(done)
+        self.reset(done)
         obs = self.observation()
         return obs, reward, done, {"crashed": crashed}
