@@ -43,7 +43,7 @@ def main():
         "benchmark": "PPO CPU throughput; same seed and transition budget",
         "results_ranked_fastest_first": results,
         "recommended_n_envs": results[0]["n_envs"],
-        "note": "The five-stage pipeline is configured for 8 environments as requested; benchmark result is diagnostic and does not automatically override that setting.",
+        "note": "The production five-stage pipeline is configured for 4 environments per training process; this standalone benchmark is diagnostic and never changes that setting.",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
