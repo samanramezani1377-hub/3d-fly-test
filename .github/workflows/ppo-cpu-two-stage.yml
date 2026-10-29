@@ -1,0 +1,286 @@
+name: PPO two-stage CPU training
+
+on:
+  workflow_dispatch:
+    inputs:
+      timesteps_per_stage1_run:
+        description: "Timesteps for each parallel Stage 1 run"
+        required: true
+        default: "100000"
+        type: string
+      stage2_timesteps:
+        description: "Timesteps for Stage 2 continuation"
+        required: true
+        default: "100000"
+        type: string
+      eval_episodes:
+        description: "Episodes per periodic evaluation"
+        required: true
+        default: "10"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ppo-cpu-two-stage-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  OMP_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  OPENBLAS_NUM_THREADS: "1"
+  NUMEXPR_NUM_THREADS: "1"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  stage1:
+    name: Stage 1 PPO seed ${{ matrix.seed }} (CPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [42, 43]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: training/requirements.txt
+
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ make
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r training/requirements.txt
+
+      - name: Build native simulator core
+        run: python training/build_native_core.py
+
+      - name: Verify CPU-only runtime
+        run: |
+          python - <<'PY'
+          import torch
+          print("PyTorch:", torch.__version__)
+          print("CUDA available:", torch.cuda.is_available())
+          print("Training device: CPU (explicit)")
+          PY
+
+      - name: Train Stage 1 candidate
+        env:
+          SEED: ${{ matrix.seed }}
+          TIMESTEPS: ${{ inputs.timesteps_per_stage1_run }}
+          EVAL_EPISODES: ${{ inputs.eval_episodes }}
+        run: |
+          python training/train_ppo.py \
+            --timesteps "$TIMESTEPS" \
+            --seed "$SEED" \
+            --run-name "ppo-hover-100k-seed$SEED" \
+            --output-dir training/runs \
+            --device cpu \
+            --n-envs 1 \
+            --n-steps 1024 \
+            --batch-size 64 \
+            --save-freq 10000 \
+            --eval-freq 10000 \
+            --eval-episodes "$EVAL_EPISODES" 2>&1 | tee "ppo-seed$SEED.log"
+
+      - name: Upload Stage 1 candidate and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ppo-stage1-seed${{ matrix.seed }}
+          path: |
+            training/runs/ppo-hover-100k-seed${{ matrix.seed }}/
+            ppo-seed${{ matrix.seed }}.log
+          if-no-files-found: error
+          retention-days: 14
+
+  stage2:
+    name: Stage 2 continue best Stage 1 model (CPU)
+    runs-on: ubuntu-latest
+    needs: stage1
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: training/requirements.txt
+
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ make
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r training/requirements.txt
+
+      - name: Build native simulator core
+        run: python training/build_native_core.py
+
+      - name: Download seed 42 candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: ppo-stage1-seed42
+          path: stage1/seed42
+
+      - name: Download seed 43 candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: ppo-stage1-seed43
+          path: stage1/seed43
+
+      - name: Select best Stage 1 checkpoint using periodic evaluation
+        id: select
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import numpy as np
+
+          candidates = []
+          for seed in (42, 43):
+              root = Path(f"stage1/seed{seed}")
+              models = list(root.rglob("best_model.zip"))
+              eval_files = list(root.rglob("evaluations.npz"))
+              if not models or not eval_files:
+                  raise SystemExit(f"Missing best checkpoint/evaluation data for seed {seed}")
+              with np.load(eval_files[0]) as data:
+                  results = np.asarray(data["results"], dtype=float)
+                  timesteps = np.asarray(data["timesteps"], dtype=int)
+              if results.size == 0:
+                  raise SystemExit(f"No evaluation results found for seed {seed}")
+              means = results.mean(axis=1)
+              idx = int(np.argmax(means))
+              candidates.append({
+                  "seed": seed,
+                  "model": str(models[0].resolve()),
+                  "best_mean_reward": float(means[idx]),
+                  "best_eval_timestep": int(timesteps[idx]),
+              })
+
+          selected = max(candidates, key=lambda item: item["best_mean_reward"])
+          Path("stage1-selection.json").write_text(json.dumps({
+              "selection_metric": "maximum mean periodic evaluation reward",
+              "candidates": candidates,
+              "selected": selected,
+          }, indent=2) + "\n")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"model={selected['model']}\n")
+              f.write(f"seed={selected['seed']}\n")
+          print(json.dumps(selected, indent=2))
+          PY
+
+      - name: Train Stage 2 on selected model (CPU)
+        env:
+          INITIAL_MODEL: ${{ steps.select.outputs.model }}
+          STAGE2_TIMESTEPS: ${{ inputs.stage2_timesteps }}
+          EVAL_EPISODES: ${{ inputs.eval_episodes }}
+        run: |
+          python training/train_ppo.py \
+            --timesteps "$STAGE2_TIMESTEPS" \
+            --seed 44 \
+            --run-name ppo-stage2-continued \
+            --output-dir training/runs \
+            --load-model "$INITIAL_MODEL" \
+            --device cpu \
+            --n-envs 1 \
+            --n-steps 1024 \
+            --batch-size 64 \
+            --save-freq 10000 \
+            --eval-freq 10000 \
+            --eval-episodes "$EVAL_EPISODES" 2>&1 | tee ppo-stage2.log
+
+      - name: Evaluate selected Stage 1 checkpoint
+        run: |
+          python training/evaluate.py \
+            --model "${{ steps.select.outputs.model }}" \
+            --episodes 20 --seed 2000 \
+            --output stage1-selected-evaluation.json
+
+      - name: Evaluate Stage 2 best checkpoint (if available)
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODEL="training/runs/ppo-stage2-continued/best/best_model.zip"
+          if [[ -f "$MODEL" ]]; then
+            python training/evaluate.py --model "$MODEL" --episodes 20 --seed 2000 \
+              --output stage2-best-evaluation.json
+          else
+            echo "Stage 2 produced no best checkpoint; preserving Stage 1 model." | tee stage2-evaluation-notes.txt
+          fi
+
+      - name: Keep the best model after matched-seed evaluation
+        run: |
+          python - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          stage1_report = json.loads(Path("stage1-selected-evaluation.json").read_text())
+          candidates = [{
+              "stage": "stage1",
+              "model": "${{ steps.select.outputs.model }}",
+              "mean_return": float(stage1_report["mean_return"]),
+          }]
+
+          stage2_model = Path("training/runs/ppo-stage2-continued/best/best_model.zip")
+          stage2_report = Path("stage2-best-evaluation.json")
+          if stage2_model.is_file() and stage2_report.is_file():
+              report = json.loads(stage2_report.read_text())
+              candidates.append({
+                  "stage": "stage2",
+                  "model": str(stage2_model),
+                  "mean_return": float(report["mean_return"]),
+              })
+
+          winner = max(candidates, key=lambda item: item["mean_return"])
+          output = Path("final-model.zip")
+          shutil.copy2(winner["model"], output)
+          manifest = {
+              "selection_metric": "mean return over 20 evaluation episodes with the same episode seeds",
+              "candidates": candidates,
+              "selected": winner,
+              "simulation_only": True,
+              "warning": "Not validated for real flight; verify physics parity and physical aircraft model first."
+          }
+          Path("final-model-selection.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Upload final models, evaluation reports, and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ppo-cpu-two-stage-results
+          path: |
+            stage1-selection.json
+            final-model.zip
+            final-model-selection.json
+            stage1/
+            training/runs/ppo-stage2-continued/
+            stage1-selected-evaluation.json
+            stage2-best-evaluation.json
+            stage2-evaluation-notes.txt
+            ppo-stage2.log
+          if-no-files-found: warn
+          retention-days: 30
