@@ -1,64 +1,36 @@
-# Reinforcement-learning training (experimental)
+# PPO training using the shared SkySim physics core
 
-This folder adds a repeatable PPO training entry point and a Google Colab notebook.
+This folder provides a native C++ build of SkySim DroneCore, a Gymnasium adapter, PPO training/evaluation scripts, tests, and a Google Colab notebook.
 
-## Important backend distinction
+## Backend architecture
 
-The browser deployment in this repository runs SkySim's C++ physics core compiled to WebAssembly. The upstream Python Gymnasium client instead talks over WebSocket to the **Godot headless agent server**. These are separate execution paths; this scaffold does **not** claim their physics or dynamics are identical.
+The browser simulator compiles these pinned upstream source files to WebAssembly: web/core/drone_core.cpp and web/core/capi.cpp.
 
-Until a native Gymnasium adapter is connected to the same C++ physics core used by the browser, treat any policy trained here as an **infrastructure prototype**, not as a controller validated for the browser build or the eventual physical quadcopter. Do not use it to fly hardware.
+build_native_core.py checks out the same pinned upstream revision used by .github/workflows/pages.yml, runs scripts/prepare_site.py to apply this repository's drone configuration and battery compatibility patch, then compiles those same C++ sources as a native shared library. native_env.py exposes that C API through Gymnasium; PPO therefore trains against the same physics source, rather than a separate Godot server.
 
-Also, `config/drone.json` still contains placeholder values. The training setup deliberately does not edit or infer the real aircraft's mass, inertia, rotor geometry, battery, or motor parameters. Final aircraft-specific training waits until the real physical model and measured parameters are available.
+**Important:** same source code does not by itself prove bit-for-bit native/WASM parity. CI compiles the native core and runs smoke tests; a future regression test should compare deterministic native and browser-WASM trajectories. This is still a simplified simulation and not sim-to-real validation.
 
-## Layout
+## Quick start
 
-- `train_ppo.py`: PPO trainer using the upstream `skysim` Gymnasium package.
-- `evaluate.py`: evaluates a saved PPO checkpoint over fixed episode seeds.
-- `requirements.txt`: Python dependencies.
-- `tests/test_training_config.py`: offline checks for safe defaults and argument parsing.
-- `../notebooks/colab_train_ppo.ipynb`: Colab notebook to clone the pinned upstream source, install dependencies, and run training.
+Requires Python 3.10+ and a C++ compiler with C++20 support (for example, g++).
 
-## Local setup
+    python -m pip install -r training/requirements.txt
+    python training/build_native_core.py
+    python training/train_ppo.py --timesteps 5000 --seed 42 --run-name smoke-hover
+    python training/evaluate.py --model training/runs/smoke-hover/final_model.zip --episodes 10
 
-Use the pinned upstream revision from `.github/workflows/pages.yml`:
+After a successful smoke run, increase timesteps as desired. PPO's MLP policy does not require a GPU.
 
-```bash
-git clone https://github.com/vishwagw/Sky-Sim-drone-simulator-3.0.git upstream
-cd upstream
-git checkout a31864f999418531775980b879979ce4c57e791d
-python -m pip install -e "python/[rl]"
-cd ..
-python -m pip install -r training/requirements.txt
-```
+## Google Colab
 
-Build/install the upstream simulator's Godot extension using its own instructions, then start its headless agent server:
+Open notebooks/colab_train_ppo.ipynb in Colab. The notebook clones this branch, installs Python dependencies, builds the native physics core, runs a short training job, evaluates the checkpoint, and downloads a ZIP of the results. Colab sessions can terminate, so download results before closing.
 
-```bash
-godot --headless demo/agent_server.tscn -- --port 5557
-```
+## Run artifacts
 
-In another terminal, from this repository root:
+Each run is stored under training/runs/<run-name>/ with periodic PPO checkpoints, final_model.zip, monitor CSV, TensorBoard logs, and metadata.json. Large model weights are not committed automatically.
 
-```bash
-python training/train_ppo.py --port 5557 --timesteps 200000 --run-name prototype-hover
-python training/evaluate.py --port 5557 --model training/runs/prototype-hover/final_model.zip --episodes 10
-```
+## Physical model boundary
 
-The simulator server must remain running while training/evaluation is active. The environment is the upstream Godot Gymnasium backend, not the browser WebAssembly instance.
+config/drone.json remains unchanged and contains placeholder values until the actual aircraft is ready. The native build applies the current configuration but does not infer mass, inertia, motor curves, or aerodynamics from a GLB. Do not treat current PPO results as specific to the final physical quadcopter or as safe for real flight.
 
-## Outputs and reproducibility
-
-Each run is saved under `training/runs/<run-name>/` with:
-- PPO checkpoint(s) and final model
-- training monitor CSV
-- JSON metadata containing seeds, timesteps, target, backend identity, pinned upstream revision, and an explicit non-equivalence warning
-
-Do not commit large model weights to the source tree by default. Download the run directory from Colab or upload it as a GitHub Actions/Colab artifact when needed.
-
-## Colab notes
-
-Colab sessions can stop and GPU availability is not guaranteed. This PPO setup uses an MLP policy; a GPU is optional and often not the bottleneck. Save checkpoints periodically and copy results out of the ephemeral runtime. The notebook does not modify the deployed site or `config/drone.json`.
-
-## Next engineering milestone
-
-Implement and test a native binding around the exact C++ `DroneCore` used for the browser WASM build, then implement a Gymnasium adapter over that binding. Once that is verified against shared deterministic test cases, switch training to that backend. This is required before claiming browser-physics equivalence.
+Once the real model and measurements exist, update the config from credible measurements/component data, validate the physics, compare native/WASM trajectories, and only then run aircraft-specific training.
