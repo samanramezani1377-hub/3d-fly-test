@@ -94,6 +94,14 @@ jobs:
             --save-freq 10000 \
             --eval-freq 10000 \
             --eval-episodes "$EVAL_EPISODES" 2>&1 | tee "ppo-seed$SEED.log"
+      - name: Trace trained policy actions and physical state
+        if: success()
+        run: |
+          python training/diagnose_control.py \
+            --model "training/runs/ppo-hover-100k-seed${{ matrix.seed }}/best/best_model.zip" \
+            --steps 100 --policy-steps 150 \
+            --output "training/runs/ppo-hover-100k-seed${{ matrix.seed }}/policy-diagnostics.json" \
+            | tee "policy-diagnostics-seed${{ matrix.seed }}.json"
 
       - name: Upload Stage 1 candidate and logs
         if: always()
@@ -103,6 +111,8 @@ jobs:
           path: |
             training/runs/ppo-hover-100k-seed${{ matrix.seed }}/
             training/runs/control-diagnostics.json
+            training/runs/ppo-hover-100k-seed${{ matrix.seed }}/policy-diagnostics.json
+            policy-diagnostics-seed${{ matrix.seed }}.json
             observation-validation.json
             control-diagnostics-summary.json
             ppo-seed${{ matrix.seed }}.log
