@@ -154,6 +154,14 @@ if (window.DRONE_CONFIG && window.DRONE_CONFIG.model_url && THREE.GLTFLoader) {
   </div>''',
         "flight recorder controls",
     )
+    # Fix upstream JS editor: compile function declarations as a function body, not a parenthesized expression.
+    html = replace_once(
+        html,
+        r'userFn = new Function\("return \(" \+ \$\("code"\)\.value \+ "\\n; control\)"\)\(\);',
+        'userFn = new Function($("code").value + "\\n; return control;")();',
+        "JavaScript controller compilation",
+    )
+
     html = replace_once(
         html,
         r'// ---------- main loop ----------',
