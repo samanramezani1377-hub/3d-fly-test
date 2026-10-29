@@ -80,14 +80,16 @@ Use this checklist as the source of truth for project progress. Check an item on
 - [ ] Test low-battery/voltage-sag behaviour if supported by the model.
 - [ ] Add guardrails for invalid outputs and unstable motion.
 - [ ] Compare results from controller versions using the same initial conditions.
-- [ ] Export numerical logs; do not judge performance from animation alone.
+- [x] Add browser flight-test recorder with JSON metadata and CSV time-series export (manual browser verification still required).
+- [ ] Export numerical logs from a deployed run and verify units, sample cadence, and repeatability; do not judge performance from animation alone.
 
 ## F. Automation and reporting
 
 - [ ] Add named test scenarios in version control.
 - [ ] Add an output format such as CSV/JSON.
-- [ ] Record commit SHA, simulator revision, model hash, configuration, controller version, and test scenario.
-- [ ] Add a concise run summary with pass/fail criteria.
+- [x] Include repository commit SHA, pinned simulator revision, optional GLB SHA-256, full configuration, controller source, and scenario in JSON exports.
+- [ ] Verify metadata and scenario labels on two distinct runs.
+- [ ] Add a concise run summary with pass/fail criteria and derived metrics (altitude error, drift, peak tilt, battery use, and limit events).
 - [ ] Define metrics: altitude error, settling time, drift, peak tilt, battery use, and crash/limit events.
 - [ ] Add repeat runs to distinguish consistent behaviour from one-off results.
 - [ ] Add parameter sweeps only after individual tests are stable.
