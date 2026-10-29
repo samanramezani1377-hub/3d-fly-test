@@ -31,23 +31,27 @@ def main(argv=None):
     except ImportError as exc:
         raise SystemExit("Install training/requirements.txt and build the native core.") from exc
 
-    env = NativeSkySimEnv(
-        target=(args.target_x, args.target_y, args.target_z),
-        max_steps=args.max_steps,
-    )
+    target = (args.target_x, args.target_y, args.target_z)
+    env = NativeSkySimEnv(target=target, max_steps=args.max_steps)
     model = PPO.load(str(args.model), device="auto")
     episode_results = []
     try:
         for episode in range(args.episodes):
-            obs, info = env.reset(seed=args.seed + episode)
+            obs, _ = env.reset(seed=args.seed + episode)
             total_reward = 0.0
             steps = 0
             terminated = truncated = False
+            info = {}
             while not (terminated or truncated):
                 action, _ = model.predict(obs, deterministic=True)
                 obs, reward, terminated, truncated, info = env.step(action)
                 total_reward += float(reward)
                 steps += 1
+            final_position = info.get("position_xyz_m")
+            final_velocity = info.get("velocity_xyz_mps")
+            final_altitude_error = (
+                float(final_position[1] - args.target_y) if final_position is not None else None
+            )
             episode_results.append({
                 "episode": episode,
                 "seed": args.seed + episode,
@@ -55,12 +59,23 @@ def main(argv=None):
                 "steps": steps,
                 "terminated": bool(terminated),
                 "truncated": bool(truncated),
-                "final_position_xyz_m": info.get("position_xyz_m"),
+                "crashed": bool(info.get("crashed", False)),
+                "final_position_xyz_m": final_position,
+                "final_velocity_xyz_mps": final_velocity,
+                "final_altitude_error_m": final_altitude_error,
             })
     finally:
         env.close()
 
     returns = [row["return"] for row in episode_results]
+    altitude_errors = [
+        abs(row["final_altitude_error_m"])
+        for row in episode_results if row["final_altitude_error_m"] is not None
+    ]
+    vertical_speeds = [
+        abs(row["final_velocity_xyz_mps"][1])
+        for row in episode_results if row["final_velocity_xyz_mps"] is not None
+    ]
     report = {
         "backend": "native-drone-core",
         "browser_core_same_cpp_sources": True,
@@ -70,14 +85,19 @@ def main(argv=None):
         ),
         "model": str(args.model),
         "episodes": args.episodes,
+        "target_xyz_m": list(target),
         "mean_return": float(np.mean(returns)),
         "std_return": float(np.std(returns)),
+        "crash_rate": float(np.mean([row["crashed"] for row in episode_results])),
+        "mean_steps": float(np.mean([row["steps"] for row in episode_results])),
+        "mean_absolute_final_altitude_error_m": float(np.mean(altitude_errors)) if altitude_errors else None,
+        "mean_absolute_final_vertical_speed_mps": float(np.mean(vertical_speeds)) if vertical_speeds else None,
         "episode_results": episode_results,
     }
     rendered = json.dumps(report, indent=2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(rendered + "\\n", encoding="utf-8")
+        args.output.write_text(rendered + "\n", encoding="utf-8")
     print(rendered)
 
 
