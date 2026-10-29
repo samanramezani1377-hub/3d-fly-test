@@ -72,6 +72,9 @@ jobs:
           python training/validate_observations.py | tee observation-validation.json
           python training/diagnose_control.py --steps 250 --throttles -0.5 -0.3 -0.2 -0.1 0 0.1 0.2 0.5 --output training/runs/control-diagnostics.json | tee control-diagnostics-summary.json
 
+      - name: Benchmark 1, 4, and 8 parallel environments
+        run: python training/benchmark_parallel_envs.py --timesteps 12000
+
       - name: Run five chained training stages
         run: |
           set -o pipefail
@@ -97,6 +100,10 @@ jobs:
             training/runs/ppo-stage4-continued/
             training/runs/ppo-stage5-continued/
             training/runs/control-diagnostics.json
+            training/runs/parallel-env-benchmark.json
+            training/runs/parallel-benchmark-envs-1/
+            training/runs/parallel-benchmark-envs-4/
+            training/runs/parallel-benchmark-envs-8/
             observation-validation.json
             control-diagnostics-summary.json
             five-stage-training.log
