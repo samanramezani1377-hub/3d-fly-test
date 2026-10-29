@@ -76,6 +76,12 @@ class NativeSkySimEnv(gym.Env):
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(12,), dtype=np.float32)
         self._step_count = 0
         self._closed = False
+        self.ground_height = 0.16
+        self.ground_contact_height = 0.22
+        self.takeoff_altitude = 0.45
+        self._has_taken_off = False
+        self._ground_wait_steps = 0
+        self._flight_phase = "grounded"
 
     @staticmethod
     def map_action(action, throttle_center=0.35, throttle_span=0.15):
@@ -94,14 +100,24 @@ class NativeSkySimEnv(gym.Env):
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
-        self.core.skysim_reset(self.handle, 0.0, 2.0, 0.0)
+        # Start at ground level; takeoff is the first learning stage.
+        self.core.skysim_reset(self.handle, 0.0, self.ground_height, 0.0)
         wind = self._config.get("wind_mps", {})
         self.core.skysim_set_wind(
             self.handle, float(wind.get("x", 0)), float(wind.get("y", 0)), float(wind.get("z", 0))
         )
         self.core.skysim_arm(self.handle, 1)
         self._step_count = 0
-        return self._observation(), {"target_xyz_m": self.target.tolist(), "backend": "native-drone-core"}
+        self._has_taken_off = False
+        self._ground_wait_steps = 0
+        self._flight_phase = "grounded"
+        obs = self._observation()
+        return obs, {
+            "target_xyz_m": self.target.tolist(),
+            "backend": "native-drone-core",
+            "flight_phase": self._flight_phase,
+            "has_taken_off": self._has_taken_off,
+        }
 
     @staticmethod
     def calculate_reward(
@@ -113,6 +129,9 @@ class NativeSkySimEnv(gym.Env):
         action,
         throttle,
         throttle_center=0.35,
+        has_taken_off=True,
+        ground_wait_steps=0,
+        takeoff_bonus=0.0,
     ):
         """Return a shaped reward and transparent signed component breakdown.
 
@@ -143,23 +162,26 @@ class NativeSkySimEnv(gym.Env):
         action_penalty = 0.01 * float(np.dot(action[:3], action[:3]))
         throttle_penalty = 0.05 * float((float(throttle) - throttle_center) ** 2)
 
-        crashed = bool(
-            position[1] <= 0.16
-            or position[1] > 12.0
-            or np.linalg.norm(position[[0, 2]]) > 12.0
-        )
+        ground_contact = bool(has_taken_off and position[1] <= 0.22)
+        ceiling_contact = bool(position[1] > 12.0)
+        horizontal_boundary = bool(np.linalg.norm(position[[0, 2]]) > 12.0)
+        crashed = bool(ground_contact or ceiling_contact or horizontal_boundary)
         crash_reason = None
-        if position[1] <= 0.16:
-            crash_reason = "ground_contact"
-        elif position[1] > 12.0:
+        if ground_contact:
+            crash_reason = "ground_contact_after_takeoff"
+        elif ceiling_contact:
             crash_reason = "ceiling"
-        elif np.linalg.norm(position[[0, 2]]) > 12.0:
+        elif horizontal_boundary:
             crash_reason = "horizontal_boundary"
 
         crash_penalty = 100.0 if crashed else 0.0
+        # Increasing but capped penalty discourages waiting on the ground.
+        ground_wait_penalty = min(0.01 * max(int(ground_wait_steps), 0), 0.5) if not has_taken_off else 0.0
         reward = (
             altitude_term
             + horizontal_term
+            + float(takeoff_bonus)
+            - ground_wait_penalty
             - vertical_speed_penalty
             - horizontal_speed_penalty
             - attitude_penalty
@@ -178,6 +200,8 @@ class NativeSkySimEnv(gym.Env):
             "action_penalty": float(-action_penalty),
             "throttle_penalty": float(-throttle_penalty),
             "crash_penalty": float(-crash_penalty),
+            "ground_wait_penalty": float(-ground_wait_penalty),
+            "takeoff_bonus": float(takeoff_bonus),
             "altitude_error_m": float(altitude_error),
             "horizontal_error_m": float(horizontal_error),
             "altitude_score": float(altitude_score),
@@ -206,6 +230,29 @@ class NativeSkySimEnv(gym.Env):
         altitude_error = abs(float(position_error[1]))
         horizontal_error = float(np.sqrt(horizontal_error_sq))
         angular_velocity = obs[9:12].astype(np.float64)
+
+        # Latch takeoff exactly once. A later ground contact is a crash.
+        newly_took_off = bool(
+            not self._has_taken_off and position[1] >= self.takeoff_altitude
+        )
+        if newly_took_off:
+            self._has_taken_off = True
+            self._ground_wait_steps = 0
+            self._flight_phase = "airborne"
+        elif not self._has_taken_off:
+            self._ground_wait_steps += 1
+            self._flight_phase = "grounded"
+        elif position[1] <= self.ground_contact_height:
+            self._flight_phase = "crashed"
+        elif (
+            altitude_error <= 0.35
+            and horizontal_error <= 0.5
+            and float(np.linalg.norm(velocity)) <= 0.5
+        ):
+            self._flight_phase = "hovering"
+        else:
+            self._flight_phase = "airborne"
+
         reward, reward_components, crashed, crash_reason = self.calculate_reward(
             position=position,
             velocity=velocity,
@@ -215,7 +262,21 @@ class NativeSkySimEnv(gym.Env):
             action=action,
             throttle=throttle,
             throttle_center=self.throttle_center,
+            has_taken_off=self._has_taken_off,
+            ground_wait_steps=self._ground_wait_steps,
+            takeoff_bonus=(
+                2.0
+                if (
+                    newly_took_off
+                    and float(np.linalg.norm(attitude)) <= 0.6
+                    and horizontal_error <= 1.0
+                    and abs(float(velocity[1])) <= 2.0
+                )
+                else 0.0
+            ),
         )
+        if crashed:
+            self._flight_phase = "crashed"
 
         terminated = crashed
         truncated = self._step_count >= self.max_steps
@@ -235,6 +296,10 @@ class NativeSkySimEnv(gym.Env):
             "throttle": throttle,
             "crashed": crashed,
             "crash_reason": crash_reason,
+            "flight_phase": self._flight_phase,
+            "has_taken_off": self._has_taken_off,
+            "ground_wait_steps": self._ground_wait_steps,
+            "takeoff_altitude_m": self.takeoff_altitude,
             "hover_stable": hover_stable,
             "reward_components": reward_components,
             "reward_total": float(reward),
