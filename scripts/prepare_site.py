@@ -158,7 +158,7 @@ if (window.DRONE_CONFIG && window.DRONE_CONFIG.model_url && THREE.GLTFLoader) {
     html = replace_once(
         html,
         r'userFn = new Function\("return \(" \+ \$\("code"\)\.value \+ "\\n; control\)"\)\(\);',
-        'const source = $("code").value;\n        userFn = new Function(source + "\\\n; return control;")();\n        activeControllerSource = source;\n        activeControllerSourceMode = "script";',
+        'const source = $("code").value;\n        userFn = new Function(source + "\\n; return control;")();\n        activeControllerSource = source;\n        activeControllerSourceMode = "script";',
         "JavaScript controller compilation and source tracking",
     )
 
