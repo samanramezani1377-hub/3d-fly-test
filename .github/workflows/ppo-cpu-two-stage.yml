@@ -193,10 +193,11 @@ jobs:
               # Higher is better for success/stability; lower is better for crashes/errors.
               return (
                   float(report["hover_success_rate"]),
+                  float(report.get("takeoff_success_rate", 0.0)),
                   -float(report["crash_rate"]),
+                  -float(report["mean_absolute_final_altitude_error_m"]),
                   float(report["mean_hover_stable_fraction"]),
                   -float(report["mean_absolute_vertical_speed_during_flight_mps"]),
-                  -float(report["mean_absolute_final_altitude_error_m"]),
                   float(report["mean_return"]),
               )
 
@@ -218,6 +219,7 @@ jobs:
                   "model": str(model),
                   "evaluation": str(report_path),
                   "hover_success_rate": float(report["hover_success_rate"]),
+                  "takeoff_success_rate": float(report.get("takeoff_success_rate", 0.0)),
                   "crash_rate": float(report["crash_rate"]),
                   "mean_hover_stable_fraction": float(report["mean_hover_stable_fraction"]),
                   "mean_absolute_vertical_speed_during_flight_mps": float(report["mean_absolute_vertical_speed_during_flight_mps"]),
@@ -229,7 +231,9 @@ jobs:
           Path("stage1-selection.json").write_text(json.dumps({
               "selection_metric": [
                   "hover_success_rate descending",
+                  "takeoff_success_rate descending",
                   "crash_rate ascending",
+                  "mean_absolute_final_altitude_error_m ascending",
                   "mean_hover_stable_fraction descending",
                   "mean_absolute_vertical_speed_during_flight_mps ascending",
                   "mean_absolute_final_altitude_error_m ascending",
@@ -303,6 +307,7 @@ jobs:
               "stage": "stage1",
               "model": "${{ steps.select.outputs.model }}",
               "hover_success_rate": float(stage1_report["hover_success_rate"]),
+              "takeoff_success_rate": float(stage1_report.get("takeoff_success_rate", 0.0)),
               "crash_rate": float(stage1_report["crash_rate"]),
               "mean_hover_stable_fraction": float(stage1_report["mean_hover_stable_fraction"]),
               "mean_absolute_vertical_speed_during_flight_mps": float(stage1_report["mean_absolute_vertical_speed_during_flight_mps"]),
@@ -318,6 +323,7 @@ jobs:
                   "stage": "stage2",
                   "model": str(stage2_model),
                   "hover_success_rate": float(report["hover_success_rate"]),
+                  "takeoff_success_rate": float(report.get("takeoff_success_rate", 0.0)),
                   "crash_rate": float(report["crash_rate"]),
                   "mean_hover_stable_fraction": float(report["mean_hover_stable_fraction"]),
                   "mean_absolute_vertical_speed_during_flight_mps": float(report["mean_absolute_vertical_speed_during_flight_mps"]),
@@ -328,10 +334,11 @@ jobs:
           def rank(item):
               return (
                   item["hover_success_rate"],
+                  item["takeoff_success_rate"],
                   -item["crash_rate"],
+                  -item["mean_absolute_final_altitude_error_m"],
                   item["mean_hover_stable_fraction"],
                   -item["mean_absolute_vertical_speed_during_flight_mps"],
-                  -item["mean_absolute_final_altitude_error_m"],
                   item["mean_return"],
               )
 
