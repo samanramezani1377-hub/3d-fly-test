@@ -38,7 +38,7 @@ jobs:
         run: python -m pytest training/tests -q
       - name: Run independent throttle calibration
         run: |
-          python training/diagnose_control.py --steps 250 --throttles -0.5 -0.3 -0.2 -0.1 0 0.1 0.2 0.5 --output training/runs/control-diagnostics-reset-isolated.json | tee throttle-calibration-summary.json
+          python training/diagnose_control.py --steps 250 --throttles -0.12 -0.10 -0.09 -0.08 -0.07 -0.06 -0.05 0.0 --output training/runs/control-diagnostics-reset-isolated.json | tee throttle-calibration-summary.json
       - name: Upload native diagnostics
         uses: actions/upload-artifact@v4
         with:
