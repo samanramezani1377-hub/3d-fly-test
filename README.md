@@ -71,6 +71,12 @@ The browser tier runs Python through Pyodide and is intended for classical/light
 - [Full project status, architecture, limitations, and roadmap](docs/PROJECT_STATUS.md)
 - [Master checklist](docs/CHECKLIST.md)
 
+## Experimental AI training (PPO / Colab)
+
+The `training/` folder contains an experimental PPO training script, evaluation script, and a Google Colab notebook at `notebooks/colab_train_ppo.ipynb`.
+
+**Backend limitation:** the current training scaffold talks to the upstream Godot headless Gymnasium server. It is not yet connected to the same C++ physics core compiled to WebAssembly for this browser demo, so results are infrastructure prototypes only—not browser-equivalent or aircraft-specific controller results. The placeholder physical values in `config/drone.json` are left unchanged. See [training documentation](training/README.md) before running it.
+
 ## Upstream
 
 - [SkySim source](https://github.com/vishwagw/Sky-Sim-drone-simulator-3.0)
