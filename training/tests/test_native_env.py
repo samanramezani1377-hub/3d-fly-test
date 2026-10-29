@@ -23,6 +23,9 @@ def test_native_core_reset_and_step():
         assert obs.shape == (12,)
         assert np.isfinite(obs).all()
         assert info["backend"] == "native-drone-core"
+        assert info["flight_phase"] == "grounded"
+        assert not info["has_taken_off"]
+        assert np.isclose(obs[1], env.ground_height, atol=1e-3)
         next_obs, reward, terminated, truncated, step_info = env.step(
             np.zeros(4, dtype=np.float32)
         )
@@ -35,6 +38,9 @@ def test_native_core_reset_and_step():
         assert "reward_components" in step_info
         assert np.isclose(step_info["reward_total"], reward)
         assert "crash_penalty" in step_info["reward_components"]
+        assert "ground_wait_penalty" in step_info["reward_components"]
+        assert step_info["flight_phase"] == "grounded"
+        assert not step_info["crashed"]
         for _ in range(2):
             _, _, terminated, truncated, _ = env.step(np.zeros(4, dtype=np.float32))
         assert truncated
@@ -96,6 +102,6 @@ def test_crash_gets_explicit_terminal_penalty_and_reason():
         throttle=0.35,
     )
     assert crashed
-    assert reason == "ground_contact"
+    assert reason == "ground_contact_after_takeoff"
     assert terms["crash_penalty"] == -100.0
     assert reward < -100.0
