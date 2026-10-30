@@ -190,6 +190,7 @@ class AdaptiveDroneEnv(gym.Env):
             self._last_finite_state = safe_state.copy()
 
         z = float(safe_state[2])
+        was_taken_off = self._taken_off
         self._taken_off = self._taken_off or bool(z > 0.18)
         measured = self._measure_state(safe_state)
         if state_finite:
@@ -221,6 +222,17 @@ class AdaptiveDroneEnv(gym.Env):
             0.99 * altitude_potential - self._previous_altitude_potential
         )
         self._previous_altitude_potential = altitude_potential
+        if self._taken_off and not was_taken_off:
+            reward += 1.0
+        stable_hover_now = bool(
+            self._taken_off
+            and altitude_error <= 0.15
+            and horizontal_error <= 0.20
+            and speed <= 0.35
+            and tilt <= 0.25
+        )
+        if stable_hover_now:
+            reward += 0.5
 
         # A simple unilateral ground-contact constraint prevents the simulated
         # vehicle from passing through the floor. It is not a detailed landing model.
@@ -253,6 +265,9 @@ class AdaptiveDroneEnv(gym.Env):
 
         terminated = crashed
         truncated = self._steps >= self.max_steps and not terminated
+        takeoff_failed = bool(truncated and not self._taken_off)
+        if takeoff_failed:
+            reward -= 20.0
         self._last_action = action.copy()
         self._history.append(self._policy_frame(safe_state, measured))
         obs = self._observation()
@@ -271,7 +286,7 @@ class AdaptiveDroneEnv(gym.Env):
             "crash_reason": crash_reasons[0] if crash_reasons else None,
             "crash_reasons": crash_reasons,
             "has_taken_off": self._taken_off,
-            "takeoff_failed": bool(truncated and not self._taken_off),
+            "takeoff_failed": takeoff_failed,
             "ground_contact": ground_contact,
             "altitude_m": float(z),
             "position_xyz_m": safe_state[:3].astype(float).tolist(),
