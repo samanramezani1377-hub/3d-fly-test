@@ -32,11 +32,11 @@ def main(argv=None):
     heldout_path = output / "held-out-domain-randomization.json"
     heldout = json.loads((ROOT / "vehicle_models/family/domain_randomization.json").read_text(encoding="utf-8"))
     heldout["description"] = "Independent wider held-out distribution; excluded from training and checkpoint selection."
-    heldout["mass"]["scale"] = [0.76, 1.24]
+    heldout["mass"]["scale"] = [0.76, 1.12]
     heldout["center_of_mass"]["offset_arm_fraction"] = 0.12
     heldout["inertia"]["scale"] = [0.65, 1.45]
-    heldout["motor"]["effectiveness"] = [0.82, 1.13]
-    heldout["battery"]["voltage_factor"] = [0.85, 1.0]
+    heldout["motor"]["effectiveness"] = [0.86, 1.10]
+    heldout["battery"]["voltage_factor"] = [0.92, 1.0]
     heldout["aerodynamics"]["drag_scale"] = [0.65, 1.45]
     heldout["environment"]["wind_component_m_s"] = [-2.5, 2.5]
     heldout.pop("curriculum", None)
