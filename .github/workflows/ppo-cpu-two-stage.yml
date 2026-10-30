@@ -23,7 +23,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: universal-ppo-five-stage-\${{ github.ref }}
+  group: universal-ppo-five-stage-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -101,7 +101,7 @@ jobs:
               exit 1
             } || true
             git commit -m "Store final-tested PPO models and resumable checkpoints"
-            git push origin "HEAD:\${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
       - name: Print training manifest and log tail
