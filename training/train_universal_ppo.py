@@ -12,8 +12,8 @@ from fast_physics.vehicle_family import DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--timesteps", type=int, default=200_000)
-    p.add_argument("--n-envs", type=int, default=4)
+    p.add_argument("--timesteps", type=int, default=1_000_000)
+    p.add_argument("--n-envs", type=int, default=16)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--run-name", default="universal-quad-ppo")
     p.add_argument("--output-dir", type=Path, default=Path("training/runs"))
