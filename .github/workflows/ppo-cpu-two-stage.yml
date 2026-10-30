@@ -69,8 +69,8 @@ jobs:
         run: |
           set -o pipefail
           python training/run_universal_curriculum.py \
-            --timesteps-per-stage 200000 \
-            --n-envs 4 \
+            --timesteps-per-stage 1000000 \
+            --n-envs 16 \
             --checkpoint-eval-episodes 5 \
             --evaluation-episodes 20 \
             2>&1 | tee five-stage-training.log
