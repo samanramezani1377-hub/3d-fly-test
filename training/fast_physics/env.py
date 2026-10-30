@@ -251,6 +251,7 @@ class AdaptiveDroneEnv(gym.Env):
             2.0 * np.exp(-altitude_error / 0.45)
             + 1.0 * np.exp(-horizontal_error / 0.65)
             - 0.10 * speed ** 2
+            - 0.08 * float(safe_state[5]) ** 2
             - 0.22 * float(np.dot(attitude[:2], attitude[:2]))
             - 0.025 * float(np.dot(rates, rates))
             - 0.015 * float(np.dot(action - self._last_action, action - self._last_action))
@@ -333,6 +334,7 @@ class AdaptiveDroneEnv(gym.Env):
             "angular_velocity_rad_s": safe_state[9:12].astype(float).tolist(),
             "state_finite": state_finite,
             "control_effort_proxy": float(np.mean(np.square(action))),
+            "motor_saturation_fraction": float(np.mean((action <= 1e-4) | (action >= 1.0 - 1e-4))),
         }
         return obs, float(reward), terminated, truncated, info
 
