@@ -66,6 +66,13 @@ def test_oracle_reference_cancels_known_fixed_wind_drag_for_every_profile():
         try:
             env.reset(seed=9200 + index)
             plant = env.inner.plant
+            plant.position[:] = env.inner.target
+            hover_omega = np.sqrt(
+                plant.params.mass_kg * 9.80665
+                / (4.0 * plant.params.thrust_coefficient_n_per_rad_s2
+                   * np.asarray(plant.params.motor_effectiveness, dtype=np.float64))
+            )
+            plant.motor_omega[:] = hover_omega
             plant.wind[:] = np.array([0.5, -0.4, 0.2], dtype=np.float64)
             controller = HoverReferenceController(
                 plant.params, target_position=env.inner.target, wind_m_s=plant.wind,
