@@ -34,7 +34,7 @@ env:
   PYTHONUNBUFFERED: "1"
 
 jobs:
-  five-stage-training:
+  single-stage-training:
     name: ${{ github.event_name == 'pull_request' && 'PR validation only (no PPO training)' || 'Single-stage PPO training' }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -124,7 +124,7 @@ jobs:
           echo '===== SINGLE-STAGE MANIFEST ====='
           if [ -f training/runs/universal-quad-v5-foundation-curriculum-manifest.json ]; then cat training/runs/universal-quad-v5-foundation-curriculum-manifest.json; else echo 'Manifest not produced'; fi
           echo '===== TRAINING LOG TAIL ====='
-          if [ -f five-stage-training.log ]; then tail -c 50000 five-stage-training.log; else echo 'Training log not produced'; fi
+          if [ -f single-stage-training.log ]; then tail -c 50000 single-stage-training.log; else echo 'Training log not produced'; fi
 
       - name: Upload full training backup
         if: always() && github.event_name == 'workflow_dispatch'
@@ -134,6 +134,6 @@ jobs:
           path: |
             training/runs/
             training/models/universal-quad-v5-foundation/
-            five-stage-training.log
+            single-stage-training.log
           if-no-files-found: warn
           retention-days: 90
