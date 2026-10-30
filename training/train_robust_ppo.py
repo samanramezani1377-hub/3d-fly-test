@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fast_physics import AdaptiveDroneEnv
+from fast_physics import AdaptiveDroneEnv, load_vehicle_parameters
 
 
 def parse_args(argv=None):
@@ -22,6 +22,8 @@ def parse_args(argv=None):
     parser.add_argument("--output-dir", type=Path, default=Path("training/runs"))
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--history-length", type=int, default=4)
+    parser.add_argument("--curriculum-stage", type=int, choices=(1, 2, 3, 4), default=None)
+    parser.add_argument("--load-model", type=Path, default=None)
     parser.add_argument("--no-randomization", action="store_true")
     parser.add_argument(
         "--software-only-synthetic-calibration", action="store_true",
@@ -34,6 +36,7 @@ def main(argv=None):
     args = parse_args(argv)
     if args.timesteps <= 0 or args.n_envs <= 0:
         raise SystemExit("--timesteps and --n-envs must be positive")
+    load_vehicle_parameters(allow_synthetic_calibration=args.software_only_synthetic_calibration)
     try:
         import stable_baselines3
         from stable_baselines3 import PPO
@@ -50,6 +53,7 @@ def main(argv=None):
                 allow_synthetic_calibration=args.software_only_synthetic_calibration,
                 history_length=args.history_length,
                 randomize=not args.no_randomization,
+                curriculum_stage=args.curriculum_stage,
             )
             env.reset(seed=args.seed + rank)
             return env
@@ -57,12 +61,16 @@ def main(argv=None):
 
     env = SubprocVecEnv([make_env(i) for i in range(args.n_envs)])
     try:
-        model = PPO(
-            "MlpPolicy", env, learning_rate=args.learning_rate,
-            n_steps=1024, batch_size=256, gamma=0.99, gae_lambda=0.95,
-            clip_range=0.2, ent_coef=0.005, verbose=1,
-            seed=args.seed, device="auto", tensorboard_log=str(run_dir / "tensorboard"),
-        )
+        if args.load_model is not None:
+            model = PPO.load(str(args.load_model), env=env, device="auto")
+            model.tensorboard_log = str(run_dir / "tensorboard")
+        else:
+            model = PPO(
+                "MlpPolicy", env, learning_rate=args.learning_rate,
+                n_steps=1024, batch_size=256, gamma=0.99, gae_lambda=0.95,
+                clip_range=0.2, ent_coef=0.005, verbose=1,
+                seed=args.seed, device="auto", tensorboard_log=str(run_dir / "tensorboard"),
+            )
         model.learn(total_timesteps=args.timesteps, progress_bar=False)
         model.save(str(run_dir / "final_model"))
         metadata = {
@@ -72,6 +80,8 @@ def main(argv=None):
             "n_envs": args.n_envs,
             "seed": args.seed,
             "history_length": args.history_length,
+            "curriculum_stage": args.curriculum_stage,
+            "initial_model": str(args.load_model) if args.load_model else None,
             "domain_randomization": not args.no_randomization,
             "software_only_synthetic_calibration": args.software_only_synthetic_calibration,
             "policy_observation": "four-frame state/action history; no privileged mass/CG/inertia/motor parameters",
