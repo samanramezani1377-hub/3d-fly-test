@@ -138,7 +138,8 @@ Run the privileged reference benchmark before spending compute on policy trainin
 
 ```bash
 python training/evaluate_hover_reference.py --episodes 10 --max-steps 1500 --settle-seconds 5
-# Add --randomize to evaluate the Stage 4 domain-randomized plant.
+python training/evaluate_hover_reference.py --episodes 10 --max-steps 1500 --settle-seconds 5 --randomize --start-at-target --wind-max 2
+# The second command checks Stage 4 randomized hover-hold with wind feed-forward; it does not test takeoff.
 ```
 
 The reference controller uses the simulator's true episode parameters. It is an oracle upper-bound diagnostic, not an observation-only policy or a flight controller. It isolates whether the simplified plant and motor allocation can sustain hover. CI checks nominal sustained hover on all four profiles. If the oracle succeeds but PPO fails, debug reward design, action exploration, observation normalization and training curriculum before increasing training duration.
