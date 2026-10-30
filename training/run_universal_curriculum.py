@@ -1,4 +1,4 @@
-"""Five sequential PPO training stages with one final held-out release evaluation."""
+"""Run a configurable PPO curriculum; stage 1 is the only active stage by default."""
 from __future__ import annotations
 
 import argparse
