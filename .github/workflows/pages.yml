@@ -1,15 +1,11 @@
-name: Deploy SkySim flight test
+name: Deploy Flight Lab
 
 on:
   push:
     branches: [main]
     paths:
-      - "config/**"
-      - "controllers/**"
-      - "models/**"
-      - "scripts/**"
-      - "sim_support/**"
-      - "README.md"
+      - "site/**"
+      - "vehicle_models/family/vehicle_profiles.json"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -19,48 +15,32 @@ permissions:
   id-token: write
 
 concurrency:
-  group: sky-sim-pages
+  group: github-pages
   cancel-in-progress: true
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout this configuration repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Checkout pinned SkySim source
-        uses: actions/checkout@v4
-        with:
-          repository: vishwagw/Sky-Sim-drone-simulator-3.0
-          ref: a31864f999418531775980b879979ce4c57e791d
-          path: upstream
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
 
-      - name: Set up Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: 3.1.64
-          actions-cache-folder: emsdk-cache
-
-      - name: Apply this repository's drone configuration and controller
-        run: python3 scripts/prepare_site.py --upstream upstream --commit-sha "$GITHUB_SHA" --upstream-ref a31864f999418531775980b879979ce4c57e791d
-
-      - name: Build SkySim WebAssembly physics core
-        run: |
-          chmod +x upstream/web/build_wasm.sh
-          upstream/web/build_wasm.sh
-          cp upstream/web/public/skysim_core.* upstream/web/
-
-      - name: Prepare Pages artifact
+      - name: Assemble Flight Lab site
         run: |
           mkdir -p _site
-          cp -a upstream/web/. _site/
-          cp upstream/LICENSE _site/THIRD_PARTY_LICENSE_SKYSIM.txt
+          cp -a site/. _site/
+          cp vehicle_models/family/vehicle_profiles.json _site/vehicle_profiles.json
           touch _site/.nojekyll
           test -s _site/index.html
-          test -s _site/skysim_core.js
-          test -s _site/skysim_core.wasm
-          test -s _site/drone-config.js
+          test -s _site/app.js
+          test -s _site/style.css
+          test -s _site/vehicle_profiles.json
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -70,8 +50,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Print deployed URL
-        run: echo "SkySim deployed. Open the GitHub Pages URL from the github-pages environment."
