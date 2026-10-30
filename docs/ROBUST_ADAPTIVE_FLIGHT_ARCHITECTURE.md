@@ -25,9 +25,9 @@ The only v1 airframe is:
 
 - ID: `smooth2-parametric-v1`
 - CAD source: `cad/parametric/drone_parametric.py`
-- imported engineering assets: `assets/preflight/smooth2-parametric/`
-- parameter snapshot: `assets/preflight/smooth2-parametric/drone_parametric.params.json`
-- assembly description: `assets/preflight/smooth2-parametric/assembly-manifest.json`
+- authoritative generated engineering assets: `output/smooth2-parametric/`
+- parameter snapshot: `output/smooth2-parametric/drone_parametric.params.json`
+- assembly description: `output/smooth2-parametric/assembly-manifest.json`
 - normalized model definition: `vehicle_models/smooth2_parametric/base_airframe.json`
 
 The geometry is held constant in v1:
@@ -42,7 +42,7 @@ The CAD parameter snapshot records `motor_x = 58 mm`, `motor_z = 58 mm`, `model_
 
 ### Geometry discrepancies
 
-The existing CAD notes contain conflicting footprint and propeller-diameter statements (approximately 247 mm vs 271.89 mm footprint, and 63.5 mm vs 74.802 mm propeller diameter). The normalized model records the source parameter values and scale, not a claim that every STEP export has been remeasured. Reopen and measure the exported STEP solids before treating the dimensions as certified manufacturing measurements.
+The authoritative CAD package is pinned to the `3D` repository's `kilo` branch commit `d591b81bd671e04abe7d4bdeb0865fd3c3bf381b`. Its committed validation report records a 271.890 × 271.856 × 49.938 mm assembly bounding box and the 74.802 mm scaled propeller diameter. Earlier 247 mm / 63.5 mm figures belong to superseded imports. These are CAD-derived dimensions, not certified manufacturing measurements; repeat BREP and physical print-fit checks before fabrication.
 
 The alternating rotor spin signs in the normalized model are a conventional quadrotor assumption. Confirm motor numbering and actual CW/CCW propeller directions before using yaw torque results as aircraft-specific.
 
