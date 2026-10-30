@@ -10,6 +10,7 @@ This directory contains engineering plans and the data contract for preflight an
 - Parametric builder: [cad/parametric/drone_parametric.py](../../cad/parametric/drone_parametric.py)
 - Canonical parameters: [cad/parametric/model.params.json](../../cad/parametric/model.params.json)
 - Measured body sections: [cad/parametric/body_sections.json](../../cad/parametric/body_sections.json)
+- Pinned CAD builder dependencies: [cad/parametric/requirements.txt](../../cad/parametric/requirements.txt)
 - Generated package: [output/smooth2-parametric](../../output/smooth2-parametric/README.md)
 - Assembly manifest: [assembly-manifest.json](../../output/smooth2-parametric/assembly-manifest.json)
 - Validation report: [validation-report.json](../../output/smooth2-parametric/validation-report.json)
