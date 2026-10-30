@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PIPELINE_VERSION = 2
+PIPELINE_VERSION = 3
 
 
 def load_profile_ids(path):
@@ -50,7 +50,7 @@ def main(argv=None):
     p.add_argument("--max-final-crash-rate", type=float, default=0.25)
     p.add_argument("--min-final-takeoff-rate", type=float, default=0.75)
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--run-prefix", default="universal-quad-v2")
+    p.add_argument("--run-prefix", default="universal-quad-v3")
     p.add_argument("--output-dir", type=Path, default=Path("training/runs"))
     p.add_argument("--vehicle-family", type=Path,
                    default=ROOT / "vehicle_models/family/vehicle_profiles.json")
