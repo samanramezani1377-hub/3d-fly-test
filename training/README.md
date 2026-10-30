@@ -122,7 +122,7 @@ python -m pip install -r training/requirements.txt
 python training/train_universal_ppo.py --timesteps 200000 --n-envs 4 --run-name universal-quad-baseline
 ```
 
-The environment samples a vehicle profile at episode reset. The policy observation contains the existing state/action history and online effective-lift estimator context plus ten normalized nominal hardware features (mass, arm radius, propeller diameter, motor speed/thrust/torque response, battery voltage/capacity and KV). Episode-randomized ground-truth mass, CG, inertia and actuator effectiveness remain hidden. This deliberately distinguishes declared setup values from uncertain episode physics.
+The environment samples a vehicle profile at episode reset. The policy observation contains the existing state/action history and online effective-lift estimator context plus twelve normalized nominal hardware features (mass, arm radius, propeller diameter, motor speed/thrust/torque response, battery voltage/capacity and KV). Episode-randomized ground-truth mass, CG, inertia and actuator effectiveness remain hidden. This deliberately distinguishes declared setup values from uncertain episode physics.
 
 ### Four-stage universal curriculum
 
@@ -138,7 +138,7 @@ Each stage starts from the previous stage's checkpoint. It writes a per-stage ch
 python training/evaluate_universal_ppo.py --model training/runs/universal-quad-baseline/final_model.zip --episodes 20
 ```
 
-To evaluate only one profile, repeat `--vehicle-id <id>`. To add a new airframe, copy `vehicle_models/family/vehicle_config_template.json`, fill all required fields and use the resulting JSON as `--vehicle-family`. A single profile JSON or a family JSON containing a `profiles` array is accepted. The loader rejects missing required physical values and invalid inertia tensors rather than silently inventing them.
+To evaluate only one profile, repeat `--vehicle-id <id>`. To add a new airframe, copy `vehicle_models/family/vehicle_config_template.json`, fill the known required fields (mass, frame geometry, rotor locations, motor KV and nominal battery voltage) and use the resulting JSON as `--vehicle-family`. A single profile JSON or a family JSON containing a `profiles` array is accepted. The loader rejects missing mass, geometry, rotor coordinates, motor KV or nominal battery voltage. Unknown inertia, loaded RPM, thrust coefficient, torque ratio and motor lag may receive explicit provisional estimates, recorded in the profile metadata and exposed to the policy as uncertainty/provenance features.
 
 For a real vehicle, enter complete takeoff mass including battery and payload, CG, rotor coordinates and verified spin directions, inertia, motor/ESC/battery details, and a measured or manufacturer-backed thrust/torque response. A KV value or propeller diameter alone is not enough to infer loaded RPM or thrust. If some values remain estimates, keep the profile labelled provisional and include uncertainty in the randomization ranges.
 
