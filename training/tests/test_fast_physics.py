@@ -18,9 +18,9 @@ RANDOMIZATION = ROOT / "vehicle_models/smooth2_parametric/domain_randomization.j
 
 def synthetic_params():
     return VehicleParameters(
-        mass_kg=1.5,
+        mass_kg=0.6,
         center_of_mass_m=(0.0, 0.0, 0.0),
-        inertia_kg_m2=(0.02, 0.035, 0.02),
+        inertia_kg_m2=(0.004, 0.006, 0.004),
         rotor_positions_m=((0.082, 0.082, 0.0), (0.082, -0.082, 0.0),
                            (-0.082, -0.082, 0.0), (-0.082, 0.082, 0.0)),
         spin_signs=(1.0, -1.0, 1.0, -1.0),
@@ -40,7 +40,7 @@ def test_synthetic_calibration_requires_explicit_opt_in():
         AIRFRAME, CALIBRATION, allow_synthetic_calibration=True
     )
     assert metadata["synthetic_calibration_used"] is True
-    assert params.mass_kg == pytest.approx(1.5)
+    assert params.mass_kg == pytest.approx(0.6)
 
 
 def test_airframe_geometry_is_fixed_and_four_rotors_are_present():
