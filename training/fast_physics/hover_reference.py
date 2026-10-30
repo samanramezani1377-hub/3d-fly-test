@@ -72,7 +72,7 @@ class HoverReferenceController:
         cy, sy = np.cos(yaw), np.sin(yaw)
         accel_body_x = cy * accel_world[0] + sy * accel_world[1]
         accel_body_y = -sy * accel_world[0] + cy * accel_world[1]
-        desired_pitch = np.clip(np.arctan2(accel_body_x, p.gravity if hasattr(p, "gravity") else 9.80665), -self.max_tilt, self.max_tilt)
+        desired_pitch = np.clip(np.arctan2(accel_body_x, 9.80665), -self.max_tilt, self.max_tilt)
         desired_roll = np.clip(-np.arctan2(accel_body_y, 9.80665), -self.max_tilt, self.max_tilt)
         desired_attitude = np.array([desired_roll, desired_pitch, 0.0])
         attitude_error = desired_attitude - attitude
