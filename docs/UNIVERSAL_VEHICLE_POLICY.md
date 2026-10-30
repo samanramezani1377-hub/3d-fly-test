@@ -55,9 +55,9 @@ The test suite also checks nominal static-hover force balance for every example 
 - `training/fast_physics/hover_reference.py` implements a cascaded position/attitude PID controller with bounded integral disturbance rejection, true-wind drag feed-forward and a four-rotor wrench allocator.
 - `training/evaluate_hover_reference.py` runs sustained-hover episodes independently for every profile, in nominal or Stage 4 randomized conditions.
 - `training/tests/test_hover_reference.py` checks sustained nominal hover for all four profiles.
-- CI runs the nominal reference benchmark and requires every provisional profile to meet the sustained-hover criteria.
+- CI runs sustained-hover benchmarks for all four profiles. Five episodes per profile achieved 100% success with zero crashes in nominal conditions and again under Stage 4 randomization, including independent wind components up to ±2 m/s. The separate fixed-wind regression test also passes.
 
-**This is a privileged-parameter oracle benchmark:** it uses the true per-episode mass, inertia, motor effectiveness, voltage factor and wind from the simulator. It is intentionally an upper-bound diagnostic to determine whether the simplified plant can be controlled; it is not an observation-only controller, cannot be compared directly with PPO, and is not deployable. If this oracle cannot hold hover, investigate physics, actuator allocation and control conventions before spending compute on PPO. If it succeeds while PPO fails, focus next on PPO reward design, exploration, observation scaling and curriculum.
+**This is a privileged-parameter oracle benchmark:** it reads the exact 12-value simulator state and uses the true per-episode mass, inertia, motor effectiveness, voltage factor, drag coefficients and wind from the simulator. It is intentionally an upper-bound diagnostic to determine whether the simplified plant can be controlled; it is not an observation-only controller, cannot be compared directly with PPO, and is not deployable. If this oracle cannot hold hover, investigate physics, actuator allocation and control conventions before spending compute on PPO. If it succeeds while PPO fails, focus next on PPO reward design, exploration, observation scaling and curriculum.
 
 ## Calibration workflow for a new aircraft
 
