@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from fast_physics.hover_reference import HoverReferenceController
-from fast_physics.vehicle_family import DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv, load_vehicle_profiles
+from fast_physics.vehicle_family import DEFAULT_RANDOMIZATION, DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv, load_vehicle_profiles
 
 
 def run_episode(env, seed: int, settle_seconds: float, success_altitude_error: float,
@@ -69,18 +69,31 @@ def main(argv=None):
     parser.add_argument("--max-steps", type=int, default=1500)
     parser.add_argument("--settle-seconds", type=float, default=5.0)
     parser.add_argument("--randomize", action="store_true")
+    parser.add_argument("--wind-max", type=float, default=None, help="Override symmetric Stage 4 wind-component bound in m/s.")
     parser.add_argument("--output", type=Path, default=Path("training/runs/hover-reference-report.json"))
     args = parser.parse_args(argv)
     if min(args.episodes, args.max_steps) <= 0 or args.settle_seconds <= 0:
         raise SystemExit("episodes, max-steps and settle-seconds must be positive")
 
     profiles = load_vehicle_profiles(args.vehicle_family)
+    randomization_path = DEFAULT_RANDOMIZATION
+    if args.wind_max is not None:
+        if args.wind_max < 0:
+            raise SystemExit("--wind-max cannot be negative")
+        config = json.loads(DEFAULT_RANDOMIZATION.read_text(encoding="utf-8"))
+        for stage in config.get("curriculum", []):
+            if int(stage["stage"]) == 4:
+                stage["wind_m_s"] = [-args.wind_max, args.wind_max]
+        randomization_path = args.output.with_name(args.output.stem + "-randomization.json")
+        randomization_path.parent.mkdir(parents=True, exist_ok=True)
+        randomization_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
     reports = []
     for profile_index, profile in enumerate(profiles):
         env = VehicleFamilyEnv(
             vehicle_family_path=args.vehicle_family,
             vehicle_id=profile["vehicle_id"],
             max_steps=args.max_steps,
+            randomization_path=randomization_path,
             randomize=args.randomize,
             curriculum_stage=4 if args.randomize else 1,
         )
@@ -104,6 +117,7 @@ def main(argv=None):
         "controller": "cascaded_pid_with_wrench_allocation",
         "controller_class": "privileged_parameter_oracle_reference_only",
         "randomized": args.randomize,
+        "stage4_wind_component_max_m_s": args.wind_max if args.wind_max is not None else (2.0 if args.randomize else 0.0),
         "episodes_per_vehicle": args.episodes,
         "settle_seconds": args.settle_seconds,
         "success_criteria": {
