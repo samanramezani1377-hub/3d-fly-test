@@ -25,7 +25,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
       - name: Install simulation and PPO dependencies
         run: |
           python -m pip install --upgrade pip
@@ -44,9 +43,10 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
-          manifest_path = Path("${RUNNER_TEMP}/universal-ppo/ci-universal-smoke-curriculum-manifest.json")
+          manifest_path = Path(os.environ["RUNNER_TEMP"]) / "universal-ppo/ci-universal-smoke-curriculum-manifest.json"
           manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
           assert manifest["checkpoint_handoff"] == "best_mean_reward"
           assert len(manifest["stages"]) == 4
