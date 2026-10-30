@@ -80,9 +80,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p training/models/universal-quad
-          if [ -d training/runs/universal-quad-stage1 ]; then
-            cp -a training/runs/universal-quad-stage* training/models/universal-quad/
-          fi
+          for stage_dir in training/runs/universal-quad-stage*; do
+            if [ -d "$stage_dir" ]; then
+              mkdir -p "training/models/universal-quad/$(basename "$stage_dir")"
+              rsync -a --exclude 'tensorboard/' --exclude '*.csv' "$stage_dir/" "training/models/universal-quad/$(basename "$stage_dir")/"
+            fi
+          done
           if [ -d training/runs/release ]; then
             cp -a training/runs/release training/models/universal-quad/
           fi
