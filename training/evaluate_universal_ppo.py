@@ -42,11 +42,17 @@ def main(argv=None):
                 episode_seed = args.seed + episode_index
                 episode_index += 1
                 rewards, crashed = [], False
+                takeoff_seen = False
+                max_altitude_m = 0.08
+                crash_reason = None
                 while True:
                     action, _ = model.predict(obs, deterministic=True)
                     obs, reward, terminated, truncated, info = env.step(action)
                     rewards.append(float(reward))
                     crashed = crashed or bool(info.get("crashed", False))
+                    takeoff_seen = takeoff_seen or bool(info.get("has_taken_off", False))
+                    max_altitude_m = max(max_altitude_m, float(info.get("altitude_m", 0.08)))
+                    crash_reason = info.get("crash_reason") or crash_reason
                     if terminated or truncated:
                         break
                 episodes.append({
@@ -55,6 +61,12 @@ def main(argv=None):
                         and info.get("altitude_error_m", 999) < 0.35
                         and info.get("horizontal_error_m", 999) < 0.5),
                     "crashed": crashed, "steps": len(rewards),
+                    "takeoff_success": takeoff_seen,
+                    "max_altitude_m": max_altitude_m,
+                    "final_altitude_m": info.get("altitude_m"),
+                    "crash_reason": crash_reason,
+                    "crash_reasons": info.get("crash_reasons", []),
+                    "terminated": bool(terminated), "truncated": bool(truncated),
                     "mean_reward": sum(rewards) / max(len(rewards), 1),
                     "final_altitude_error_m": info.get("altitude_error_m"),
                     "final_horizontal_error_m": info.get("horizontal_error_m"),
@@ -68,6 +80,8 @@ def main(argv=None):
             "episodes": episodes,
             "hover_success_rate": sum(e["hover_success"] for e in episodes) / len(episodes),
             "crash_rate": sum(e["crashed"] for e in episodes) / len(episodes),
+            "takeoff_success_rate": sum(e["takeoff_success"] for e in episodes) / len(episodes),
+            "mean_max_altitude_m": sum(e["max_altitude_m"] for e in episodes) / len(episodes),
             "completion_rate": sum(e["completed"] for e in episodes) / len(episodes),
         })
     result = {
