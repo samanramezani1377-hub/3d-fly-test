@@ -1,6 +1,19 @@
 {
   "assembly": "drone_parametric.step",
-  "branch_scope": "demo",
+  "parameter_source": "cad/parametric/model.params.json",
+  "parameter_snapshot": "drone_parametric.params.json",
+  "input_sha256": {
+    "builder": "4e83c871b93f9e997411cf1c65242565e3ce59c95dc8551128d8a45a3bdb06af",
+    "parameters": "01db4601267d9a8bcf2284a243fbd96b47e874d101ccf47814b0eb57c9683ce7",
+    "body_sections": "0ab619d6aca819ae7029b37d5ed1215abd9c503e990bca544f2bc8f5a83e3ad9"
+  },
+  "export_semantics": {
+    "drone_parametric.step": "assembled pose; named 26-component STEP assembly",
+    "drone_parametric.stl": "byte-identical alias of drone_parametric_assembled.stl",
+    "drone_parametric_assembled.stl": "same assembled component solids and coordinates as the STEP assembly",
+    "drone_parametric_exploded.stl": "display-only exploded layout derived from the same component solids"
+  },
+  "branch_scope": "kilo",
   "export_orientation": {
     "vertical_axis": "+Z",
     "camera_front_direction": "-Y",
@@ -13,7 +26,7 @@
       "name": "body_lower",
       "step": "body_lower.step",
       "stl": "body_lower.stl",
-      "role": "lower body shell with reinforced floor rails, side entry openings and hex-nut traps"
+      "role": "lower hull shell with a continuous floor plate, four side-entry openings, and eight underside nut bosses/pockets"
     },
     {
       "name": "body_crown",
@@ -25,25 +38,25 @@
       "name": "arm_1",
       "step": "arm_1.step",
       "stl": "arm_1.stl",
-      "role": "removable arm module with an integral floor-mounting tongue, guard and motor"
+      "role": "removable full-height tick-root arm module with guard and motor"
     },
     {
       "name": "arm_2",
       "step": "arm_2.step",
       "stl": "arm_2.stl",
-      "role": "removable arm module with an integral floor-mounting tongue, guard and motor"
+      "role": "removable full-height tick-root arm module with guard and motor"
     },
     {
       "name": "arm_3",
       "step": "arm_3.step",
       "stl": "arm_3.stl",
-      "role": "removable arm module with an integral floor-mounting tongue, guard and motor"
+      "role": "removable full-height tick-root arm module with guard and motor"
     },
     {
       "name": "arm_4",
       "step": "arm_4.step",
       "stl": "arm_4.stl",
-      "role": "removable arm module with an integral floor-mounting tongue, guard and motor"
+      "role": "removable full-height tick-root arm module with guard and motor"
     },
     {
       "name": "prop_1",
@@ -170,12 +183,12 @@
     "type": "full-height arm beam reaches the screw stations; screws pass through the beam and floor into underside nut recesses",
     "fastener": "two vertical M3 screws per arm, passing through the floor into exterior underside nut recesses",
     "fastener_count": 8,
-    "fastener_axis_design_coordinates": "Y (vertical); screws installed from the arm-tab side into exterior underside nuts",
+    "fastener_axis_design_coordinates": "Y (vertical); screws pass downward through the full-height arm beam and floor into exterior underside nuts",
     "fastener_axis_export_coordinates": "Z (vertical)",
     "nut_retention": "hexagonal pockets open on the exterior underside; nut solids sit inside the pocket depth, with real metal nuts required for assembly",
     "nut_recesses_open_on_exterior_underside": true,
     "underside_boss_count": 8,
-    "underside_boss_diameter_mm": 11.0,
+    "underside_boss_diameter_mm": 11,
     "underside_boss_total_local_thickness_mm": 8.8,
     "underside_boss_integral_with_body": true,
     "nut_pocket_depth_mm": 2.571,
@@ -183,7 +196,7 @@
     "nut_seated_inside_floor_recess": true,
     "nut_pocket_clearance_per_side_mm": 0.193,
     "side_wall_fasteners": false,
-    "floor_plate_cut_through": true,
+    "floor_bolt_clearance_bores_pass_through": true,
     "arm_entry_openings": 4,
     "integral_tab": false,
     "bolt_positions_radial_tangent_model_units": [
@@ -196,6 +209,16 @@
         4.5
       ]
     ],
+    "tick_root_geometry": {
+      "long_branch_length_model_units": 22,
+      "short_branch_length_model_units": 14,
+      "branch_width_ratio": 0.6,
+      "long_branch_axis_deg": 55,
+      "short_branch_axis_deg": 55,
+      "included_angle_deg": 110,
+      "junction_radius_model_units": 36.61,
+      "junction_radius_final_mm": 51.768
+    },
     "tab_removed": true,
     "arm_start_radius_model_units": 36.61,
     "main_beam_height_mm": 16.968,
