@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "policy": "randomize uncertain physical properties while keeping the v1 CAD geometry fixed",
+  "mass": {"scale": [0.80, 1.25]},
+  "center_of_mass": {"offset_m": [-0.015, 0.015]},
+  "inertia": {"scale": [0.70, 1.40]},
+  "motor": {"effectiveness": [0.90, 1.10]},
+  "battery": {"voltage_factor": [0.82, 1.0]},
+  "aerodynamics": {"drag_scale": [0.70, 1.40]},
+  "environment": {
+    "wind_component_m_s": [-2.0, 2.0],
+    "sensor_noise_std": 0.002
+  },
+  "curriculum": [
+    {"stage": 1, "name": "baseline", "mass_scale": [1.0, 1.0], "cg_offset_m": [0.0, 0.0], "inertia_scale": [1.0, 1.0], "motor_effectiveness": [1.0, 1.0], "wind_m_s": [0.0, 0.0]},
+    {"stage": 2, "name": "mass_and_cg", "mass_scale": [0.90, 1.10], "cg_offset_m": [-0.008, 0.008], "inertia_scale": [0.90, 1.10], "motor_effectiveness": [1.0, 1.0], "wind_m_s": [-0.5, 0.5]},
+    {"stage": 3, "name": "actuator_and_battery", "mass_scale": [0.85, 1.15], "cg_offset_m": [-0.012, 0.012], "inertia_scale": [0.80, 1.20], "motor_effectiveness": [0.90, 1.10], "wind_m_s": [-1.0, 1.0]},
+    {"stage": 4, "name": "combined_robustness", "mass_scale": [0.80, 1.25], "cg_offset_m": [-0.015, 0.015], "inertia_scale": [0.70, 1.40], "motor_effectiveness": [0.90, 1.10], "wind_m_s": [-2.0, 2.0]}
+  ],
+  "important": "Ranges are initial software experiment bounds, not verified physical operating limits. They must be narrowed or widened using measured component and structural limits."
+}
