@@ -52,7 +52,7 @@ def test_every_profile_has_nominal_static_hover_equilibrium():
 
 
 def test_all_curriculum_stages_preserve_minimum_hover_thrust_margin():
-    randomization_path = ROOT / "vehicle_models/smooth2_parametric/domain_randomization.json"
+    randomization_path = ROOT / "vehicle_models/family/domain_randomization.json"
     config = json.loads(randomization_path.read_text(encoding="utf-8"))
     for profile in load_vehicle_profiles(DEFAULT_VEHICLE_FAMILY):
         params = profile_to_parameters(profile)
@@ -60,7 +60,7 @@ def test_all_curriculum_stages_preserve_minimum_hover_thrust_margin():
             4.0 * params.thrust_coefficient_n_per_rad_s2 * params.max_rotor_speed_rad_s**2
             / (params.mass_kg * 9.80665)
         )
-        for stage_number in range(1, 5):
+        for stage_number in range(1, 6):
             stage = randomization_for_stage(config, stage_number)
             worst_mass = max(stage["mass"]["scale"])
             worst_voltage = min(stage["battery"]["voltage_factor"])
