@@ -32,7 +32,7 @@ def score(report):
         min(x["takeoff_success_rate"] for x in profiles),
         sum(x["mean_stable_hover_seconds"] for x in profiles) / len(profiles),
         -sum(x.get("mean_motor_saturation_fraction", 1.0) for x in profiles) / len(profiles),
-        sum(x.get("mean_reward", 0.0) for x in profiles) / len(profiles),
+        sum(x.get("mean_return", 0.0) for x in profiles) / len(profiles),
     )
 
 
