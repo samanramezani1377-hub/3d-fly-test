@@ -1,4 +1,4 @@
-name: Universal five-stage PPO training
+name: Universal PPO - PR validation / manual five-stage training
 
 on:
   pull_request:
@@ -35,7 +35,7 @@ env:
 
 jobs:
   five-stage-training:
-    name: Universal PPO validation or full five-stage training
+    name: ${{ github.event_name == 'pull_request' && 'PR validation only (no PPO training)' || 'Five-stage PPO training' }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -64,14 +64,25 @@ jobs:
             training/tests/test_universal_vehicle.py \
             training/tests/test_hover_reference.py
 
-      - name: Run five-stage training and final held-out model test
+      - name: Restore resumable v2 checkpoints
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          mkdir -p training/runs
+          if [ -d training/models/universal-quad-v2 ]; then
+            cp -a training/models/universal-quad-v2/. training/runs/
+          fi
+
+      - name: Run exactly five sequential PPO training stages
         if: github.event_name == 'workflow_dispatch'
         run: |
           set -o pipefail
           python training/run_universal_curriculum.py \
             --timesteps-per-stage 1000000 \
             --n-envs 16 \
-            --checkpoint-eval-episodes 5 \
+            --run-prefix universal-quad-v2 \
+            --checkpoint-eval-episodes 2 \
+            --eval-frequency 100000 \
+            --checkpoint-frequency 20000 \
             --evaluation-episodes 20 \
             2>&1 | tee five-stage-training.log
 
@@ -79,24 +90,27 @@ jobs:
         if: always() && github.event_name == 'workflow_dispatch'
         run: |
           set -euo pipefail
-          mkdir -p training/models/universal-quad
-          for stage_dir in training/runs/universal-quad-stage*; do
+          mkdir -p training/models/universal-quad-v2
+          for stage_dir in training/runs/universal-quad-v2-stage*; do
             if [ -d "$stage_dir" ]; then
-              mkdir -p "training/models/universal-quad/$(basename "$stage_dir")"
-              rsync -a --exclude 'tensorboard/' --exclude '*.csv' "$stage_dir/" "training/models/universal-quad/$(basename "$stage_dir")/"
+              mkdir -p "training/models/universal-quad-v2/$(basename "$stage_dir")"
+              rsync -a --exclude 'tensorboard/' --exclude '*.csv' "$stage_dir/" "training/models/universal-quad-v2/$(basename "$stage_dir")/"
             fi
           done
           if [ -d training/runs/release ]; then
-            cp -a training/runs/release training/models/universal-quad/
+            cp -a training/runs/release training/models/universal-quad-v2/
           fi
-          if [ -f training/runs/universal-quad-curriculum-manifest.json ]; then
-            cp training/runs/universal-quad-curriculum-manifest.json training/models/universal-quad/
+          if [ -f training/runs/universal-quad-v2-curriculum-manifest.json ]; then
+            cp training/runs/universal-quad-v2-curriculum-manifest.json training/models/universal-quad-v2/
+          fi
+          if [ -f training/runs/universal-quad-v2-held-out-domain-randomization.json ]; then
+            cp training/runs/universal-quad-v2-held-out-domain-randomization.json training/models/universal-quad-v2/
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add training/models/universal-quad
+          git add training/models/universal-quad-v2
           if ! git diff --cached --quiet; then
-            find training/models/universal-quad -type f -size +90M -print -quit | grep -q . && {
+            find training/models/universal-quad-v2 -type f -size +90M -print -quit | grep -q . && {
               echo "A checkpoint exceeds the safe 90 MB per-file repository limit."
               exit 1
             } || true
@@ -108,7 +122,7 @@ jobs:
         if: always() && github.event_name == 'workflow_dispatch'
         run: |
           echo '===== FIVE-STAGE MANIFEST ====='
-          if [ -f training/runs/universal-quad-curriculum-manifest.json ]; then cat training/runs/universal-quad-curriculum-manifest.json; else echo 'Manifest not produced'; fi
+          if [ -f training/runs/universal-quad-v2-curriculum-manifest.json ]; then cat training/runs/universal-quad-v2-curriculum-manifest.json; else echo 'Manifest not produced'; fi
           echo '===== TRAINING LOG TAIL ====='
           if [ -f five-stage-training.log ]; then tail -c 50000 five-stage-training.log; else echo 'Training log not produced'; fi
 
@@ -119,7 +133,7 @@ jobs:
           name: universal-ppo-five-stage-backup
           path: |
             training/runs/
-            training/models/universal-quad/
+            training/models/universal-quad-v2/
             five-stage-training.log
           if-no-files-found: warn
           retention-days: 90
