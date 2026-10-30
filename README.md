@@ -69,6 +69,7 @@ The browser tier runs Python through Pyodide and is intended for classical/light
 ## Project documentation
 
 - [Full project status, architecture, limitations, and roadmap](docs/PROJECT_STATUS.md)
+- [Robust/adaptive flight learning architecture and fast-physics implementation](docs/ROBUST_ADAPTIVE_FLIGHT_ARCHITECTURE.md)
 - [Master checklist](docs/CHECKLIST.md)
 
 ## Experimental AI training (PPO / Colab)
@@ -81,3 +82,12 @@ The `training/` folder contains a native build of the same pinned C++ `DroneCore
 
 - [SkySim source](https://github.com/vishwagw/Sky-Sim-drone-simulator-3.0)
 - [SkySim browser demo](https://vishwagw.github.io/Sky-Sim-drone-simulator-3.0/)
+
+
+## Experimental robust/adaptive fast-physics backend
+
+The repository now includes an additive fast 6-DoF research plant for the fixed `smooth2-parametric-v1` CAD airframe. It randomizes uncertain mass, centre of mass, inertia, motor effectiveness, voltage factor, drag and wind while keeping the v1 body/arm/rotor geometry fixed. The policy receives a short state/action history and does not receive the simulator's privileged physical parameters.
+
+This backend is separate from the existing SkySim Native/WASM backend and does not replace the existing five-stage PPO workflow. Aircraft mass, CG, inertia and motor/propeller calibration remain unknown until measured. The new PPO entry point is calibration-gated by default; synthetic calibration requires an explicit software-only flag and must not be interpreted as aircraft performance or flight clearance.
+
+See [robust/adaptive architecture](docs/ROBUST_ADAPTIVE_FLIGHT_ARCHITECTURE.md) and [training guide](training/README.md).

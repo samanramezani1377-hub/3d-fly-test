@@ -68,3 +68,33 @@ config/drone.json still contains placeholder values until the actual aircraft is
 The imported `smooth2-parametric` CAD model and engineering metadata live under `assets/preflight/`. Read the [preflight asset index](../assets/preflight/README.md), [analysis plan](../assets/preflight/ANALYSIS_PLAN.md), and [data dictionary](../assets/preflight/DATA_DICTIONARY.md) before using aircraft-specific parameters.
 
 The current SkySim/PPO configuration is not automatically derived from this CAD. Do not copy design dimensions into mass, inertia, rotor thrust or motor parameters without validating the STEP geometry, material/density, exact motor/ESC/battery and rotor performance data. The preflight gates must pass before treating the model as the training plant.
+
+
+## Experimental robust/adaptive PPO on the smooth2 fast-physics plant
+
+The new `training/fast_physics/` package provides a separate simplified 6-DoF plant and Gymnasium environment. It keeps the imported smooth2 geometry fixed and randomizes uncertain physical properties per episode. The policy receives four frames of state/action history; mass, CG, inertia, motor effectiveness and voltage factor are not exposed as policy observations.
+
+**The aircraft calibration is intentionally incomplete.** By default, the environment refuses to load while measured mass/CG/inertia and motor/propeller coefficients are missing. For software-only development, synthetic values can be enabled explicitly:
+
+```bash
+python training/train_robust_ppo.py --timesteps 100000 --n-envs 4 --software-only-synthetic-calibration
+```
+
+Do not use a synthetic run as evidence of real hover capability or physical flight safety. This new entry point is additive and is not part of the existing SkySim five-stage checkpoint chain. Full details and current limitations are documented in [ROBUST_ADAPTIVE_FLIGHT_ARCHITECTURE.md](../docs/ROBUST_ADAPTIVE_FLIGHT_ARCHITECTURE.md).
+
+
+### Staged robust/adaptive PPO experiment
+
+The new fast-physics environment supports curriculum stages 1–4. Each stage narrows or expands mass, CG, inertia, actuator, battery, drag and wind ranges. The sequential runner warm-starts each stage from the previous stage's final model:
+
+```bash
+python training/run_robust_curriculum.py \
+  --timesteps-per-stage 100000 \
+  --n-envs 4 \
+  --run-prefix robust-smooth2-software-only \
+  --software-only-synthetic-calibration
+```
+
+The policy input contains a four-frame state/action history, observation noise, and two context values from an online recursive-least-squares estimator of effective collective lift response. The estimator is not a unique mass/motor/battery diagnosis; it provides an approximate adaptation cue and confidence value. Privileged simulator parameters remain outside the policy observation.
+
+The curriculum runner and PPO script refuse to use unknown physical calibration unless the explicit software-only synthetic flag is supplied. The existing native SkySim five-stage workflow is unchanged.

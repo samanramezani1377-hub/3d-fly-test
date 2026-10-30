@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "vehicle_id": "smooth2-parametric-v1",
+  "status": "uncalibrated",
+  "physical_properties": {
+    "takeoff_mass_kg": null,
+    "center_of_mass_m": null,
+    "inertia_tensor_kg_m2": null,
+    "linear_drag_kg_s": 0.08,
+    "quadratic_drag_kg_m": 0.015,
+    "angular_damping_nms": 0.002,
+    "evidence": "drag and damping defaults are numerical regularizers for software experiments, not measured aircraft values"
+  },
+  "motor_propeller": {
+    "motor_make": null,
+    "motor_model": null,
+    "esc_model": null,
+    "propeller_geometry_source": "smooth2-parametric CAD; two-blade NACA 4410-derived design",
+    "battery_model": null,
+    "max_rotor_speed_rad_s": null,
+    "thrust_coefficient_n_per_rad_s2": null,
+    "torque_to_thrust_m": null,
+    "motor_time_constant_s": 0.045,
+    "thrust_curve_source": null,
+    "torque_curve_source": null,
+    "evidence": "unknown"
+  },
+  "synthetic_software_test_values": {
+    "warning": "Only enabled by an explicit software-only flag. Never use for physical predictions or real flight.",
+    "mass_kg": 0.6,
+    "center_of_mass_m": [0.0, 0.0, 0.0],
+    "inertia_kg_m2": [0.004, 0.006, 0.004],
+    "max_rotor_speed_rad_s": 1100.0,
+    "thrust_coefficient_n_per_rad_s2": 0.000002,
+    "torque_to_thrust_m": 0.012
+  },
+  "required_before_physical_calibration": [
+    "weigh the complete takeoff aircraft including battery and payload",
+    "measure CG in the declared CAD_EXPORT_Z_UP frame",
+    "calculate full inertia tensor from validated solids and verified material densities, then cross-check experimentally where practical",
+    "identify exact motor, ESC, battery and propeller combination",
+    "obtain or measure thrust, torque, RPM, voltage and current data over the operating range",
+    "verify rotor spin directions and motor numbering"
+  ]
+}

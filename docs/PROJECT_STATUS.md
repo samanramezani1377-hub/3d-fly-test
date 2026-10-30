@@ -192,3 +192,14 @@ The first milestone is complete only when all of these are true:
 - The UI/test result clearly states that the GLB is visual-only and the physics remain simplified.
 
 After that milestone, the next priority is to make the model's physical parameters and test outputs more faithful and measurable.
+
+
+## 8B. Robust/adaptive fast-physics backend (2026-10-30)
+
+An additive experimental backend has been introduced for the fixed `smooth2-parametric-v1` airframe. It contains a simplified 6-DoF plant, explicit physical calibration record, bounded domain randomization, hidden-parameter Gymnasium observations with four-frame state/action history, a separate PPO entry point, and unit tests.
+
+The v1 geometry is held fixed; mass, CG, inertia, motor effectiveness, voltage factor, drag and wind vary between episodes. Unknown aircraft values remain null in the calibration record. The software-only synthetic parameter set requires explicit opt-in. The new backend does not replace or modify the existing NativeSkySimEnv/SkySim training chain.
+
+Implementation status and limitations: [Robust/adaptive architecture](ROBUST_ADAPTIVE_FLIGHT_ARCHITECTURE.md).
+
+**Important:** the fast plant is a research approximation, not CFD or a validated model of the real aircraft. It has not yet been calibrated against thrust-stand measurements, verified mass properties or flight telemetry. Automatic curriculum scheduling, a dedicated online estimator, native-SkySim parity and physical validation remain future work. No model from this backend is cleared for real flight.
