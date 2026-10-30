@@ -20,9 +20,10 @@ def parse_args(argv=None):
     p.add_argument("--eval-frequency", type=int, default=10000, help="Evaluation interval in aggregate environment transitions.")
     p.add_argument("--eval-episodes", type=int, default=10)
     p.add_argument("--history-length", type=int, default=4)
-    p.add_argument("--curriculum-stage", type=int, choices=(1,2,3,4), default=None)
+    p.add_argument("--curriculum-stage", type=int, choices=(1,2,3,4,5), default=None)
     p.add_argument("--load-model", type=Path, default=None)
     p.add_argument("--vehicle-family", type=Path, default=DEFAULT_VEHICLE_FAMILY)
+    p.add_argument("--randomization-config", type=Path, default=Path(__file__).resolve().parents[1] / "vehicle_models/family/domain_randomization.json")
     p.add_argument("--vehicle-id", action="append", default=None, help="Optional profile allow-list; repeat IDs.")
     p.add_argument("--no-randomization", action="store_true")
     return p.parse_args(argv)
@@ -61,7 +62,7 @@ def main(argv=None):
         def _init():
             return VehicleFamilyEnv(
                 vehicle_family_path=family_path,
-                randomization_path=Path(__file__).resolve().parents[1] / "vehicle_models/smooth2_parametric/domain_randomization.json",
+                randomization_path=args.randomization_config,
                 history_length=args.history_length, randomize=not args.no_randomization,
                 curriculum_stage=args.curriculum_stage,
             )

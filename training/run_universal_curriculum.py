@@ -1,4 +1,4 @@
-"""Four-stage universal-vehicle PPO curriculum with checkpoint handoff."""
+"""Five-stage universal-vehicle PPO curriculum with evaluated checkpoint handoff."""
 from __future__ import annotations
 
 import argparse
@@ -8,6 +8,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_profile_ids(path):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return [p["vehicle_id"] for p in data["profiles"]]
 
 
 def main(argv=None):
@@ -23,13 +28,13 @@ def main(argv=None):
     if args.timesteps_per_stage <= 0 or args.n_envs <= 0 or args.evaluation_episodes <= 0:
         raise SystemExit("timesteps, n-envs and evaluation-episodes must be positive")
     output, previous, stages = args.output_dir.resolve(), None, []
-    for stage in range(1, 5):
+    for stage in range(1, 6):
         name = f"{args.run_prefix}-stage{stage}"
         command = [sys.executable, str(ROOT / "training/train_universal_ppo.py"),
             "--timesteps", str(args.timesteps_per_stage), "--n-envs", str(args.n_envs),
             "--seed", str(args.seed + stage - 1), "--run-name", name,
             "--output-dir", str(output), "--curriculum-stage", str(stage),
-            "--vehicle-family", str(args.vehicle_family)]
+            "--vehicle-family", str(args.vehicle_family), "--randomization-config", str(ROOT / "vehicle_models/family/domain_randomization.json")]
         if previous:
             command.extend(["--load-model", str(previous)])
         subprocess.run(command, cwd=ROOT, check=True)
@@ -42,14 +47,14 @@ def main(argv=None):
         report = output / name / "held-out-evaluation.json"
         subprocess.run([sys.executable, str(ROOT / "training/evaluate_universal_ppo.py"),
             "--model", str(previous), "--vehicle-family", str(args.vehicle_family),
-            "--episodes", str(args.evaluation_episodes), "--seed", str(90000 + stage * 1000), "--output", str(report)],
+            "--episodes", str(args.evaluation_episodes), "--seed", str(90000 + stage * 1000), "--output", str(report), "--randomization-config", str(ROOT / "vehicle_models/family/domain_randomization.json"), "--curriculum-stage", str(stage)],
             cwd=ROOT, check=True)
         evaluation = json.loads(report.read_text(encoding="utf-8"))
         stages.append({"stage":stage,"final_checkpoint":str(final_checkpoint),
                        "selected_best_checkpoint":str(previous),
-                       "checkpoint_selection":"best_mean_reward",
-                       "evaluation":str(report),"profiles":evaluation["profiles"]})
-    manifest = {"stages":stages,"checkpoint_handoff":"best_mean_reward",
+                       "checkpoint_selection":"stable_baselines3_eval_callback_mean_reward",
+                       "evaluation":str(report),"profiles":evaluation["profiles"], "all_profiles_evaluated": len(evaluation["profiles"]) == len(load_profile_ids(args.vehicle_family))})
+    manifest = {"stages":stages,"checkpoint_handoff":"previous_stage_best_mean_reward",
                 "timesteps_per_stage":args.timesteps_per_stage,
                 "vehicle_family":str(args.vehicle_family),"simulation_only":True,
                 "physical_flight_eligible":False}

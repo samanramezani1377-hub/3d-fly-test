@@ -13,6 +13,8 @@ def main(argv=None):
     p.add_argument("--model", type=Path, required=True)
     p.add_argument("--vehicle-family", type=Path, default=DEFAULT_VEHICLE_FAMILY)
     p.add_argument("--vehicle-id", action="append", default=None)
+    p.add_argument("--randomization-config", type=Path, default=Path(__file__).resolve().parents[1] / "vehicle_models/family/domain_randomization.json")
+    p.add_argument("--curriculum-stage", type=int, choices=(1,2,3,4,5), default=5)
     p.add_argument("--episodes", type=int, default=20)
     p.add_argument("--seed", type=int, default=90000)
     p.add_argument("--output", type=Path, default=Path("training/runs/universal-evaluation.json"))
@@ -31,7 +33,7 @@ def main(argv=None):
     model = PPO.load(str(args.model), device="auto")
     reports, episode_index = [], 0
     for profile in selected:
-        env = VehicleFamilyEnv(vehicle_family_path=args.vehicle_family, vehicle_id=profile["vehicle_id"], randomize=True)
+        env = VehicleFamilyEnv(vehicle_family_path=args.vehicle_family, randomization_path=args.randomization_config, curriculum_stage=args.curriculum_stage, vehicle_id=profile["vehicle_id"], randomize=True)
         episodes = []
         try:
             for _ in range(args.episodes):

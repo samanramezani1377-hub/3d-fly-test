@@ -73,16 +73,16 @@ jobs:
           python training/validate_observations.py | tee observation-validation.json
           python training/diagnose_control.py --steps 250 --throttles -0.5 -0.3 -0.2 -0.1 0 0.1 0.2 0.5 --output training/runs/control-diagnostics.json | tee control-diagnostics-summary.json
 
-      - name: Run five chained training stages
+      - name: Run five chained universal multi-vehicle training stages
         run: |
           set -o pipefail
-          python training/run_five_stage.py 2>&1 | tee five-stage-training.log
+          python training/run_universal_curriculum.py --timesteps-per-stage 200000 --n-envs 4 --evaluation-episodes 20 2>&1 | tee five-stage-training.log
 
       - name: Print full result reports for direct log retrieval
         if: always()
         run: |
-          echo '===== FIVE-STAGE MANIFEST ====='
-          if [ -f training/runs/five-stage-training-manifest.json ]; then cat training/runs/five-stage-training-manifest.json; else echo 'Manifest not produced'; fi
+          echo '===== UNIVERSAL FIVE-STAGE MANIFEST ====='
+          if [ -f training/runs/universal-quad-curriculum-manifest.json ]; then cat training/runs/universal-quad-curriculum-manifest.json; else echo 'Manifest not produced'; fi
           echo '===== OBSERVATION VALIDATION ====='
           if [ -f observation-validation.json ]; then cat observation-validation.json; else echo 'Validation not produced'; fi
           echo '===== CONTROL DIAGNOSTICS ====='
@@ -94,7 +94,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ppo-five-stage-results
+          name: universal-ppo-five-stage-results
           path: |
             final-model.zip
             training/runs/five-stage-training-manifest.json
@@ -103,12 +103,12 @@ jobs:
             training/runs/stage3-selected-model.zip
             training/runs/stage4-selected-model.zip
             training/runs/stage5-selected-model.zip
-            training/runs/ppo-stage1-seed42/
-            training/runs/ppo-stage1-seed40/
-            training/runs/ppo-stage2-continued/
-            training/runs/ppo-stage3-continued/
-            training/runs/ppo-stage4-continued/
-            training/runs/ppo-stage5-continued/
+            training/runs/universal-quad-stage1/
+            training/runs/universal-quad-stage2/
+            training/runs/universal-quad-stage3/
+            training/runs/universal-quad-stage4/
+            training/runs/universal-quad-stage5/
+            training/runs/universal-quad-stage5/
             training/runs/control-diagnostics.json
             observation-validation.json
             control-diagnostics-summary.json

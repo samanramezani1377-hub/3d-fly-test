@@ -12,7 +12,7 @@ def randomization_for_stage(config: dict, stage_number: int) -> dict:
         raise ValueError(f"unknown curriculum stage {stage_number}; available stages: {available}")
     result = deepcopy(config)
     result["mass"]["scale"] = stage["mass_scale"]
-    result["center_of_mass"]["offset_m"] = stage["cg_offset_m"]
+    result["center_of_mass"]["offset_arm_fraction"] = stage["cg_offset_arm_fraction"]
     result["inertia"]["scale"] = stage["inertia_scale"]
     result["motor"]["effectiveness"] = stage["motor_effectiveness"]
     result["battery"]["voltage_factor"] = stage.get("battery_voltage_factor", [1.0, 1.0])
