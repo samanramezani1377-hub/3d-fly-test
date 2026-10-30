@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "component_id": "generic-a2212-13t-kv1000",
+  "component_type": "brushless_outrunner_motor",
+  "identity": {
+    "family": "A2212",
+    "winding_variant": "13T",
+    "kv_rpm_per_volt": 1000,
+    "manufacturer": null,
+    "exact_vendor_sku": null,
+    "identity_note": "A2212 1000KV is sold by multiple manufacturers. This record is a generic 13T reference profile, not proof that every A2212-labelled unit has identical construction."
+  },
+  "confirmed_or_repeated_catalog_values": {
+    "operating_cells_lipo": {
+      "min": 2,
+      "max": 3
+    },
+    "nominal_voltage_v": {
+      "2S": 7.4,
+      "3S": 11.1
+    },
+    "no_load_current_a_at_10v": 0.5,
+    "internal_resistance_ohm_catalog": 0.09,
+    "max_efficiency_fraction": 0.8,
+    "max_efficiency_current_a": {
+      "min": 4,
+      "max": 10
+    },
+    "shaft_diameter_mm": 3.17,
+    "pole_count": 14,
+    "motor_dimensions_mm": {
+      "diameter": 27.5,
+      "length_or_bell_height": 27
+    },
+    "recommended_esc_minimum_a": 18,
+    "recommended_esc_typical_a": 20,
+    "recommended_esc_comfort_margin_a": 30
+  },
+  "conflicting_or_vendor_dependent_values": {
+    "max_current_a": [
+      {
+        "value": 12,
+        "duration_s": 60,
+        "source": "HiModel A2212/13T catalog"
+      },
+      {
+        "value": 13,
+        "duration_s": 60,
+        "source": "Mouser-hosted A2212/13T technical data"
+      }
+    ],
+    "max_power_w": [
+      {
+        "value": 150,
+        "source": "A2212/13T catalog sheets"
+      },
+      {
+        "value": 173,
+        "source": "E-S Motor A2212-series performance table, 1000KV row; paired with 1047 prop and 3S"
+      }
+    ],
+    "mass_g": [
+      {
+        "value": 47,
+        "qualification": "motor/accessory configuration as listed by HiModel and some distributors"
+      },
+      {
+        "value": 52.7,
+        "qualification": "motor mass as listed in Mouser-hosted A2212/13T sheet"
+      },
+      {
+        "value": 53,
+        "qualification": "4-Max listing, includes wires and connectors"
+      },
+      {
+        "value": 61,
+        "qualification": "E-S Motor A2212-series 1000KV performance table, approximate"
+      }
+    ],
+    "dimensions": [
+      {
+        "value_mm": [
+          27.5,
+          30
+        ],
+        "source": "HiModel catalog"
+      },
+      {
+        "value_mm": [
+          27.7,
+          27
+        ],
+        "source": "E-S Motor A2212-series sheet"
+      }
+    ]
+  },
+  "published_static_test_points": [
+    {
+      "test_source": "HiModel A2212/13T static thrust report",
+      "battery_voltage_v": 11.1,
+      "propeller": "GWS Direct Drive 9x4.7",
+      "typical_current_a": 7.5,
+      "peak_current_a": 11.3,
+      "typical_thrust_gf": 650,
+      "max_thrust_gf": 730,
+      "measured_motor_rpm": null,
+      "torque_nm": null,
+      "temperature_c": null
+    },
+    {
+      "test_source": "HiModel A2212/13T static thrust report",
+      "battery_voltage_v": 11.1,
+      "propeller": "APC 10x4.7",
+      "typical_current_a": 10,
+      "peak_current_a": 12,
+      "typical_thrust_gf": 790,
+      "max_thrust_gf": 915,
+      "measured_motor_rpm": null,
+      "torque_nm": null,
+      "temperature_c": null
+    },
+    {
+      "test_source": "E-S Motor A2212-series sheet, 1000KV row",
+      "battery_voltage_v": 11.1,
+      "propeller": "1047",
+      "current_a": 15.6,
+      "thrust_gf": 885,
+      "power_w": 173,
+      "efficiency_gf_per_w": 5.1,
+      "measured_motor_rpm": null,
+      "torque_nm": null,
+      "temperature_c": null,
+      "note": "This row exceeds the 12-13A/60s ratings in other A2212/13T catalog sheets; retain as a vendor-specific data point, not as a safe continuous rating."
+    }
+  ],
+  "not_characterized_yet": {
+    "kv_tolerance": null,
+    "phase_to_phase_resistance_ohm_and_measurement_method": null,
+    "inductance_h": null,
+    "no_load_rpm_vs_voltage_curve": null,
+    "motor_time_constant_s": null,
+    "rotor_inertia_kg_m2": null,
+    "thrust_curve_vs_rpm": null,
+    "torque_curve_vs_rpm": null,
+    "current_curve_vs_rpm": null,
+    "thermal_limit_and_temperature_rise": null,
+    "bearing_and_winding_details": null
+  },
+  "simulation_use_policy": {
+    "use_kv_for_free_speed_estimate_only": true,
+    "do_not_infer_max_rotor_speed_from_kv_times_nominal_voltage": "KV is a no-load speed constant; loaded RPM is lower and ESC, battery sag, propeller load and motor losses matter.",
+    "do_not_fit_thrust_or_torque_coefficients_from_mixed_vendor_points": true,
+    "do_not_use_conflicting_max_current_or_power_as_a_safe_limit": true,
+    "physical_calibration_status": "incomplete",
+    "required_bench_test": "For the exact motor, ESC, battery and propeller: measure voltage, current, RPM, thrust, torque and temperature at multiple steady throttle points, plus step response for motor lag."
+  },
+  "sources": [
+    {
+      "name": "HiModel A2212/13T 1000KV product specifications and static thrust report",
+      "url": "https://www.himodel.com/electric/HiModel_1000KV_Outrunner_Brushless_Motors_W_Prop_adapter_Type_A2212_13.html"
+    },
+    {
+      "name": "Mouser-hosted A2212/13T technical data PDF",
+      "url": "https://www.mouser.com/datasheet/2/306/BLDC_A2212_13T-3223217.pdf"
+    },
+    {
+      "name": "E-S Motor A2212 series specification and performance data PDF",
+      "url": "https://cdn.robotshop.com/rbm/a00a7635-653b-4220-aac9-b0c23c5c5e2c/5/520795f9-301f-4e66-a0a3-019811d1f78b/222c434c_a2212-brushless-motor.pdf"
+    },
+    {
+      "name": "4-Max A2212-1000KV specifications and propeller test points",
+      "url": "https://www.4-max.co.uk/A2212-13T-1000kv.htm"
+    },
+    {
+      "name": "RobotShop / E-S Motor A2212 product specification",
+      "url": "https://www.robotshop.com/products/e-s-motor-xxd-a2212-brushless-motor-160w-mounting-base-kits-kv-1000"
+    }
+  ]
+}

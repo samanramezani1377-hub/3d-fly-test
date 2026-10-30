@@ -12,25 +12,83 @@
     "evidence": "drag and damping defaults are numerical regularizers for software experiments, not measured aircraft values"
   },
   "motor_propeller": {
-    "motor_make": null,
-    "motor_model": null,
+    "motor_make": "Generic/unbranded A2212-series (exact manufacturer not identified)",
+    "motor_model": "A2212/13T 1000KV reference profile",
     "esc_model": null,
-    "propeller_geometry_source": "smooth2-parametric CAD; two-blade NACA 4410-derived design",
+    "propeller_geometry_source": "3D repository kilo branch at d591b81bd671e04abe7d4bdeb0865fd3c3bf381b; cad/parametric/model.params.json and output/smooth2-parametric/assembly-manifest.json. Custom two-blade parametric propeller design; geometry is not a measured thrust/torque curve.",
     "battery_model": null,
     "max_rotor_speed_rad_s": null,
     "thrust_coefficient_n_per_rad_s2": null,
     "torque_to_thrust_m": null,
-    "motor_time_constant_s": 0.045,
+    "motor_time_constant_s": null,
     "thrust_curve_source": null,
     "torque_curve_source": null,
-    "evidence": "unknown"
+    "evidence": "Catalog identity and limits partially characterized from multiple vendor sources; exact manufacturer/lot and exact motor+ESC+battery+propeller bench calibration remain unknown.",
+    "kv_rpm_per_volt": 1000,
+    "motor_reference_file": "vehicle_models/components/a2212_1000kv_motor.json",
+    "catalog_values": {
+      "lipo_cells": [
+        2,
+        3
+      ],
+      "no_load_current_a_at_10v": 0.5,
+      "catalog_internal_resistance_ohm": 0.09,
+      "max_current_a_vendor_range": [
+        12,
+        13
+      ],
+      "max_current_duration_s": 60,
+      "max_power_w_vendor_range": [
+        150,
+        173
+      ],
+      "max_efficiency_fraction": 0.8,
+      "max_efficiency_current_a": [
+        4,
+        10
+      ],
+      "mass_g_vendor_range": [
+        47,
+        61
+      ],
+      "dimensions_mm_reference": [
+        27.5,
+        27
+      ],
+      "shaft_diameter_mm": 3.17,
+      "pole_count": 14,
+      "recommended_esc_minimum_a": 18,
+      "recommended_esc_typical_a": 20,
+      "recommended_esc_margin_a": 30
+    },
+    "catalog_data_note": "Sourced values from multiple A2212/13T vendors; exact user's motor identity is not verified. Conflicting values are preserved with source attribution in vehicle_models/components/a2212_1000kv_motor.json. Catalog values do not replace bench measurements.",
+    "propeller_design_revision": "d591b81bd671e04abe7d4bdeb0865fd3c3bf381b",
+    "propeller_geometry_design": {
+      "blade_count": 2,
+      "radius_mm_design": 26.45,
+      "pitch_mm_design": 53.086,
+      "airfoil_parameters": {
+        "max_camber_fraction": 0.04,
+        "max_camber_position_fraction": 0.4,
+        "thickness_ratio": 0.1
+      },
+      "source_parameter_file": "cad/parametric/model.params.json"
+    }
   },
   "synthetic_software_test_values": {
     "warning": "Only enabled by an explicit software-only flag. Never use for physical predictions or real flight.",
     "mass_kg": 0.6,
-    "center_of_mass_m": [0.0, 0.0, 0.0],
-    "inertia_kg_m2": [0.004, 0.006, 0.004],
-    "max_rotor_speed_rad_s": 1100.0,
+    "center_of_mass_m": [
+      0,
+      0,
+      0
+    ],
+    "inertia_kg_m2": [
+      0.004,
+      0.006,
+      0.004
+    ],
+    "max_rotor_speed_rad_s": 1100,
     "thrust_coefficient_n_per_rad_s2": 0.000002,
     "torque_to_thrust_m": 0.012
   },

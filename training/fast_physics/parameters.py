@@ -128,7 +128,7 @@ def load_vehicle_parameters(
         max_rotor_speed_rad_s=float(motor.get("max_rotor_speed_rad_s") or synthetic["max_rotor_speed_rad_s"]),
         thrust_coefficient_n_per_rad_s2=float(motor.get("thrust_coefficient_n_per_rad_s2") or synthetic["thrust_coefficient_n_per_rad_s2"]),
         torque_to_thrust_m=float(motor.get("torque_to_thrust_m") or synthetic["torque_to_thrust_m"]),
-        motor_time_constant_s=float(motor.get("motor_time_constant_s", 0.045)),
+        motor_time_constant_s=float(motor.get("motor_time_constant_s") or 0.045),
         linear_drag_kg_s=float(physical.get("linear_drag_kg_s", 0.08)),
         quadratic_drag_kg_m=float(physical.get("quadratic_drag_kg_m", 0.015)),
         angular_damping_nms=float(physical.get("angular_damping_nms", 0.002)),

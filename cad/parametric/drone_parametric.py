@@ -3,154 +3,37 @@
 Design coordinates are Y-up with X-Z as the plan; exported CAD is rotated to Z-up for
 common CAD/3D-printing orientation. Export transform: (x, y, z) -> (x, -z, y).
 Thus the camera/front points toward -Y and the flat underside faces -Z. Units: mm.
-Edit PARAMS (or pass --params file.json) and re-run to regenerate the model.
+Edit cad/parametric/model.params.json and re-run the single canonical build.
 """
-import json, sys
+import hashlib, json, shutil
+from pathlib import Path
 import cadquery as cq
 
-PARAMS = {
-    # central body (plan polygon, mirrored left/right) ---------------------
-    "body_height": 13.0,            # lower hull height (y 0..body_height)
-    "body_shell_thickness": 2.0,    # nominal thickness of shell, flat bottom plate, and roof
-    "body_half_width": 38.0,        # max half width (x) at the widest point (was 32: middle made wider)
-    "body_front_z": 66.0,           # nose (+z)
-    "body_rear_z": -52.0,           # tail (-z)
-    "body_front_half_width": 9.0,
-    "body_rear_half_width": 16.0,
-    "body_widest_z_front": 10.0,
-    "body_widest_z_rear": -18.0,
-    "body_edge_fillet": 0.8,
-    # extra widening of the dome through the middle of the body (plan view: narrow nose/tail, fat middle)
-    "mid_widen": 0.22,              # relative extra half width at the middle (0 = off)
-    "mid_widen_z": -4.0,            # z of the widest point of the dome
-    "mid_widen_sigma": 30.0,        # how far (mm) the widening spreads front/back
-    # canopy (upper dome) ---------------------------------------------------
-    "canopy_height": 12.0,
-    "canopy_front_z": 44.0,
-    "canopy_rear_z": -20.0,
-    "canopy_half_width": 19.0,
-    "canopy_taper_deg": 18.0,
-    "canopy_fillet": 4.0,
-    "use_measured_canopy": True,     # loft through cad/parametric/body_sections.json (edit the numbers to reshape)
-    "canopy_base_y": 13.0,
-    "canopy_top_y": 25.6,
-    "canopy_top_scale": 0.45,        # last ring of the dome relative to the top measured section
-    # faceted (low-poly) dome, like the reference render --------------------------
-    "canopy_faceted": True,
-    "facet_vertices": 14,            # vertices per level (fewer = bigger flat facets)
-    "facet_inset": 0.90,             # every 2nd vertex of the mid levels is pulled inward -> sharp creases
-    "facet_ridge_lift": 1.6,         # extra height (mm) given to the top ridge vertices
-    # rotor stations / arms ---------------------------------------------------
-    "motor_x": 58.0,                # |x| of each motor axis
-    "motor_z": 58.0,                # |z| of each motor axis (= motor_x -> square 4-rotor layout, was 39.5)
-    "arm_width": 16.0,
-    "arm_height": 12.0,
-    "motor_radius": 6.0,
-    "motor_height": 20.0,
-    "motor_hub_radius": 9.0,        # base boss under the motor
-    "motor_hub_height": 6.0,
-    # propeller guards: TRUE circular rings -----------------------------------
-    "guard_outer_radius": 35.5,     # used when guard_use_profile is False
-    "guard_wall": 4.5,
-    "guard_height": 21.0,
-    "guard_edge_fillet": 1.8,
-    # barrel profile measured on the original ring wall (radius vs height, mm)
-    "guard_profile_y":     [0.0, 1.5, 3.0, 5.0, 7.0, 9.0, 11.0, 13.0, 15.0, 21.0],
-    "guard_profile_outer": [29.0, 32.1, 33.4, 34.4, 34.9, 35.3, 35.2, 34.2, 33.1, 31.0],
-    "guard_profile_inner": [27.8, 27.8, 27.8, 28.0, 28.0, 27.5, 27.0, 27.0, 28.0, 28.5],
-    "guard_use_profile": True,
-    # enlarge the guards in place (radii of the measured profile shifted outward, wall thickness kept) until they
-    # almost touch the body (0.6 mm gap, not fused): +2.7 model units -> outer radius ~48.9 mm final
-    "guard_grow": 2.7,
-    "guard_y_offset": 10.0,          # lower edge overlaps arm for fusion; extended top covers propeller
-    # front LED slit (no separate part): a small slit through the front shell that opens into a small
-    # pocket behind it, so a real LED can be glued from inside later. Sizes are in FINAL (scaled) mm.
-    "led_enabled": True,
-    "led_y": 14.5,                   # height of the slit centre (model units, before scaling)
-    "led_slit_length": 11.0,          # +10% with overall model scale
-    "led_slit_height": 2.2,           # +10% with overall model scale
-    "led_wall": 1.65,                # +10% with overall model scale
-    "led_pocket_length": 13.2,       # +10% with overall model scale
-    "led_pocket_height": 4.4,         # +10% with overall model scale
-    "led_pocket_depth": 6.6,         # +10% with overall model scale
-    # front camera: small module hidden INSIDE the nose, only a small square housing (aligned with the lens axis) shows outside.
-    # Sizes are in FINAL (scaled) mm. The lens axis points forward, tilted down by camera_tilt_down_deg.
-    "camera_enabled": True,
-    "camera_tilt_down_deg": 35.0,
-    "camera_y": 9.185,               # +10% with the enlarged nose; keep housing centered on the scaled face
-    "camera_block_size": 11.55,      # +10% with overall model scale
-    "camera_block_protrusion": 3.85, # +10% with overall model scale
-    "camera_block_fillet": 0.88,     # +10% with overall model scale
-    "camera_lens_hole_radius": 3.52, # +10% with overall model scale
-    "camera_wall": 1.65,             # +10% with overall model scale
-    "camera_cavity_w": 10.45,        # +10% with overall model scale
-    "camera_cavity_h": 6.6,          # +10% with overall model scale
-    "camera_cavity_d": 7.7,          # +10% with overall model scale
-    # propellers (parametric, twisted cambered two-blade rotor) -----------------
-    "include_props": True,
-    "prop_radius": 26.45,           # 34.0 mm final radius -> 68.0 mm / 2.68 in diameter; preserves ~4.18 mm radial guard clearance
-    "prop_chord": 7.0,              # legacy parameter retained for old parameter files
-    "prop_thickness": 1.2,          # legacy parameter; airfoil thickness is set by prop_airfoil_thickness_ratio
-    "prop_y": 25.5,                 # lifted above motor and arm envelope; validated for 3D clearance
-    "prop_hub_radius": 4.0,
-    "prop_hub_height": 4.0,
-    "prop_pitch_mm": 53.086,        # +10% with the complete rotor geometry; not a motor/load guarantee
-    "prop_airfoil_camber": 0.04,    # NACA 4410 camber ratio
-    "prop_airfoil_camber_position": 0.40,
-    "prop_airfoil_thickness_ratio": 0.10,
-    "prop_airfoil_samples": 24,     # cosine-spaced points per upper/lower surface
-    "prop_tip_sweep": 1.2,          # mild sweep at the tip, in pre-scale model units
-    # [radius fraction, local chord] stations from root to tip; taper avoids a rectangular slab.
-    "prop_blade_stations": [  # chord increased ~7% with diameter to preserve blade proportions
-        [0.05, 6.96], [0.14, 8.36], [0.23, 9.21], [0.33, 9.43],
-        [0.44, 8.79], [0.56, 7.82], [0.68, 6.86], [0.80, 6.00],
-        [0.90, 5.14], [0.96, 4.71], [1.00, 4.28]
-    ],
-    # overall size -------------------------------------------------------------
-    # model_scale: uniform final scale. Current assembly is enlarged by 10% from the previous approved layout.
-    # Real M3 fastener/nut interface dimensions are compensated locally and remain physically unchanged.
-    # target_overall_mm: if set (and model_scale is None) the scale is derived so the largest extent equals it.
-    # Floor-mounted arm attachment: integral tongue + two vertical M3 fasteners per arm.
-    # Dimensions below are pre-scale model units; model_scale converts them to final millimetres.
-    "joint_clearance": 0.227273,      # reduced in local units so final physical fit clearance stays unchanged
-    "joint_tip_width": 16.5,          # keep the tongue full-width at its inner end; no sudden neck-down
-    "joint_lead_in_length": 6.0,
-    "joint_branch_long_length": 22.0,   # longitudinal branch length toward the body centre
-    "joint_branch_short_length": 14.0,  # transverse branch length at the body entry point
-    "joint_branch_width_ratio": 0.60,  # each tick branch is 60% of the main arm width
-    "joint_branch_axis_bias_deg": 55.0, # short branch rotates +10 degrees toward the long-branch side
-    "joint_branch_long_axis_deg": 55.0,  # both branches rotate together +10 degrees; included angle remains 110 degrees
-    "joint_tick_junction_radius": 36.61,  # extend the arm 15 final mm and keep the tick junction at its inner tip
-    "joint_tab_start_radius": 40.5,
-    "joint_tab_end_radius": 43.0,
-    "joint_tab_width": 16.5,
-    "joint_tab_thickness": 2.5,  # legacy values retained for parameter-file compatibility; no low-profile tab is generated
-    "joint_tab_y": 4.0,
-    "joint_floor_pad_height": 2.0,
-    "joint_floor_pad_width": 16.5,
-    "joint_floor_pad_end_radius": 34.5,
-    "joint_arm_start_radius": 36.61,  # extend the main arm 15 final mm and align its inner tip with the tick junction
-    "joint_entry_start_radius": 34.5,
-    "joint_entry_end_radius": 50.0,
+PARAMS_PATH = Path(__file__).resolve().with_name("model.params.json")
+ROOT_DIR = Path(__file__).resolve().parents[2]
+OUTPUT_DIR = ROOT_DIR / "output" / "smooth2-parametric"
 
-    "joint_bolt_positions": [[28.5, -4.5], [28.5, 4.5]],
-    "joint_bolt_hole_radius": 1.181818, # preserve the existing real M3 clearance-hole diameter after scaling
-    "joint_nut_af": 3.909091,         # scaled locally so the real M3 nut remains ~5.53 mm across flats
-    "joint_nut_pocket_af": 4.181818,  # preserve real nut pocket size and side clearance
-    "joint_nut_depth": 1.818182,      # preserve physical pocket depth for M3 nut
-    "joint_nut_hole_radius": 1.090909, # preserve real nut bore size
-    "joint_screw_shaft_radius": 1.045455, # preserve M3 screw shaft diameter
-    "joint_screw_length": 14.545455, # local units adjusted to retain the existing physical screw length
-    "joint_screw_head_radius": 1.954545, # preserve physical screw-head diameter
-    "joint_screw_head_height": 2.090909, # preserve physical screw-head height
-    "joint_screw_socket_af": 1.772727, # preserve physical hex socket size
-    "joint_screw_socket_depth": 0.818182, # preserve physical socket depth
-    "joint_nut_thickness": 1.727273,   # preserve physical M3 nut thickness
-    "joint_boss_diameter_mm": 11.0,       # +10% underside reinforcement around each nut station (final mm)
-    "joint_boss_total_thickness_mm": 8.8, # +10% total thickness from boss underside to floor interior (final mm)
-    "model_scale": 1.414028,              # original scale x 1.10: entire CAD assembly enlarged uniformly by 10%
-    "target_overall_mm": None,
-}
+
+def _load_params():
+    data = json.loads(PARAMS_PATH.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not data:
+        raise ValueError(f"Invalid canonical model parameters: {PARAMS_PATH}")
+    return data
+
+
+def _input_fingerprints():
+    inputs = {
+        "builder": Path(__file__).resolve(),
+        "parameters": PARAMS_PATH,
+        "body_sections": Path(__file__).resolve().with_name("body_sections.json"),
+    }
+    return {
+        name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for name, path in inputs.items()
+    }
+
+
+PARAMS = _load_params()
 
 
 def _resample(pts, n):
@@ -857,38 +740,6 @@ def _prop_collision_report(p):
     return checks
 
 
-def build(p=None):
-    p = {**PARAMS, **(p or {})}
-    inner_min = (min(p["guard_profile_inner"]) + p.get("guard_grow", 0.0)) if p.get("guard_use_profile") else p["guard_outer_radius"] - p["guard_wall"]
-    assert p["prop_radius"] < inner_min, "prop would hit the guard"
-    model = body(p)
-    for i, (x, z) in enumerate(stations(p)):
-        model = model.union(arm(p, x, z)).union(guard(p, x, z)).union(motor(p, x, z))
-        if p["include_props"]:
-            model = model.union(prop(p, x, z))
-    f = 1.0
-    if p.get("model_scale"):
-        f = p["model_scale"]
-    elif p.get("target_overall_mm"):
-        bb = model.val().BoundingBox()
-        f = p["target_overall_mm"] / max(bb.xlen, bb.zlen)
-    if p["camera_enabled"]:
-        barrel, cutter = camera_parts(p, f)
-        model = model.union(barrel).cut(cutter)
-    if p["led_enabled"]:
-        model = model.cut(led_slot(p, model.val(), f))
-    if f != 1.0:
-        model = cq.Workplane("XY").newObject([model.val().scale(f)])
-        print("uniform scale factor", round(f, 4))
-    # Export convention: Z is vertical, the flat underside faces -Z, camera/front faces -Y.
-    model = model.rotate((0, 0, 0), (1, 0, 0), 90)
-    return model
-
-
-
-
-
-
 def build_modular(p=None):
     """Build the split body, four removable arms, vertical screws, nut placeholders and props."""
     import math
@@ -1032,9 +883,10 @@ def build_modular(p=None):
     return parts, scale
 
 
-def export_modular(parts, out_dir):
-    """Export a named STEP assembly plus a compound STL and each separate component."""
+def export_modular(parts, out_dir, params):
+    """Export STEP and STL from the same canonical parameterized CadQuery solids."""
     import os, json
+    p = {**PARAMS, **params}
     os.makedirs(out_dir, exist_ok=True)
 
     # STEP must be a real CadQuery Assembly, not a Workplane wrapping a Compound.
@@ -1046,27 +898,15 @@ def export_modular(parts, out_dir):
         assembly.add(part.val(), name=name, color=matte_black)
     assembly.save(os.path.join(out_dir, "drone_parametric.step"), exportType="STEP")
 
-    # Keep the assembled STL for visualization, but note that STL stores no
-    # assembly/explode instructions. Also write a physically exploded STL so
-    # slicers that open one STL cannot mistake the parts for a single assembled model.
-    # In the assembled STL only, add 0.01 mm export-only clearances at touching interfaces.
-    # The crown is lifted off the lower hull; each arm module is lifted off the floor rails.
-    # Do not alter source geometry, the STEP assembly, or the exploded STL layout.
-    assembled_shapes = []
-    for name, part in parts.items():
-        shape = part.val()
-        if name == "body_crown":
-            shape = shape.translate((0, 0, 0.01))  # exported coordinates are Z-up
-        elif name.startswith("arm_"):
-            shape = shape.translate((0, 0, 0.01))  # lift tongue off rails; Z-up export
-        assembled_shapes.append(shape)
-    compound = cq.Compound.makeCompound(assembled_shapes)
-    # Preserve the assembled pose under an explicit filename. The default STL name below
-    # is intentionally reserved for the exploded layout so opening drone_parametric.stl
-    # in a mesh viewer shows the separated parts instead of the closed assembly.
-    cq.exporters.export(cq.Workplane("XY").newObject([compound]),
-                        os.path.join(out_dir, "drone_parametric_assembled.stl"),
+    # Assembly STEP and assembled STL use the exact same unmodified component solids.
+    # No export-only translation or geometry adjustment is permitted.
+    compound = cq.Compound.makeCompound([part.val() for part in parts.values()])
+    assembled_stl = os.path.join(out_dir, "drone_parametric_assembled.stl")
+    default_stl = os.path.join(out_dir, "drone_parametric.stl")
+    cq.exporters.export(cq.Workplane("XY").newObject([compound]), assembled_stl,
                         tolerance=0.05, angularTolerance=0.1)
+    # The default STL is a byte-identical alias of the assembled STEP pose.
+    shutil.copyfile(assembled_stl, default_stl)
 
     # Exploded layout uses deliberate, visible clearances rather than small illustrative offsets.
     # body_lower remains fixed; the crown lifts clear of the hull, and each complete arm module
@@ -1115,27 +955,23 @@ def export_modular(parts, out_dir):
     cq.exporters.export(cq.Workplane("XY").newObject([exploded_compound]),
                         os.path.join(out_dir, "drone_parametric_exploded.stl"),
                         tolerance=0.05, angularTolerance=0.1)
-    # Make the conventional/default STL name the exploded layout too, preventing
-    # viewers such as OpenSCAD from opening the assembled compound by accident.
-    cq.exporters.export(cq.Workplane("XY").newObject([exploded_compound]),
-                        os.path.join(out_dir, "drone_parametric.stl"),
-                        tolerance=0.05, angularTolerance=0.1)
-
-    try:
-        import trimesh
-        mesh = trimesh.load(os.path.join(out_dir, "drone_parametric_assembled.stl"), force="mesh")
-        if not mesh.is_watertight:
-            trimesh.repair.fill_holes(mesh)
-            trimesh.repair.fix_normals(mesh)
-            mesh.export(os.path.join(out_dir, "drone_parametric_assembled.stl"))
-    except Exception as e:
-        print("Assembly STL repair skipped:", e)
+    # Keep the default STL as the assembled alias created above.
+    # Only the explicitly named exploded STL receives presentation translations.
 
     for name, part in parts.items():
         export(part, out_dir, name)
     manifest = {
         "assembly": "drone_parametric.step",
-        "branch_scope": "demo",
+        "parameter_source": "cad/parametric/model.params.json",
+        "parameter_snapshot": "drone_parametric.params.json",
+        "input_sha256": _input_fingerprints(),
+        "export_semantics": {
+            "drone_parametric.step": "assembled pose; named 26-component STEP assembly",
+            "drone_parametric.stl": "byte-identical alias of drone_parametric_assembled.stl",
+            "drone_parametric_assembled.stl": "same assembled component solids and coordinates as the STEP assembly",
+            "drone_parametric_exploded.stl": "display-only exploded layout derived from the same component solids"
+        },
+        "branch_scope": "kilo",
         "export_orientation": {
             "vertical_axis": "+Z",
             "camera_front_direction": "-Y",
@@ -1145,9 +981,9 @@ def export_modular(parts, out_dir):
         },
         "parts": [
             {"name": name, "step": f"{name}.step", "stl": f"{name}.stl",
-             "role": ("lower body shell with reinforced floor rails, side entry openings and hex-nut traps" if name == "body_lower"
+             "role": ("lower hull shell with a continuous floor plate, four side-entry openings, and eight underside nut bosses/pockets" if name == "body_lower"
                       else "separate removable upper crown/canopy" if name == "body_crown"
-                      else "removable arm module with an integral floor-mounting tongue, guard and motor" if name.startswith("arm_")
+                      else "removable full-height tick-root arm module with guard and motor" if name.startswith("arm_")
                       else "separate propeller" if name.startswith("prop_")
                       else "simplified vertical socket-head screw placeholder; use real M3 hardware" if name.startswith("screw_")
                       else "simplified hex-nut placeholder; replace with a real metal M3 nut" if name.startswith("nut_")
@@ -1158,27 +994,37 @@ def export_modular(parts, out_dir):
             "type": "full-height arm beam reaches the screw stations; screws pass through the beam and floor into underside nut recesses",
             "fastener": "two vertical M3 screws per arm, passing through the floor into exterior underside nut recesses",
             "fastener_count": 8,
-            "fastener_axis_design_coordinates": "Y (vertical); screws installed from the arm-tab side into exterior underside nuts",
+            "fastener_axis_design_coordinates": "Y (vertical); screws pass downward through the full-height arm beam and floor into exterior underside nuts",
             "fastener_axis_export_coordinates": "Z (vertical)",
             "nut_retention": "hexagonal pockets open on the exterior underside; nut solids sit inside the pocket depth, with real metal nuts required for assembly",
             "nut_recesses_open_on_exterior_underside": True,
             "underside_boss_count": 8,
-            "underside_boss_diameter_mm": PARAMS["joint_boss_diameter_mm"],
-            "underside_boss_total_local_thickness_mm": PARAMS["joint_boss_total_thickness_mm"],
+            "underside_boss_diameter_mm": p["joint_boss_diameter_mm"],
+            "underside_boss_total_local_thickness_mm": p["joint_boss_total_thickness_mm"],
             "underside_boss_integral_with_body": True,
-            "nut_pocket_depth_mm": round(PARAMS["joint_nut_depth"] * PARAMS["model_scale"], 3),
-            "nut_thickness_mm": round(PARAMS["joint_nut_thickness"] * PARAMS["model_scale"], 3),
+            "nut_pocket_depth_mm": round(p["joint_nut_depth"] * p["model_scale"], 3),
+            "nut_thickness_mm": round(p["joint_nut_thickness"] * p["model_scale"], 3),
             "nut_seated_inside_floor_recess": True,
-            "nut_pocket_clearance_per_side_mm": round((PARAMS["joint_nut_pocket_af"] - PARAMS["joint_nut_af"]) * PARAMS["model_scale"] / 2, 3),
+            "nut_pocket_clearance_per_side_mm": round((p["joint_nut_pocket_af"] - p["joint_nut_af"]) * p["model_scale"] / 2, 3),
             "side_wall_fasteners": False,
-            "floor_plate_cut_through": True,
+            "floor_bolt_clearance_bores_pass_through": True,
             "arm_entry_openings": 4,
             "integral_tab": False,
-            "bolt_positions_radial_tangent_model_units": PARAMS["joint_bolt_positions"],
+            "bolt_positions_radial_tangent_model_units": p["joint_bolt_positions"],
+            "tick_root_geometry": {
+                "long_branch_length_model_units": p["joint_branch_long_length"],
+                "short_branch_length_model_units": p["joint_branch_short_length"],
+                "branch_width_ratio": p["joint_branch_width_ratio"],
+                "long_branch_axis_deg": p["joint_branch_long_axis_deg"],
+                "short_branch_axis_deg": p["joint_branch_axis_bias_deg"],
+                "included_angle_deg": p["joint_branch_long_axis_deg"] + p["joint_branch_axis_bias_deg"],
+                "junction_radius_model_units": p["joint_tick_junction_radius"],
+                "junction_radius_final_mm": round(p["joint_tick_junction_radius"] * p["model_scale"], 3)
+            },
             "tab_removed": True,
-            "arm_start_radius_model_units": PARAMS["joint_arm_start_radius"],
-            "main_beam_height_mm": round(PARAMS["arm_height"] * PARAMS["model_scale"], 3),
-            "approx_m3_clearance_hole_diameter_mm": round(2 * PARAMS["joint_bolt_hole_radius"] * PARAMS["model_scale"], 3),
+            "arm_start_radius_model_units": p["joint_arm_start_radius"],
+            "main_beam_height_mm": round(p["arm_height"] * p["model_scale"], 3),
+            "approx_m3_clearance_hole_diameter_mm": round(2 * p["joint_bolt_hole_radius"] * p["model_scale"], 3),
             "hardware_geometry_is_simplified": True,
             "physical_fit_tested": False,
             "note": "The CAD includes simplified screw and nut envelopes for assembly visualization. Nut solids are positioned within the underside-open hex pockets and the screw clearance bores pass through the floor. Use real M3 screws and metal nuts; print-fit, tool access, and flight-load testing are still required."
@@ -1252,11 +1098,132 @@ def write_validation_report(parts, scale, out_dir, params):
         else float(p["guard_outer_radius"]) - float(p["guard_wall"])
     )
     prop_radius_local = float(p["prop_radius"])
+
+    # Validate the files actually written to disk, not only in-memory CadQuery shapes.
+    import trimesh
+    component_stl_names = [name + ".stl" for name in parts]
+    stl_names = ["drone_parametric.stl", "drone_parametric_assembled.stl",
+                 "drone_parametric_exploded.stl"] + component_stl_names
+    stl_checks = {}
+    stl_bounds = {}
+    for filename in component_stl_names:
+        path = os.path.join(out_dir, filename)
+        mesh = trimesh.load(path, force="mesh", process=True)
+        if mesh.is_empty:
+            raise RuntimeError(f"Exported component STL is empty: {filename}")
+        if not mesh.is_watertight:
+            trimesh.repair.fill_holes(mesh)
+            trimesh.repair.fix_normals(mesh)
+            mesh.export(path)
+            mesh = trimesh.load(path, force="mesh", process=True)
+        stl_checks[filename] = bool(mesh.is_watertight)
+        stl_bounds[filename] = [float(v) for v in mesh.bounds.reshape(-1)]
+        if not stl_checks[filename]:
+            raise RuntimeError(f"Component STL is not watertight after repair: {filename}")
+
+    # A multi-solid assembled STL is allowed to contain touching closed shells.
+    # It is validated as an assembly envelope, not misclassified as one manifold solid.
+    assembled_mesh = trimesh.load(
+        os.path.join(out_dir, "drone_parametric_assembled.stl"), force="mesh", process=True
+    )
+    if assembled_mesh.is_empty:
+        raise RuntimeError("Assembled STL is empty")
+    assembled_stl_bounds = [float(v) for v in assembled_mesh.bounds.reshape(-1)]
+    exploded_mesh = trimesh.load(
+        os.path.join(out_dir, "drone_parametric_exploded.stl"), force="mesh", process=True
+    )
+    if exploded_mesh.is_empty:
+        raise RuntimeError("Exploded STL is empty")
+    exploded_stl_integrity = {
+        "non_empty": not exploded_mesh.is_empty,
+        "triangle_count": int(len(exploded_mesh.faces)),
+        "passed": len(exploded_mesh.faces) > 0
+    }
+
+    step_names = ["drone_parametric"] + list(parts)
+    step_checks = {}
+    step_bounds = {}
+    for name in step_names:
+        filename = name + ".step"
+        imported = cq.importers.importStep(os.path.join(out_dir, filename)).val()
+        expected_solids = len(parts) if name == "drone_parametric" else 1
+        actual_solids = len(imported.Solids())
+        step_bb = imported.BoundingBox()
+        step_bounds[filename] = [step_bb.xmin, step_bb.ymin, step_bb.zmin,
+                                 step_bb.xmax, step_bb.ymax, step_bb.zmax]
+        step_checks[filename] = {
+            "shape_valid": bool(imported.isValid()),
+            "solid_count": actual_solids,
+            "expected_solid_count": expected_solids,
+            "passed": bool(imported.isValid() and actual_solids == expected_solids)
+        }
+        if not step_checks[filename]["passed"]:
+            raise RuntimeError(
+                f"STEP round-trip failed for {filename}: valid={imported.isValid()}, "
+                f"solids={actual_solids}, expected={expected_solids}"
+            )
+
+    geometry_pairs = {}
+    for name in parts:
+        step_box = step_bounds[name + ".step"]
+        stl_box = stl_bounds[name + ".stl"]
+        delta = max(abs(a - b) for a, b in zip(step_box, stl_box))
+        geometry_pairs[name] = {"max_bbox_delta_mm": round(delta, 6), "passed": delta <= 0.10}
+    assembly_delta = max(abs(a - b) for a, b in zip(
+        step_bounds["drone_parametric.step"], assembled_stl_bounds))
+    geometry_pairs["assembly"] = {
+        "max_bbox_delta_mm": round(assembly_delta, 6), "passed": assembly_delta <= 0.10
+    }
+    with open(os.path.join(out_dir, "drone_parametric.stl"), "rb") as default_file:
+        default_bytes = default_file.read()
+    with open(os.path.join(out_dir, "drone_parametric_assembled.stl"), "rb") as assembled_file:
+        assembled_bytes = assembled_file.read()
+    default_stl_matches_assembled = default_bytes == assembled_bytes
+    assembly_stl_integrity = {
+        "non_empty": not assembled_mesh.is_empty,
+        "triangle_count": int(len(assembled_mesh.faces)),
+        "step_bbox_delta_mm": round(assembly_delta, 6),
+        "default_stl_byte_identical_to_assembled": default_stl_matches_assembled,
+        "passed": (not assembled_mesh.is_empty and len(assembled_mesh.faces) > 0
+                   and assembly_delta <= 0.10 and default_stl_matches_assembled)
+    }
+    export_files = sorted(set(stl_names + [name + ".step" for name in step_names]))
+    export_hashes = {}
+    for filename in export_files:
+        file_path = os.path.join(out_dir, filename)
+        with open(file_path, "rb") as exported_file:
+            digest = hashlib.sha256(exported_file.read()).hexdigest()
+        export_hashes[filename] = {"sha256": digest, "size_bytes": os.path.getsize(file_path)}
+    export_checks = {
+        "stl_watertight": {"all_passed": all(stl_checks.values()), "files": stl_checks},
+        "step_round_trip_import": {
+            "all_passed": all(v["passed"] for v in step_checks.values()),
+            "files": step_checks
+        },
+        "step_stl_geometry_pairs": {
+            "all_passed": all(v["passed"] for v in geometry_pairs.values()),
+            "files": geometry_pairs
+        },
+        "assembly_stl_integrity": assembly_stl_integrity,
+        "exploded_stl_integrity": exploded_stl_integrity,
+        "default_stl_is_assembled_alias": default_stl_matches_assembled,
+        "file_sha256": export_hashes
+    }
+    if not default_stl_matches_assembled:
+        raise RuntimeError("drone_parametric.stl must be byte-identical to the assembled STL")
+    if not assembly_stl_integrity["passed"]:
+        raise RuntimeError(f"Assembled STL integrity check failed: {assembly_stl_integrity}")
+    if not exploded_stl_integrity["passed"]:
+        raise RuntimeError(f"Exploded STL integrity check failed: {exploded_stl_integrity}")
+    if not export_checks["step_stl_geometry_pairs"]["all_passed"]:
+        raise RuntimeError(f"STEP/STL bounding-box mismatch: {geometry_pairs}")
     report = {
-        "report_version": 3,
+        "report_version": 4,
         "generated_from": "cad/parametric/drone_parametric.py",
-        "branch": "demo",
-        "validation_scope": "Fresh CadQuery in-memory geometry checks and workflow output-presence checks; no physical print-fit test",
+        "branch": "kilo",
+        "parameter_source": "cad/parametric/model.params.json",
+        "input_sha256": _input_fingerprints(),
+        "validation_scope": "Fresh CadQuery solid checks, exported STL watertightness checks, STEP round-trip imports, and workflow output checks; no physical print-fit test",
         "assembly": {
             "shape_valid": bool(compound.isValid()),
             "solid_count": len(compound.Solids()),
@@ -1307,6 +1274,16 @@ def write_validation_report(parts, scale, out_dir, params):
             "fastener_count": 8,
             "fasteners_per_arm": len(p["joint_bolt_positions"]),
             "bolt_positions_radial_tangent_model_units": p["joint_bolt_positions"],
+            "tick_root_geometry": {
+                "long_branch_length_model_units": p["joint_branch_long_length"],
+                "short_branch_length_model_units": p["joint_branch_short_length"],
+                "branch_width_ratio": p["joint_branch_width_ratio"],
+                "long_branch_axis_deg": p["joint_branch_long_axis_deg"],
+                "short_branch_axis_deg": p["joint_branch_axis_bias_deg"],
+                "included_angle_deg": p["joint_branch_long_axis_deg"] + p["joint_branch_axis_bias_deg"],
+                "junction_radius_model_units": p["joint_tick_junction_radius"],
+                "junction_radius_final_mm": round(p["joint_tick_junction_radius"] * scale, 3)
+            },
             "bolt_clearance_hole_diameter_mm": round(2 * p["joint_bolt_hole_radius"] * scale, 3),
             "thin_tab_removed": True,
             "arm_start_radius_model_units": p["joint_arm_start_radius"],
@@ -1325,18 +1302,22 @@ def write_validation_report(parts, scale, out_dir, params):
             "nut_body_intersection_volume_mm3": nut_body_intersections,
             "max_nut_body_intersection_volume_mm3": max(nut_body_intersections.values(), default=0.0),
             "side_wall_fasteners": False,
-            "floor_plate_cut_through": True,
+            "floor_bolt_clearance_bores_pass_through": True,
             "hole_centres_aligned_by_shared_coordinates": True,
             "arm_tab_is_integral": False,
             "hardware_geometry_is_simplified": True,
             "physical_fit_tested": False
         },
-        "stl_watertight": "not_checked",
-        "step_round_trip_import": "not_checked",
+        "stl_watertight": export_checks["stl_watertight"],
+        "step_round_trip_import": export_checks["step_round_trip_import"],
+        "step_stl_geometry_pairs": export_checks["step_stl_geometry_pairs"],
+        "default_stl_is_assembled_alias": export_checks["default_stl_is_assembled_alias"],
+        "assembly_stl_integrity": export_checks["assembly_stl_integrity"],
+        "exploded_stl_integrity": export_checks["exploded_stl_integrity"],
+        "export_file_sha256": export_checks["file_sha256"],
         "known_limitations": [
             "CAD validity checks apply to in-memory CadQuery shapes before export.",
-            "The workflow checks that exported STEP/STL files exist and are non-empty; STEP round-trip import is not yet checked.",
-            "STL watertightness is not reported by this validation step.",
+            "STEP round-trip import and STL watertightness are checked for every exported assembly/component file.",
             "Screw and nut solids are simplified envelopes without threads; use real metal M3 hardware.",
             "The mounting-hole coordinates align directly with the full-height arm beam and underside nut traps; physical print-fit, screwdriver access in the printed body, and flight-load strength still require testing."
         ]
@@ -1386,22 +1367,21 @@ def export(shape, out_dir, name="drone_parametric"):
 
 
 if __name__ == "__main__":
-    params = {}
-    if len(sys.argv) > 2 and sys.argv[1] == "--params":
-        params = json.load(open(sys.argv[2], encoding="utf-8"))
+    # One authoritative configuration: cad/parametric/model.params.json.
+    # Parameter overrides are intentionally disabled to prevent stale or partial builds.
+    params = dict(PARAMS)
     parts, scale = build_modular(params)
     compound = cq.Compound.makeCompound([part.val() for part in parts.values()])
     bb = compound.BoundingBox()
     print("assembly bbox", bb.xlen, bb.ylen, bb.zlen, "valid", compound.isValid(),
           "solids", len(compound.Solids()))
-    out = "output/قالب گیری شده/smooth2-parametric"
+    out = OUTPUT_DIR
     if not compound.isValid() or len(compound.Solids()) != len(parts):
         raise RuntimeError("Generated assembly failed validity/solid-count checks")
-    export_modular(parts, out)
+    export_modular(parts, out, params)
     write_validation_report(parts, scale, out, params)
-    with open(out + "/drone_parametric.params.json", "w", encoding="utf-8") as f:
-        json.dump({**PARAMS, **params}, f, indent=2, ensure_ascii=False)
+    shutil.copyfile(PARAMS_PATH, out / "drone_parametric.params.json")
 
 # Modular export: lower body shell, separate crown, four removable arm/guard/motor modules,
 # and separate propellers. The crown-to-lower-body joining method is intentionally undecided.
-# Regeneration is restricted to the demo branch; no crown-to-base joining features are included yet.
+# Regeneration is restricted to the kilo branch; no crown-to-base joining features are included yet.
