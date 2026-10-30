@@ -231,12 +231,15 @@ def main(argv=None):
             model = PPO.load(str(args.load_model), env=env, device="cpu")
             model.tensorboard_log = str(run_dir / "tensorboard")
             if model.n_steps != 500 or model.batch_size != 250:
-                raise RuntimeError("Checkpoint PPO rollout settings do not match the v2 training pipeline.")
+                raise RuntimeError("Checkpoint PPO rollout settings do not match the v4 training pipeline.")
         else:
             model = PPO(
                 "MlpPolicy", env, learning_rate=args.learning_rate, n_steps=500,
-                batch_size=250, gamma=0.99, gae_lambda=0.95, clip_range=0.2,
-                ent_coef=0.005, verbose=1, seed=args.seed, device="cpu",
+                batch_size=250, gamma=0.99, gae_lambda=0.95, clip_range=0.15,
+                ent_coef=0.008, vf_coef=0.5, max_grad_norm=0.5,
+                target_kl=0.03, normalize_advantage=True,
+                policy_kwargs={"net_arch": {"pi": [128, 128], "vf": [128, 128]}},
+                verbose=1, seed=args.seed, device="cpu",
                 tensorboard_log=str(run_dir / "tensorboard"),
             )
         if args.resume:
