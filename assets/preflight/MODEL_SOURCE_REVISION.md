@@ -4,6 +4,7 @@
 - Branch: `kilo`
 - Source commit: `d591b81bd671e04abe7d4bdeb0865fd3c3bf381b`
 - Parametric CAD source: `cad/parametric/`
+- Pinned CAD-builder dependencies: `cad/parametric/requirements.txt` (copied from the source branch's root `requirements.txt`)
 - Generated assembly and per-part exports: `output/smooth2-parametric/`
 
 The destination CAD source and generated exports are copied together from this single immutable source revision.
