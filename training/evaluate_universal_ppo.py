@@ -144,6 +144,7 @@ def main(argv=None):
             "takeoff_failure_rate": sum(e["takeoff_failed"] for e in episodes) / count,
             "mean_max_altitude_m": sum(e["max_altitude_m"] for e in episodes) / count,
             "mean_stable_hover_seconds": sum(e["stable_hover_seconds_max"] for e in episodes) / count,
+            "mean_reward": sum(e["mean_reward"] for e in episodes) / count,
             "mean_motor_saturation_fraction": sum(e["mean_motor_saturation_fraction"] for e in episodes) / count,
             "mission_completion_rate": sum(e["mission_completed"] for e in episodes) / count,
             "survived_to_time_limit_rate": sum(e["survived_to_time_limit"] for e in episodes) / count,
