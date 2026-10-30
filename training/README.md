@@ -101,3 +101,45 @@ The curriculum runner and PPO script refuse to use unknown physical calibration 
 
 
 Each curriculum stage is followed by a held-out evaluation (20 episodes by default) using a separate seed range. Reports are written to `held-out-evaluation.json` in the stage run directory. The evaluator reports hover/takeoff success, crash rate, stable-hover fraction and position errors. These are held-out random seeds from the configured distribution, not out-of-range generalization proof.
+
+
+## Universal hardware-conditioned quadrotor policy (new research path)
+
+The separate universal PPO path trains one policy across several four-rotor vehicle profiles and supplies the policy with a normalized nominal hardware descriptor. It does not replace the existing native SkySim production pipeline or the earlier smooth2-only fast-physics experiment.
+
+Included provisional profiles live in `vehicle_models/family/vehicle_profiles.json`:
+- `smooth2-a2212-custom-prop`: current CAD rotor geometry with provisional software-only mass and propulsion coefficients;
+- `generic-5inch-quad`: generic 5-inch class estimate;
+- `generic-7inch-long-range`: generic 7-inch class estimate;
+- `generic-3inch-cinewhoop`: generic ducted 3-inch class estimate.
+
+Every profile is marked `provisional_estimate`. The numerical mass, inertia, thrust coefficient, torque ratio, RPM and motor lag are training hypotheses, not measurements or verified safe limits. Do not interpret a profile name as proof that a particular commercial aircraft has those specifications.
+
+### Train a shared hardware-conditioned policy
+
+```bash
+python -m pip install -r training/requirements.txt
+python training/train_universal_ppo.py --timesteps 200000 --n-envs 4 --run-name universal-quad-baseline
+```
+
+The environment samples a vehicle profile at episode reset. The policy observation contains the existing state/action history and online effective-lift estimator context plus ten normalized nominal hardware features (mass, arm radius, propeller diameter, motor speed/thrust/torque response, battery voltage/capacity and KV). Episode-randomized ground-truth mass, CG, inertia and actuator effectiveness remain hidden. This deliberately distinguishes declared setup values from uncertain episode physics.
+
+### Four-stage universal curriculum
+
+```bash
+python training/run_universal_curriculum.py --timesteps-per-stage 200000 --n-envs 4
+```
+
+Each stage starts from the previous stage's checkpoint. It writes a per-stage checkpoint, metadata, held-out per-profile evaluation and a final curriculum manifest. Stage ranges are inherited from `vehicle_models/smooth2_parametric/domain_randomization.json`; they are provisional software ranges and are not structural or electrical operating limits.
+
+### Evaluate per airframe
+
+```bash
+python training/evaluate_universal_ppo.py --model training/runs/universal-quad-baseline/final_model.zip --episodes 20
+```
+
+To evaluate only one profile, repeat `--vehicle-id <id>`. To add a new airframe, copy `vehicle_models/family/vehicle_config_template.json`, fill all required fields and use the resulting JSON as `--vehicle-family`. A single profile JSON or a family JSON containing a `profiles` array is accepted. The loader rejects missing required physical values and invalid inertia tensors rather than silently inventing them.
+
+For a real vehicle, enter complete takeoff mass including battery and payload, CG, rotor coordinates and verified spin directions, inertia, motor/ESC/battery details, and a measured or manufacturer-backed thrust/torque response. A KV value or propeller diameter alone is not enough to infer loaded RPM or thrust. If some values remain estimates, keep the profile labelled provisional and include uncertainty in the randomization ranges.
+
+**Important boundary:** this is still a four-rotor research simulator with simplified quadratic rotor thrust, first-order motor lag and rigid-body 6-DoF dynamics. The universal policy is simulation-only. It is not cleared for hardware operation. Before any real flight, independently validate the exact airframe, motor/ESC/propeller/battery combination, actuator allocation, sensor conventions, failsafes and a safe test procedure.
