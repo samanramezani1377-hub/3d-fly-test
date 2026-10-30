@@ -40,7 +40,7 @@ class BalancedProfileCallback(BaseCallback):
         self.randomization_path, self.history_length = randomization_path, history_length
         self.stage, self.episodes = stage, max(1, int(episodes))
         self.frequency, self.best_dir, self.reports_dir = max(1, frequency), Path(best_dir), Path(reports_dir)
-        self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, float("-inf")), None
+        self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, -1.0, float("-inf")), None
         self.latest_dir = self.best_dir.parent
         self.latest_dir.mkdir(parents=True, exist_ok=True)
         selection_path = self.best_dir / "selection.json"
@@ -62,50 +62,78 @@ class BalancedProfileCallback(BaseCallback):
                 for ei in range(self.episodes):
                     seed = self.seed + self.n_calls * 100 + pi * 1000 + ei
                     obs, _ = e.reset(seed=seed)
-                    total, crashed = 0.0, False
+                    total, crashed, took_off = 0.0, False, False
+                    stable_steps = max_stable_steps = 0
                     while True:
                         action, _ = self.model.predict(obs, deterministic=True)
                         obs, reward, terminated, truncated, info = e.step(action)
                         total += float(reward)
                         crashed = crashed or bool(info.get("crashed", False))
+                        took_off = took_off or bool(info.get("has_taken_off", False))
+                        velocity = info.get("state_velocity_m_s", [float("inf")] * 3)
+                        attitude = info.get("attitude_rad", [float("inf")] * 3)
+                        try:
+                            speed_sq = sum(float(v) ** 2 for v in velocity)
+                            tilt = max(abs(float(attitude[0])), abs(float(attitude[1])))
+                            stable = bool(info.get("has_taken_off", False)
+                                and not info.get("crashed", False)
+                                and info.get("state_finite", True)
+                                and float(info.get("altitude_error_m", 999)) <= 0.15
+                                and float(info.get("horizontal_error_m", 999)) <= 0.20
+                                and speed_sq <= 0.35 ** 2 and tilt <= 0.25)
+                        except (TypeError, ValueError, IndexError):
+                            stable = False
+                        if stable:
+                            stable_steps += 1
+                            max_stable_steps = max(max_stable_steps, stable_steps)
+                        else:
+                            stable_steps = 0
                         if terminated or truncated:
                             break
-                    success = bool(info.get("has_taken_off", False) and not crashed
-                        and info.get("altitude_error_m", 999) < 0.35
-                        and info.get("horizontal_error_m", 999) < 0.5)
-                    episodes.append({"seed":seed,"success":success,"crashed":crashed,
-                        "steps":e.inner._steps,"return":total,
-                        "altitude_error_m":info.get("altitude_error_m"),
-                        "horizontal_error_m":info.get("horizontal_error_m")})
+                    stable_seconds = max_stable_steps * e.inner.dt
+                    success = bool(not crashed and stable_seconds >= 5.0)
+                    episodes.append({"seed": seed, "success": success,
+                        "takeoff_success": took_off, "takeoff_failed": bool(not took_off and truncated),
+                        "crashed": crashed, "steps": e.inner._steps,
+                        "stable_hover_seconds_max": stable_seconds, "return": total,
+                        "altitude_error_m": info.get("altitude_error_m"),
+                        "horizontal_error_m": info.get("horizontal_error_m"),
+                        "crash_reasons": info.get("crash_reasons", [])})
             finally:
                 e.close()
-            profile_reports.append({"vehicle_id":profile["vehicle_id"],
-                "success_rate":sum(x["success"] for x in episodes)/len(episodes),
-                "crash_rate":sum(x["crashed"] for x in episodes)/len(episodes),
-                "mean_return":sum(x["return"] for x in episodes)/len(episodes),
-                "episodes":episodes})
-        score=(min(x["success_rate"] for x in profile_reports),
-               -max(x["crash_rate"] for x in profile_reports),
-               sum(x["mean_return"] for x in profile_reports)/len(profile_reports))
-        report={"timesteps":int(self.num_timesteps),"selection_score":list(score),
-            "selection_rule":["maximize minimum per-profile takeoff-hover success",
-                              "minimize worst-profile crash rate","maximize mean return"],
-            "profiles":profile_reports}
-        self.reports_dir.mkdir(parents=True,exist_ok=True)
-        report_path=self.reports_dir/f"profile-evaluation-{self.num_timesteps}.json"
-        report_path.write_text(json.dumps(report,indent=2),encoding="utf-8")
+            count = len(episodes)
+            profile_reports.append({"vehicle_id": profile["vehicle_id"],
+                "success_rate": sum(x["success"] for x in episodes) / count,
+                "takeoff_success_rate": sum(x["takeoff_success"] for x in episodes) / count,
+                "takeoff_failure_rate": sum(x["takeoff_failed"] for x in episodes) / count,
+                "crash_rate": sum(x["crashed"] for x in episodes) / count,
+                "mean_stable_hover_seconds": sum(x["stable_hover_seconds_max"] for x in episodes) / count,
+                "mean_return": sum(x["return"] for x in episodes) / count,
+                "episodes": episodes})
+        score = (min(x["success_rate"] for x in profile_reports),
+            -max(x["crash_rate"] for x in profile_reports),
+            min(x["takeoff_success_rate"] for x in profile_reports),
+            sum(x["mean_return"] for x in profile_reports) / len(profile_reports))
+        report = {"timesteps": int(self.num_timesteps), "selection_score": list(score),
+            "selection_rule": ["maximize minimum per-profile five-second sustained-hover success",
+                "minimize worst-profile crash rate", "maximize minimum per-profile takeoff rate",
+                "maximize mean return as final tie-breaker"], "profiles": profile_reports}
+        self.reports_dir.mkdir(parents=True, exist_ok=True)
+        report_path = self.reports_dir / f"profile-evaluation-{self.num_timesteps}.json"
+        report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
         self.model.save(str(self.latest_dir / "latest_model"))
         (self.latest_dir / "training_state.json").write_text(json.dumps({
             "num_timesteps": int(self.num_timesteps), "stage": self.stage,
             "seed": self.seed, "latest_checkpoint": "latest_model.zip"
         }, indent=2), encoding="utf-8")
         if score > self.best_score:
-            self.best_score,self.best_report=score,report_path.name
-            self.best_dir.mkdir(parents=True,exist_ok=True)
-            self.model.save(str(self.best_dir/"best_model"))
-            (self.best_dir/"selection.json").write_text(json.dumps({
-                "score":list(score),"report":self.best_report,"timesteps":int(self.num_timesteps),
-                "selection_rule":report["selection_rule"]},indent=2),encoding="utf-8")
+            self.best_score, self.best_report = score, report_path.name
+            self.best_dir.mkdir(parents=True, exist_ok=True)
+            self.model.save(str(self.best_dir / "best_model"))
+            (self.best_dir / "selection.json").write_text(json.dumps({
+                "score": list(score), "report": self.best_report,
+                "timesteps": int(self.num_timesteps),
+                "selection_rule": report["selection_rule"]}, indent=2), encoding="utf-8")
             print(f"Balanced best checkpoint: steps={self.num_timesteps}, score={score}")
         return True
 
