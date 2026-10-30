@@ -22,27 +22,50 @@ function draw(now){requestAnimationFrame(draw);if(!lastFrame)lastFrame=now;const
 function currentAction(){if(directMotorMode)return motors.map(v=>clamp(v,0,1));let roll=(keys.arrowleft?1:0)-(keys.arrowright?1:0),pitch=(keys.arrowup?1:0)-(keys.arrowdown?1:0),yaw=(keys.d?1:0)-(keys.a?1:0);return [throttle+roll*.14-pitch*.14+yaw*.07,throttle-roll*.14-pitch*.14-yaw*.07,throttle-roll*.14+pitch*.14+yaw*.07,throttle+roll*.14+pitch*.14-yaw*.07].map(v=>clamp(v,0,1))}
 function updateUI(){if(!snapshot)return;const s=snapshot.state,[x,y,z,vx,vy,vz,r,p,yaw]=s,speed=norm([vx,vy,vz]);$("alt").textContent=z.toFixed(3)+" m";$("vz").textContent=vz.toFixed(3)+" m/s";$("speed").textContent=speed.toFixed(3)+" m/s";$("thrust").textContent=Number(snapshot.total_thrust_n||0).toFixed(2)+" N";$("roll").textContent=(r*180/Math.PI).toFixed(1)+"°";$("pitch").textContent=(p*180/Math.PI).toFixed(1)+"°";$("yaw").textContent=(yaw*180/Math.PI).toFixed(1)+"°";$("mass").textContent=Number(snapshot.mass_kg).toFixed(3)+" kg";$("altHud").textContent=z.toFixed(2)+" m";$("speedHud").textContent=speed.toFixed(2)+" m/s";$("timeHud").textContent=Number(snapshot.time_s).toFixed(2)+" s";$("flightState").textContent=z>.18?"در حال پرواز":armed?"موتورها مسلح":"روی زمین";const actual=snapshot.info?.rotor_omega_rad_s||[0,0,0,0],max=profile.propulsion.max_rotor_speed_rad_s;$("motorBars").innerHTML=motors.map((v,i)=>{const pct=Math.round(v*100);return '<div class="bar-row"><span>موتور '+(i+1)+'</span><div class="bar"><i style="width:'+pct+'%"></i></div><b>'+pct+'%</b></div>'}).join("");$("statusText").textContent=armed?"موتور فیزیک آموزشی فعال":"موتور آماده";$("statusDot").style.background=armed?"#56d6a0":"#f0b66a";$("timeHud").textContent=Number(snapshot.time_s).toFixed(2)+" s";if(snapshot.step%25===0){$("engineMeta").textContent="گام "+snapshot.step+" · dt="+snapshot.dt_s+"s · obs="+snapshot.observation_size+" · reward="+Number(snapshot.reward||0).toFixed(3)}}
 function loadExternalScript(src){return new Promise((resolve,reject)=>{const existing=[...document.scripts].find(s=>s.src===src);if(existing){if(window.loadPyodide)return resolve();existing.addEventListener("load",resolve,{once:true});existing.addEventListener("error",()=>reject(Error("بارگذاری اسکریپت ناموفق: "+src)),{once:true});return}const script=document.createElement("script");script.src=src;script.async=true;script.onload=resolve;script.onerror=()=>reject(Error("دریافت اسکریپت Pyodide ناموفق: "+src));document.head.appendChild(script)})}
+async function probePyodideMirror(indexURL){
+ const names=["pyodide.js","pyodide.asm.wasm","python_stdlib.zip","pyodide-lock.json"];
+ const results=[];
+ for(const name of names){
+  const url=indexURL+name;
+  try{
+   const response=await fetch(url,{method:"HEAD",cache:"no-store"});
+   results.push({file:name,status:response.status,ok:response.ok,type:response.headers.get("content-type"),length:response.headers.get("content-length")});
+  }catch(e){results.push({file:name,error:e.message||String(e)})}
+ }
+ return results;
+}
 async function loadTrainingEngine(){
  let phase="شروع";
+ const bootTrace=[];
  try{
-  phase="بارگذاری Pyodide";setStatus("در حال بارگذاری Python / Pyodide");log("در حال آماده‌سازی همان بستهٔ فیزیک مورد استفاده در PPO…");
+  phase="بررسی قابلیت‌های مرورگر";
+  const caps={wasm:typeof WebAssembly!=="undefined",fetch:typeof fetch==="function",secureContext:window.isSecureContext,crossOriginIsolated:window.crossOriginIsolated===true,sharedArrayBuffer:typeof SharedArrayBuffer!=="undefined",userAgent:navigator.userAgent};
+  diagLog("info",JSON.stringify(caps),"pyodide.browser");
+  if(!caps.wasm||!caps.fetch)throw Error("مرورگر WebAssembly یا Fetch را پشتیبانی نمی‌کند");
+  phase="بارگذاری Pyodide";
+  setStatus("در حال بارگذاری Python / Pyodide");log("در حال آماده‌سازی همان بستهٔ فیزیک مورد استفاده در PPO…");
   const mirrors=[
    {script:"https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js",index:"https://cdn.jsdelivr.net/pyodide/v0.27.7/full/"},
    {script:"https://unpkg.com/pyodide@0.27.7/pyodide.js",index:"https://unpkg.com/pyodide@0.27.7/"}
   ];
   let bootErrors=[];
   for(const mirror of mirrors){
+   const stderr=[];
    try{
+    bootTrace.push("Probe "+mirror.index);
+    const probe=await probePyodideMirror(mirror.index);
+    bootTrace.push(JSON.stringify(probe));
     if(typeof window.loadPyodide!=="function")await loadExternalScript(mirror.script);
     if(typeof window.loadPyodide!=="function")throw Error("اسکریپت دریافت شد اما loadPyodide در دسترس نیست");
-    pyodide=await window.loadPyodide({indexURL:mirror.index,stderr:(line)=>console.error("[Pyodide stderr]",line)});
+    pyodide=await window.loadPyodide({indexURL:mirror.index,stderr:(line)=>{stderr.push(String(line));console.error("[Pyodide stderr]",line)}});
+    bootTrace.push("Pyodide initialized from "+mirror.index);
     break;
    }catch(bootError){
-    bootErrors.push(mirror.index+" => "+(bootError?.stack||bootError?.message||String(bootError)));
+    bootErrors.push(mirror.index+" => "+(bootError?.stack||bootError?.message||String(bootError))+(stderr.length?" | stderr: "+stderr.join(" || "):""));
     pyodide=null;
    }
   }
-  if(!pyodide)throw Error("راه‌اندازی Pyodide از هر دو CDN ناموفق بود. "+bootErrors.join(" || "));
+  if(!pyodide)throw Error("راه‌اندازی Pyodide ناموفق بود. "+bootErrors.join(" || ")+" | diagnostics: "+bootTrace.join(" || "));
   phase="بارگذاری micropip";await pyodide.loadPackage(["micropip"]);
   phase="نصب Gymnasium";await pyodide.runPythonAsync("import micropip\nawait micropip.install('gymnasium==1.2.3')");
   const paths=["__init__.py","dynamics.py","parameters.py","system_identification.py","curriculum.py","env.py","vehicle_family.py","diagnostics.py"];
