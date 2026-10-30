@@ -216,18 +216,40 @@ The current universal fast-physics path (train_universal_ppo.py, evaluate_univer
 No additional workflow or test suite was introduced for these changes. The existing PR workflow remains the only automated validation path; no training or evaluation run is started by editing these files.
 
 
-### Universal PPO action normalization (pipeline v3)
+### Universal PPO body-wrench control and observation scaling (pipeline v4)
 
-The universal family policy uses a symmetric four-dimensional action space
-[-1, 1]. Each component is a normalized motor delta around the nominal hover
-command computed from the declared vehicle profile. A zero action therefore
-requests nominal hover thrust; -1 maps to zero motor command and +1 maps to
-full command. The mapping uses nominal profile parameters only, not hidden
-episode-randomized mass, voltage, motor effectiveness, or other ground truth.
-The underlying physics environment and Flight Lab continue to use physical
-motor commands in [0, 1].
+Pipeline v4 replaces four independent motor-delta policy outputs with four
+body-wrench controls: collective thrust, roll torque, pitch torque and yaw
+torque. A geometry-derived allocation matrix converts the requested wrench to
+per-rotor thrust, then to normalized motor commands. The zero policy action is
+nominal level hover. The allocator uses only the declared nominal vehicle
+profile; it never reads episode-randomized mass, motor effectiveness, voltage,
+inertia or wind.
 
-Pipeline v3 uses a separate checkpoint directory/name. Checkpoints trained
-with the old [0, 1] PPO action space are intentionally not resumed because
-their policy distribution and action semantics are incompatible. No training
-run is started by this code change.
+The policy samples an unbounded Gaussian action and the environment applies a
+smooth tanh mapping before wrench allocation. This avoids hard action clipping
+at the PPO boundary while keeping the physical control bounded. The plant and
+Flight Lab continue to receive four physical motor commands in [0, 1].
+
+The fast-physics observation now scales position error, velocity, attitude,
+angular rate and previous motor commands to dimensionless ranges before they
+enter the four-frame history. The online estimator context and twelve nominal
+vehicle features remain appended as before.
+
+Ground takeoff remains part of every stage. Initial horizontal-position and
+roll/pitch perturbations increase progressively from stage 2 through stage 5;
+stage 1 remains nominal. This teaches recovery without silently replacing the
+takeoff task with airborne-only starts. Reward shaping additionally emphasizes
+vertical-speed damping while retaining altitude progress, takeoff transition,
+stable-hover and terminal-failure signals.
+
+PPO uses separate 128-unit policy/value MLPs, a conservative 0.15 clip range,
+target-KL guard, gradient-norm cap and normalized advantages. These settings
+are a more controlled starting point, not a guarantee of convergence.
+
+Pipeline v4 uses a separate checkpoint directory/name because action meaning,
+action distribution and observation scaling differ from v3. Existing v2/v3
+checkpoints must not be resumed under v4. The existing five-stage workflow is
+the only training workflow; no training or additional tests are launched by
+these code changes. All example vehicle parameters remain provisional
+simulation estimates and are not evidence of real-flight capability.
