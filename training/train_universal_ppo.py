@@ -216,7 +216,7 @@ def main(argv=None):
             "best_checkpoint": str(best_checkpoint),
             "balanced_selection_score": list(eval_callback.best_score),
             "balanced_selection_report": eval_callback.best_report,
-            "checkpoint_selection": "max_min_profile_success_then_min_worst_crash_then_mean_return",
+            "checkpoint_selection": "max_min_profile_sustained_hover_then_min_worst_crash_then_max_min_takeoff_then_mean_return",
             "history_length": args.history_length, "curriculum_stage": args.curriculum_stage,
             "initial_model": str(args.load_model) if args.load_model else None,
             "domain_randomization": not args.no_randomization,
