@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: samanramezani1377-hub/3D
-          ref: kilo
+          ref: d591b81bd671e04abe7d4bdeb0865fd3c3bf381b
           path: source-3d
           fetch-depth: 1
 
