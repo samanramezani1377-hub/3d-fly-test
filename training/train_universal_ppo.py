@@ -56,7 +56,7 @@ class BalancedProfileCallback(BaseCallback):
         if selection_path.is_file():
             saved = json.loads(selection_path.read_text(encoding="utf-8"))
             saved_score = tuple(saved.get("score", ()))
-            # Older selection rules are not comparable to the v5 five-field rule.
+            # Older selection rules are not comparable to the v5 six-field rule.
             if len(saved_score) == 6:
                 self.best_score = saved_score
                 self.best_report = saved.get("report")
@@ -274,7 +274,7 @@ def main(argv=None):
             model = PPO.load(str(args.load_model), env=env, device="cpu")
             model.tensorboard_log = str(run_dir / "tensorboard")
             if model.n_steps != 500 or model.batch_size != 250:
-                raise RuntimeError("Checkpoint PPO rollout settings do not match the v4 training pipeline.")
+                raise RuntimeError("Checkpoint PPO rollout settings do not match the v5 training pipeline.")
         else:
             model = PPO(
                 "MlpPolicy", env, learning_rate=args.learning_rate, n_steps=500,
