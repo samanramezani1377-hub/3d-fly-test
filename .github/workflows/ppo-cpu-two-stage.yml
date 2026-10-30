@@ -20,10 +20,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: universal-ppo-five-stage-${{ github.ref }}
+  group: universal-ppo-five-stage-\${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -64,15 +64,42 @@ jobs:
             training/tests/test_universal_vehicle.py \
             training/tests/test_hover_reference.py
 
-      - name: Run the complete five-stage, one-million-transition PPO curriculum
+      - name: Run five-stage training and final held-out model test
         if: github.event_name == 'workflow_dispatch'
         run: |
           set -o pipefail
           python training/run_universal_curriculum.py \
             --timesteps-per-stage 200000 \
             --n-envs 4 \
+            --checkpoint-eval-episodes 5 \
             --evaluation-episodes 20 \
             2>&1 | tee five-stage-training.log
+
+      - name: Commit resumable checkpoints and final-tested models to this repository
+        if: always() && github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          mkdir -p training/models/universal-quad
+          if [ -d training/runs/universal-quad-stage1 ]; then
+            cp -a training/runs/universal-quad-stage* training/models/universal-quad/
+          fi
+          if [ -d training/runs/release ]; then
+            cp -a training/runs/release training/models/universal-quad/
+          fi
+          if [ -f training/runs/universal-quad-curriculum-manifest.json ]; then
+            cp training/runs/universal-quad-curriculum-manifest.json training/models/universal-quad/
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add training/models/universal-quad
+          if ! git diff --cached --quiet; then
+            find training/models/universal-quad -type f -size +90M -print -quit | grep -q . && {
+              echo "A checkpoint exceeds the safe 90 MB per-file repository limit."
+              exit 1
+            } || true
+            git commit -m "Store final-tested PPO models and resumable checkpoints"
+            git push origin "HEAD:\${GITHUB_REF_NAME}"
+          fi
 
       - name: Print training manifest and log tail
         if: always() && github.event_name == 'workflow_dispatch'
@@ -82,19 +109,14 @@ jobs:
           echo '===== TRAINING LOG TAIL ====='
           if [ -f five-stage-training.log ]; then tail -c 50000 five-stage-training.log; else echo 'Training log not produced'; fi
 
-      - name: Upload checkpoints, per-profile evaluations, manifest, and logs
+      - name: Upload full training backup
         if: always() && github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: universal-ppo-five-stage-results
+          name: universal-ppo-five-stage-backup
           path: |
-            training/runs/universal-quad-curriculum-manifest.json
-            training/runs/held-out-domain-randomization.json
-            training/runs/universal-quad-stage1/
-            training/runs/universal-quad-stage2/
-            training/runs/universal-quad-stage3/
-            training/runs/universal-quad-stage4/
-            training/runs/universal-quad-stage5/
+            training/runs/
+            training/models/universal-quad/
             five-stage-training.log
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 90
