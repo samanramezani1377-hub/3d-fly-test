@@ -306,3 +306,10 @@ The current GitHub Actions manual run uses 2,000,000 aggregate environment trans
 The trainer prints a `[PPO_SPEED]` line at each PPO rollout boundary. It reports rollout transitions/sec and cumulative average transitions/sec across all parallel environments. These records are streamed into the same GitHub Actions job log and retained in `single-stage-training.log`.
 
 No new workflow or test suite is added. The existing PR validation path remains unchanged. These are simulation-only training settings and do not establish physical-flight readiness.
+
+
+## Current universal PPO workflow configuration
+
+**Current source of truth:** [Single-stage takeoff/hover training guide](../docs/UNIVERSAL_PPO_SINGLE_STAGE_GUIDE.md). The existing GitHub Actions workflow now runs stage 1 only, with 2,000,000 aggregate transitions and 32 parallel environments. Stages 2–5 remain implemented but dormant. Throughput is logged per PPO rollout as `[PPO_SPEED]` in the same Actions job log and `single-stage-training.log`.
+
+Older sections below describe earlier experimental configurations and historical defaults. For the current manual GitHub Actions run, follow the linked guide and the arguments in `.github/workflows/ppo-cpu-two-stage.yml`; do not use the legacy five-stage command examples as the current workflow settings.
