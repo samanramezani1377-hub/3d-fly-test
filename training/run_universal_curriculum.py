@@ -126,6 +126,11 @@ def main(argv=None):
     heldout["aerodynamics"]["drag_scale"] = [0.65, 1.45]
     heldout["environment"]["wind_component_m_s"] = [-2.5, 2.5]
     heldout.pop("curriculum", None)
+    # Held-out evaluation keeps the same stage-5 initial recovery difficulty
+    # while using its independent wider physical/environment distribution.
+    heldout["active_curriculum_stage"] = {
+        "stage": 5, "name": "held-out-stage5-initial-condition"
+    }
     write_json(heldout_path, heldout)
 
     previous_best = None
