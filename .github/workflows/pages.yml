@@ -1,23 +1,20 @@
 name: Deploy Flight Lab
-
 on:
   push:
     branches: [main]
     paths:
       - "site/**"
-      - "vehicle_models/family/vehicle_profiles.json"
+      - "training/fast_physics/**"
+      - "vehicle_models/family/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
-
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
   group: github-pages
   cancel-in-progress: true
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -27,26 +24,28 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
-
-      - name: Assemble Flight Lab site
+      - name: Assemble shared-engine Flight Lab
         run: |
-          mkdir -p _site
+          mkdir -p _site/training _site/vehicle_models/family
           cp -a site/. _site/
-          cp vehicle_models/family/vehicle_profiles.json _site/vehicle_profiles.json
+          cp -a training/fast_physics _site/training/
+          cp vehicle_models/family/vehicle_profiles.json _site/vehicle_models/family/
+          cp vehicle_models/family/domain_randomization.json _site/vehicle_models/family/
           touch _site/.nojekyll
           test -s _site/index.html
           test -s _site/app.js
-          test -s _site/style.css
-          test -s _site/vehicle_profiles.json
-
+          test -s _site/engine.py
+          test -s _site/training/fast_physics/vehicle_family.py
+          test -s _site/training/fast_physics/dynamics.py
+          test -s _site/training/fast_physics/env.py
+          test -s _site/vehicle_models/family/vehicle_profiles.json
+          test -s _site/vehicle_models/family/domain_randomization.json
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
-
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
