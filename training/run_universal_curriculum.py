@@ -232,16 +232,19 @@ def main(argv=None):
     tested = []
     for label, model_path in candidates:
         report_path = stage5 / f"final-test-{label}.json"
-        subprocess.run([
-            sys.executable, str(ROOT / "training/evaluate_universal_ppo.py"),
-            "--model", str(model_path),
-            "--vehicle-family", str(a.vehicle_family),
-            "--episodes", str(a.evaluation_episodes),
-            "--seed", "990001",
-            "--output", str(report_path),
-            "--randomization-config", str(heldout_path),
-            "--held-out",
-        ], cwd=ROOT, check=True)
+        if report_path.is_file():
+            print(f"Reusing completed held-out report: {report_path.name}")
+        else:
+            subprocess.run([
+                sys.executable, str(ROOT / "training/evaluate_universal_ppo.py"),
+                "--model", str(model_path),
+                "--vehicle-family", str(a.vehicle_family),
+                "--episodes", str(a.evaluation_episodes),
+                "--seed", "990001",
+                "--output", str(report_path),
+                "--randomization-config", str(heldout_path),
+                "--held-out",
+            ], cwd=ROOT, check=True)
         result = json.loads(report_path.read_text(encoding="utf-8"))
         expected = set(load_profile_ids(a.vehicle_family))
         actual = {item["vehicle_id"] for item in result["profiles"]}
