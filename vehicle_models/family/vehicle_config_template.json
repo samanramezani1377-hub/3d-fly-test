@@ -3,16 +3,34 @@
   "vehicle_id": "my-quadrotor-v1",
   "display_name": "My measured quadrotor",
   "calibration_status": "user_supplied",
-  "parameter_source": "Record source, measurement date, instrument and uncertainty for every measured field.",
+  "parameter_source": "Record source, measurement date, instrument and uncertainty for every known field.",
   "geometry": {"arm_span_diagonal_m": null, "propeller_diameter_m": null, "rotor_count": 4},
-  "physical": {"mass_kg": null, "center_of_mass_m": [0,0,0], "inertia_kg_m2": null, "linear_drag_kg_s": 0.08, "quadratic_drag_kg_m": 0.015, "angular_damping_nms": 0.002},
+  "physical": {
+    "mass_kg": null,
+    "center_of_mass_m": [0.0, 0.0, 0.0],
+    "inertia_kg_m2": null,
+    "linear_drag_kg_s": 0.08,
+    "quadratic_drag_kg_m": 0.015,
+    "angular_damping_nms": 0.002
+  },
   "rotors": [
-    {"position_m":[null,null,0],"spin_sign":1},
-    {"position_m":[null,null,0],"spin_sign":-1},
-    {"position_m":[null,null,0],"spin_sign":1},
-    {"position_m":[null,null,0],"spin_sign":-1}
+    {"position_m":[null,null,0.0],"spin_sign":1},
+    {"position_m":[null,null,0.0],"spin_sign":-1},
+    {"position_m":[null,null,0.0],"spin_sign":1},
+    {"position_m":[null,null,0.0],"spin_sign":-1}
   ],
-  "propulsion": {"motor_name":null,"kv_rpm_per_volt":null,"max_rotor_speed_rad_s":null,"thrust_coefficient_n_per_rad_s2":null,"torque_to_thrust_m":null,"motor_time_constant_s":null,"nominal_battery_voltage_v":null,"battery_cells":null,"battery_capacity_ah":null},
+  "propulsion": {
+    "motor_name": null,
+    "kv_rpm_per_volt": null,
+    "max_rotor_speed_rad_s": null,
+    "thrust_coefficient_n_per_rad_s2": null,
+    "assumed_max_thrust_to_weight": 2.0,
+    "torque_to_thrust_m": null,
+    "motor_time_constant_s": null,
+    "nominal_battery_voltage_v": null,
+    "battery_cells": null,
+    "battery_capacity_ah": null
+  },
   "measurement_record": {
     "takeoff_mass_includes_battery_and_payload": false,
     "mass_measurement_kg": null,
@@ -22,6 +40,6 @@
     "torque_curve_file": null,
     "rpm_voltage_current_dataset": null,
     "rotor_directions_verified": false,
-    "notes": "Do not use for flight until required values and independent safety limits are verified."
+    "notes": "Mass, frame dimensions, motor KV and nominal battery voltage are required. If inertia, loaded RPM, thrust coefficient, torque ratio or motor lag are unknown, the loader derives provisional initial estimates and records each one in derived_estimates. These are not measured values or flight clearance."
   }
 }
