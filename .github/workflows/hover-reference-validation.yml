@@ -37,13 +37,13 @@ jobs:
             --episodes 5 --max-steps 1500 --settle-seconds 5 \
             --output "${RUNNER_TEMP}/hover-nominal.json"
           python training/evaluate_hover_reference.py \
-            --episodes 5 --max-steps 1500 --settle-seconds 5 --randomize --wind-max 0 \
+            --episodes 5 --max-steps 1500 --settle-seconds 5 --randomize --start-at-target --wind-max 0 \
             --output "${RUNNER_TEMP}/hover-stage4-no-wind.json"
           python training/evaluate_hover_reference.py \
-            --episodes 5 --max-steps 1500 --settle-seconds 5 --randomize --wind-max 0.5 \
+            --episodes 5 --max-steps 1500 --settle-seconds 5 --randomize --start-at-target --wind-max 0.5 \
             --output "${RUNNER_TEMP}/hover-stage4-low-wind.json"
           python training/evaluate_hover_reference.py \
-            --episodes 5 --max-steps 1500 --settle-seconds 5 --randomize --wind-max 2 \
+            --episodes 5 --max-steps 1500 --settle-seconds 5 --randomize --start-at-target --wind-max 2 \
             --output "${RUNNER_TEMP}/hover-stage4-randomized.json"
       - name: Print compact feasibility summary
         run: |
