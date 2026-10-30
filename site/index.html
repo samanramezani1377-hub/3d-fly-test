@@ -1,52 +1,29 @@
 <!doctype html>
 <html lang="fa" dir="rtl">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#07131c">
-  <title>Flight Lab | 3D Fly Test</title>
-  <link rel="stylesheet" href="./style.css">
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#07131c">
+<title>Flight Lab | Training Engine</title><link rel="stylesheet" href="./style.css">
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
 </head>
 <body>
-<header class="topbar">
-  <div><div class="eyebrow">3D FLY TEST / SIMULATION LAB</div><h1>آزمایشگاه پرواز</h1></div>
-  <div class="status"><i id="statusDot"></i><span id="statusText">در حال آماده‌سازی</span></div>
-</header>
+<header class="topbar"><div><div class="eyebrow">3D FLY TEST / SHARED TRAINING ENGINE</div><h1>آزمایشگاه پرواز — موتور مشترک آموزش</h1></div><div class="status"><i id="statusDot"></i><span id="statusText">در حال آماده‌سازی</span></div></header>
 <main>
-  <section class="viewport panel">
-    <div class="view-head"><div><b>نمای سه‌بعدی زنده</b><small id="profileCaption">مدل فیزیکی در حال بارگذاری</small></div><div class="chips"><span id="modeChip">کنترل دستی</span><span>20 ms / step</span></div></div>
-    <div id="scene" aria-label="نمای سه بعدی شبیه ساز"></div>
-    <div class="overlay"><span>ارتفاع <b id="altHud">0.08 m</b></span><span>سرعت <b id="speedHud">0.00 m/s</b></span><span>زمان <b id="timeHud">0.00 s</b></span></div>
-    <div class="view-actions"><button id="armBtn" class="primary">مسلح‌سازی موتورها</button><button id="resetBtn">بازنشانی پرواز</button><button id="pauseBtn">توقف</button></div>
-  </section>
-  <aside class="side">
-    <section class="panel controls">
-      <h2>تنظیمات آزمایش</h2>
-      <label>مدل پهپاد<select id="profileSelect"></select></label>
-      <label>نوع کنترل<select id="modeSelect"><option value="manual">کنترل دستی</option><option value="reference">کنترل مرجع هاور (PID)</option></select></label>
-      <label class="range-label">باد محیط <b id="windValue">0.0 m/s</b><input id="wind" type="range" min="0" max="2" step=".1" value="0"></label>
-      <div class="note">کنترل مرجع، یک کنترل‌کننده PID آزمایشی با دسترسی به پارامترهای شبیه‌ساز است؛ مدل PPO نیست.</div>
-      <h3>فرمان‌های دستی</h3>
-      <div class="keyboard">
-        <span><kbd>W</kbd> افزایش گاز</span><span><kbd>S</kbd> کاهش گاز</span>
-        <span><kbd>↑ ↓</kbd> پیچ</span><span><kbd>← →</kbd> رول</span>
-        <span><kbd>A D</kbd> یاو</span><span><kbd>Space</kbd> قطع موتورها</span>
-      </div>
-      <label class="range-label">گاز پایه <b id="throttleValue">0%</b><input id="throttle" type="range" min="0" max="100" value="0"></label>
-      <div class="motor-grid" id="motorGrid"></div>
-    </section>
-  </aside>
-  <section class="panel telemetry">
-    <div class="section-title"><div><h2>تله‌متری</h2><small>مقادیر از هسته فیزیک محاسبه می‌شوند</small></div><span id="flightState" class="state">روی زمین</span></div>
-    <div class="metrics">
-      <div><small>ارتفاع</small><b id="alt">0.080 m</b></div><div><small>سرعت عمودی</small><b id="vz">0.000 m/s</b></div><div><small>سرعت کل</small><b id="speed">0.000 m/s</b></div><div><small>تراست کل</small><b id="thrust">0.00 N</b></div>
-      <div><small>رول</small><b id="roll">0.0°</b></div><div><small>پیچ</small><b id="pitch">0.0°</b></div><div><small>یاو</small><b id="yaw">0.0°</b></div><div><small>جرم</small><b id="mass">— kg</b></div>
-    </div>
-    <div class="motors"><div class="section-title"><h3>دور موتور</h3><small>مقدار نرمال‌شده فرمان هر روتور</small></div><div id="motorBars"></div></div>
-    <div class="log" id="log">آماده شروع آزمایش. ابتدا موتورها را مسلح کنید.</div>
-  </section>
-  <footer>این ابزار شبیه‌سازی نرم‌افزاری است. ضرایب پروفایل‌ها تخمینی و غیرکالیبره‌اند؛ نتایج، تضمین عملکرد یا ایمنی پرواز واقعی نیستند.</footer>
-</main>
-<script src="./app.js"></script>
-</body></html>
+<section class="viewport panel"><div class="view-head"><div><b>نمای سه‌بعدی زنده</b><small id="profileCaption">در انتظار موتور فیزیک آموزشی</small></div><div class="chips"><span id="modeChip">VehicleFamilyEnv</span><span>50 Hz · fixed dt</span></div></div><div id="scene" aria-label="نمای سه‌بعدی شبیه‌ساز"></div>
+<div class="overlay"><span>ارتفاع <b id="altHud">0.08 m</b></span><span>سرعت <b id="speedHud">0.00 m/s</b></span><span>زمان <b id="timeHud">0.00 s</b></span></div>
+<div class="view-actions"><button id="armBtn" class="primary">مسلح‌سازی موتورها</button><button id="resetBtn">بازنشانی اپیزود</button><button id="pauseBtn">توقف</button></div></section>
+<aside class="side"><section class="panel controls"><h2>تنظیمات محیط آموزشی</h2>
+<label>مدل پهپاد<select id="profileSelect"></select></label>
+<label>مرحلهٔ curriculum<select id="curriculumSelect"><option value="0">بدون مرحلهٔ مشخص (تنظیمات کامل)</option><option value="1">مرحله ۱ — Nominal</option><option value="2">مرحله ۲ — جرم، مرکز جرم و اینرسی</option><option value="3">مرحله ۳ — تغییرات پیشران</option><option value="4">مرحله ۴ — محیط ترکیبی</option><option value="5">مرحله ۵ — تعمیم مقاوم</option></select></label>
+<label>Seed آزمایش<input id="seedInput" type="number" value="12345" min="0" step="1"></label>
+<label class="checkline"><input id="randomizeToggle" type="checkbox" checked> فعال‌سازی Domain Randomization و نویز حسگر</label>
+<div class="note">این صفحه مستقیماً کلاس VehicleFamilyEnv و FastQuadrotor را از فایل‌های پایتون مخزن اجرا می‌کند. معادلات پرواز در JavaScript بازنویسی نشده‌اند. کنترل دستی فقط action چهارموتوره را تولید می‌کند.</div>
+<h3>فرمان‌های دستی</h3><div class="keyboard"><span><kbd>W</kbd> افزایش گاز</span><span><kbd>S</kbd> کاهش گاز</span><span><kbd>↑ ↓</kbd> پیچ</span><span><kbd>← →</kbd> رول</span><span><kbd>A D</kbd> یاو</span><span><kbd>Space</kbd> قطع موتورها</span></div>
+<label class="range-label">گاز پایه <b id="throttleValue">0%</b><input id="throttle" type="range" min="0" max="100" value="0"></label><div class="motor-grid" id="motorGrid"></div>
+</section></aside>
+<section class="panel telemetry"><div class="section-title"><div><h2>تله‌متری محیط آموزشی</h2><small>خروجی مستقیم از FastQuadrotor / AdaptiveDroneEnv</small></div><span id="flightState" class="state">روی زمین</span></div>
+<div class="metrics"><div><small>ارتفاع</small><b id="alt">0.080 m</b></div><div><small>سرعت عمودی</small><b id="vz">0.000 m/s</b></div><div><small>سرعت کل</small><b id="speed">0.000 m/s</b></div><div><small>تراست کل</small><b id="thrust">0.00 N</b></div><div><small>رول</small><b id="roll">0.0°</b></div><div><small>پیچ</small><b id="pitch">0.0°</b></div><div><small>یاو</small><b id="yaw">0.0°</b></div><div><small>جرم تصادفی اپیزود</small><b id="mass">— kg</b></div></div>
+<div class="motors"><div class="section-title"><h3>فرمان موتورها</h3><small>action ∈ [0,1]⁴</small></div><div id="motorBars"></div></div>
+<div class="log" id="log">در حال راه‌اندازی…</div><div class="log" id="engineMeta">Engine metadata…</div>
+</section><footer>هستهٔ محیط دقیقاً از training/fast_physics بارگذاری می‌شود. این صفحه شبیه‌ساز پژوهشی است و اعتبارسنجی پرواز واقعی یا کالیبراسیون سخت‌افزار محسوب نمی‌شود.</footer>
+</main><script src="./app.js"></script></body></html>
