@@ -122,7 +122,7 @@ jobs:
         if: always() && github.event_name == 'workflow_dispatch'
         run: |
           echo '===== FIVE-STAGE MANIFEST ====='
-          if [ -f training/runs/universal-quad-v2-curriculum-manifest.json ]; then cat training/runs/universal-quad-curriculum-manifest.json; else echo 'Manifest not produced'; fi
+          if [ -f training/runs/universal-quad-v2-curriculum-manifest.json ]; then cat training/runs/universal-quad-v2-curriculum-manifest.json; else echo 'Manifest not produced'; fi
           echo '===== TRAINING LOG TAIL ====='
           if [ -f five-stage-training.log ]; then tail -c 50000 five-stage-training.log; else echo 'Training log not produced'; fi
 
