@@ -20,7 +20,7 @@ Profiles live in `vehicle_models/family/vehicle_profiles.json`. Each profile con
 
 ## Shared policy observation
 
-The current policy receives the existing environment observation plus ten dimensionless nominal hardware features:
+The current policy receives the existing environment observation plus twelve dimensionless nominal hardware/provenance features:
 
 1. nominal mass;
 2. mean rotor arm radius;
@@ -31,20 +31,20 @@ The current policy receives the existing environment observation plus ten dimens
 7. motor time constant;
 8. nominal battery voltage;
 9. battery capacity;
-10. motor KV.
+10. motor KV;\n11. fraction of the profile values that were derived estimates;\n12. calibration provenance confidence (a software label, not a measurement-quality certification).
 
 The policy does **not** receive episode-randomized true mass, CG offset, inertia scale, per-motor effectiveness, battery sag or wind. The existing online effective-lift estimator remains observation-derived and approximate; it is not a full system-identification solution.
 
-## Training and evaluation
+The resulting observation has 78 values with the default four history frames: 66 environment values plus 12 hardware/provenance features. Existing 66-value smooth2-only checkpoints are not observation-compatible.\n\n## Training and evaluation
 
 - `training/train_universal_ppo.py`: one shared PPO model; random vehicle selection each episode.
 - `training/evaluate_universal_ppo.py`: deterministic checkpoint evaluation, separately grouped by vehicle profile.
-- `training/run_universal_curriculum.py`: four sequential stages, loading the preceding stage checkpoint before continuing.
+- `training/run_universal_curriculum.py`: four sequential stages, loading the preceding stage's final checkpoint before continuing; the runner does not claim that this is the best checkpoint.
 - `training/tests/test_universal_vehicle.py`: profile validation, observation dimensions, deterministic selection, pinning and fail-closed tests.
 
 Example commands are in `training/README.md`.
 
-## Calibration workflow for a new aircraft
+The test suite also checks nominal static-hover force balance for every example profile and verifies that the configured worst-case mass, voltage and motor-effectiveness bounds in each curriculum stage retain at least a 1.05 thrust-to-weight ratio. These are internal consistency checks on provisional coefficients, not proof that the real aircraft can hover.\n\n## Calibration workflow for a new aircraft
 
 1. Copy `vehicle_config_template.json` and assign a unique vehicle ID.
 2. Measure total takeoff mass with battery and intended payload.
