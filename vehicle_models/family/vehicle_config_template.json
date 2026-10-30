@@ -7,7 +7,7 @@
   "geometry": {"arm_span_diagonal_m": null, "propeller_diameter_m": null, "rotor_count": 4},
   "physical": {
     "mass_kg": null,
-    "center_of_mass_m": [0.0, 0.0, 0.0],
+    "center_of_mass_m": null,
     "inertia_kg_m2": null,
     "linear_drag_kg_s": 0.08,
     "quadratic_drag_kg_m": 0.015,
