@@ -153,11 +153,11 @@ The adaptive profile sampler updates profile weights from observed weaknesses. T
 ## 8. How to launch the training
 
 1. Open the repository's **Actions** tab.
-2. Select **Universal PPO - Five-stage curriculum (stage 1 active)**.
+2. Select **Universal PPO - Five-stage curriculum**.
 3. Select the `main` branch.
 4. Choose **Run workflow**.
 
-A push to `main` runs the existing reward/checkpoint and CAD asset-integrity checks, and deploys Flight Lab only when its source files change. A pull request runs those existing checks plus the universal physics, vehicle-family and hover-reference regression tests. Neither event starts PPO training. The two-million-transition training run starts only through the manual `workflow_dispatch` event. All repository automation is consolidated in the single workflow `.github/workflows/universal-ppo-five-stage.yml`.
+Every push/commit and pull request runs `.github/workflows/validate-physics-cad.yml`, covering reward/checkpoint behavior, physics, vehicle-family behavior, hover control and CAD asset integrity. PPO training starts only through manual dispatch of `.github/workflows/universal-ppo-five-stage.yml`. Flight Lab publication is a separate manual action: `.github/workflows/deploy-flight-lab.yml`. Neither training nor deployment is triggered by commits.
 
 Do not start duplicate manual runs concurrently. The workflow concurrency group prevents overlapping runs on the same ref from proceeding independently.
 
