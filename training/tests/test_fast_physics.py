@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "training"))
 
 from fast_physics import AdaptiveDroneEnv, FastQuadrotor, VehicleParameters, load_vehicle_parameters, sample_scenario, OnlineThrustEstimator, randomization_for_stage
+from evaluate_robust_ppo import summarize_episode
 AIRFRAME = ROOT / "vehicle_models/smooth2_parametric/base_airframe.json"
 CALIBRATION = ROOT / "vehicle_models/smooth2_parametric/physics_calibration.json"
 RANDOMIZATION = ROOT / "vehicle_models/smooth2_parametric/domain_randomization.json"
@@ -181,3 +182,24 @@ def test_sensor_noise_is_reproducible_with_same_seed():
         assert np.allclose(obs_a, obs_b)
     finally:
         env.close()
+
+
+def test_held_out_evaluator_requires_sustained_hover_and_no_crash():
+    stable_samples = [
+        {
+            "taken_off": True, "stable": True, "crashed": False,
+            "altitude_error_m": 0.05, "horizontal_error_m": 0.05,
+        }
+        for _ in range(300)
+    ]
+    good = summarize_episode(stable_samples, 500.0)
+    assert good["hover_success"] is True
+    assert good["crashed"] is False
+
+    crashed_samples = stable_samples[:-1] + [{
+        "taken_off": True, "stable": False, "crashed": True,
+        "altitude_error_m": 0.5, "horizontal_error_m": 0.5,
+    }]
+    bad = summarize_episode(crashed_samples, 100.0)
+    assert bad["hover_success"] is False
+    assert bad["crashed"] is True
