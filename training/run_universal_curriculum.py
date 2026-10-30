@@ -177,6 +177,12 @@ def main(argv=None):
             print(f"Stage {stage}/5 training was complete; recovered its manifest entry.")
             continue
 
+        sampling_weights = stage_dir / "profile-sampling-weights.json"
+        if stage > 1 and not sampling_weights.is_file() and previous_best is not None:
+            previous_weights = previous_best.parent.parent / "profile-sampling-weights.json"
+            if previous_weights.is_file():
+                shutil.copy2(previous_weights, sampling_weights)
+
         same_stage_resume = (
             latest.is_file()
             and state_path.is_file()
