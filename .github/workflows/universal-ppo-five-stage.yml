@@ -83,7 +83,7 @@ jobs:
             cp training/runs/universal-quad-v5-foundation-held-out-domain-randomization.json training/models/universal-quad-v5-foundation/
           fi
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add training/models/universal-quad-v5-foundation
           if ! git diff --cached --quiet; then
             find training/models/universal-quad-v5-foundation -type f -size +90M -print -quit | grep -q . && {
