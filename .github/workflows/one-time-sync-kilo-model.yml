@@ -1,4 +1,5 @@
 name: One-time sync quadcopter model from 3D kilo
+# Triggered only on the dedicated migration branch.
 
 on:
   push:
