@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import numpy as np
 from datetime import datetime, timezone
 from pathlib import Path
 
