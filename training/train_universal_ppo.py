@@ -47,8 +47,8 @@ class BalancedProfileCallback(BaseCallback):
         self.checkpoint_frequency = max(1, checkpoint_frequency)
         self.best_dir, self.reports_dir = Path(best_dir), Path(reports_dir)
         self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, -1.0, -1.0, float("-inf"), float("-inf")), None
-        self.sampling_weights_path = self.latest_dir / "profile-sampling-weights.json"
         self.latest_dir = self.best_dir.parent
+        self.sampling_weights_path = self.latest_dir / "profile-sampling-weights.json"
         self.latest_dir.mkdir(parents=True, exist_ok=True)
         self.last_eval_timesteps = 0
         self.last_checkpoint_timesteps = None
