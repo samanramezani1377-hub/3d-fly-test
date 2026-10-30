@@ -48,7 +48,7 @@ The resulting observation has 78 values with the default four history frames: 66
 
 Example commands are in `training/README.md`.
 
-The test suite also checks nominal static-hover force balance for every example profile and verifies that the configured worst-case mass, voltage and motor-effectiveness bounds in each curriculum stage retain at least a 1.05 thrust-to-weight ratio. These are internal consistency checks on provisional coefficients, not proof that the real aircraft can hover.
+The test suite also checks nominal static-hover force balance for every example profile and verifies that the configured worst-case mass, voltage and motor-effectiveness bounds in each curriculum stage retain at least a 1.05 thrust-to-weight ratio. During training, periodic family evaluation writes the best mean-reward policy to `best/best_model.zip`; the last policy snapshot is saved independently as `final_model.zip`. These are internal consistency checks on provisional coefficients, not proof that the real aircraft can hover.
 
 ## Calibration workflow for a new aircraft
 
