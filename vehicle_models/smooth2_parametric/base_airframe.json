@@ -2,12 +2,15 @@
   "schema_version": 1,
   "vehicle_id": "smooth2-parametric-v1",
   "source": {
-    "repository_path": "assets/preflight/smooth2-parametric",
+    "repository_path": "output/smooth2-parametric",
     "cad_script": "cad/parametric/drone_parametric.py",
-    "parameter_file": "assets/preflight/smooth2-parametric/drone_parametric.params.json",
-    "assembly_manifest": "assets/preflight/smooth2-parametric/assembly-manifest.json",
-    "geometry_revision": "smooth2-parametric imported baseline",
-    "evidence": "cad-derived design parameters; not a metrology certificate"
+    "parameter_file": "cad/parametric/model.params.json",
+    "assembly_manifest": "output/smooth2-parametric/assembly-manifest.json",
+    "geometry_revision": "3D:kilo@d591b81bd671e04abe7d4bdeb0865fd3c3bf381b",
+    "evidence": "Exact source revision and generated CAD exports are pinned in assets/preflight/MODEL_SOURCE_REVISION.md; geometry values are CAD-derived design dimensions, not a metrology certificate.",
+    "repository": "https://github.com/samanramezani1377-hub/3D",
+    "branch": "kilo",
+    "commit": "d591b81bd671e04abe7d4bdeb0865fd3c3bf381b"
   },
   "coordinate_frame": {
     "frame": "CAD_EXPORT_Z_UP",
@@ -21,25 +24,77 @@
   },
   "geometry": {
     "model_scale": 1.414028,
-    "body_height_mm_design": 13.0,
-    "body_half_width_mm_design": 38.0,
-    "body_front_z_mm_design": 66.0,
-    "body_rear_z_mm_design": -52.0,
+    "body_height_mm_design": 13,
+    "body_half_width_mm_design": 38,
+    "body_front_z_mm_design": 66,
+    "body_rear_z_mm_design": -52,
     "arm_count": 4,
-    "motor_x_mm_design": 58.0,
-    "motor_z_mm_design": 58.0,
+    "motor_x_mm_design": 58,
+    "motor_z_mm_design": 58,
     "propeller_count": 4,
     "propeller_blade_count": 2,
     "propeller_radius_mm_design": 26.45,
     "propeller_pitch_mm_design": 53.086,
     "guard_outer_radius_mm_design": 35.5,
-    "camera_tilt_down_deg": 35.0
+    "camera_tilt_down_deg": 35
   },
   "rotors": [
-    {"id": "rotor_xp_yp", "position_m": [0.082013624, 0.082013624, 0.0], "axis_body": [0.0, 0.0, 1.0], "spin_sign": 1},
-    {"id": "rotor_xp_yn", "position_m": [0.082013624, -0.082013624, 0.0], "axis_body": [0.0, 0.0, 1.0], "spin_sign": -1},
-    {"id": "rotor_xn_yn", "position_m": [-0.082013624, -0.082013624, 0.0], "axis_body": [0.0, 0.0, 1.0], "spin_sign": 1},
-    {"id": "rotor_xn_yp", "position_m": [-0.082013624, 0.082013624, 0.0], "axis_body": [0.0, 0.0, 1.0], "spin_sign": -1}
+    {
+      "id": "rotor_xp_yp",
+      "position_m": [
+        0.082013624,
+        0.082013624,
+        0
+      ],
+      "axis_body": [
+        0,
+        0,
+        1
+      ],
+      "spin_sign": 1
+    },
+    {
+      "id": "rotor_xp_yn",
+      "position_m": [
+        0.082013624,
+        -0.082013624,
+        0
+      ],
+      "axis_body": [
+        0,
+        0,
+        1
+      ],
+      "spin_sign": -1
+    },
+    {
+      "id": "rotor_xn_yn",
+      "position_m": [
+        -0.082013624,
+        -0.082013624,
+        0
+      ],
+      "axis_body": [
+        0,
+        0,
+        1
+      ],
+      "spin_sign": 1
+    },
+    {
+      "id": "rotor_xn_yp",
+      "position_m": [
+        -0.082013624,
+        0.082013624,
+        0
+      ],
+      "axis_body": [
+        0,
+        0,
+        1
+      ],
+      "spin_sign": -1
+    }
   ],
   "uncertain_physical_properties": {
     "takeoff_mass_kg": null,
@@ -53,9 +108,32 @@
     "rotor_torque_curve": null
   },
   "geometry_policy": {
-    "fixed_in_v1": ["body geometry", "arm geometry", "motor mount positions", "propeller geometry", "propeller guard geometry", "rotor count", "rotor axes"],
-    "randomized_in_training": ["total mass", "center of mass", "inertia tensor", "per-motor effectiveness", "battery voltage factor", "body drag", "wind", "sensor noise"],
-    "not_claimed": ["CAD-derived mass", "measured CG", "measured inertia", "verified propeller thrust", "flight readiness"]
+    "fixed_in_v1": [
+      "body geometry",
+      "arm geometry",
+      "motor mount positions",
+      "propeller geometry",
+      "propeller guard geometry",
+      "rotor count",
+      "rotor axes"
+    ],
+    "randomized_in_training": [
+      "total mass",
+      "center of mass",
+      "inertia tensor",
+      "per-motor effectiveness",
+      "battery voltage factor",
+      "body drag",
+      "wind",
+      "sensor noise"
+    ],
+    "not_claimed": [
+      "CAD-derived mass",
+      "measured CG",
+      "measured inertia",
+      "verified propeller thrust",
+      "flight readiness"
+    ]
   },
   "notes": [
     "Rotor locations are transformed from design coordinates using the CAD model_scale and the documented 90-degree X export rotation.",
