@@ -6,6 +6,8 @@ episode-randomized plant parameters remain hidden from the policy.
 """
 from __future__ import annotations
 
+from functools import lru_cache
+
 import gymnasium as gym
 import numpy as np
 
@@ -26,6 +28,11 @@ def _allocation_matrix(params: VehicleParameters) -> np.ndarray:
     if not np.all(np.isfinite(matrix)) or np.linalg.matrix_rank(matrix) < 4:
         raise ValueError("vehicle rotor geometry does not provide a full-rank 4-axis mixer")
     return matrix
+
+
+@lru_cache(maxsize=32)
+def _allocation_inverse(params: VehicleParameters) -> np.ndarray:
+    return np.linalg.inv(_allocation_matrix(params))
 
 
 def nominal_hover_commands(params: VehicleParameters) -> np.ndarray:
@@ -62,7 +69,7 @@ def policy_action_to_motor_commands(action, params: VehicleParameters) -> np.nda
         action[2] * 0.20 * weight * arm,
         action[3] * 0.20 * weight * params.torque_to_thrust_m,
     ], dtype=np.float64)
-    rotor_thrust = np.linalg.solve(_allocation_matrix(params), desired_wrench)
+    rotor_thrust = _allocation_inverse(params) @ desired_wrench
     max_per_rotor = (
         params.thrust_coefficient_n_per_rad_s2
         * np.asarray(params.motor_effectiveness, dtype=np.float64)
@@ -86,12 +93,18 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
         self.action_space = gym.spaces.Box(
             low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32
         )
+        self._cached_profile_id = None
+        self._cached_params = None
 
     def action(self, action):
         profile = self.env.active_profile
         if profile is None:
             raise RuntimeError("environment must be reset before mapping PPO actions")
-        return policy_action_to_motor_commands(action, profile_to_parameters(profile))
+        profile_id = profile["vehicle_id"]
+        if profile_id != self._cached_profile_id:
+            self._cached_params = profile_to_parameters(profile)
+            self._cached_profile_id = profile_id
+        return policy_action_to_motor_commands(action, self._cached_params)
 
 
 # Backwards-compatible import name; action semantics are body-wrench, not motor deltas.
