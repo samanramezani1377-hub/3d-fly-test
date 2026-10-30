@@ -53,7 +53,6 @@ def main(argv=None):
     except ImportError as exc:
         raise SystemExit("Install training/requirements.txt to evaluate PPO") from exc
 
-    required_stable_steps = max(1, int(round(args.stable_hover_seconds / 0.02)))
     profiles = load_vehicle_profiles(args.vehicle_family)
     wanted = set(args.vehicle_id or [profile["vehicle_id"] for profile in profiles])
     selected = [profile for profile in profiles if profile["vehicle_id"] in wanted]
@@ -70,6 +69,7 @@ def main(argv=None):
             vehicle_id=profile["vehicle_id"], randomize=True,
         )
         episodes = []
+        required_stable_steps = max(1, int(round(args.stable_hover_seconds / env.inner.dt)))
         try:
             for _ in range(args.episodes):
                 obs, _ = env.reset(seed=args.seed + episode_index)
@@ -102,7 +102,7 @@ def main(argv=None):
                     "seed": episode_seed,
                     "vehicle_id": profile["vehicle_id"],
                     "hover_success": hover_success,
-                    "stable_hover_seconds_max": max_stable_steps * 0.02,
+                    "stable_hover_seconds_max": max_stable_steps * env.inner.dt,
                     "crashed": crashed,
                     "takeoff_success": takeoff_seen,
                     "takeoff_failed": bool(not takeoff_seen and truncated),
