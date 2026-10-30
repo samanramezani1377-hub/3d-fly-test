@@ -73,10 +73,11 @@ def main(argv=None):
             vehicle_id=profile["vehicle_id"], randomize=True,
         )
         episodes = []
-        required_stable_steps = max(1, int(round(args.stable_hover_seconds / env.inner.dt)))
+        required_stable_steps = None
         try:
             for _ in range(args.episodes):
                 obs, _ = env.reset(seed=args.seed + episode_index)
+                required_stable_steps = max(1, int(round(args.stable_hover_seconds / env.inner.dt)))
                 episode_seed = args.seed + episode_index
                 episode_index += 1
                 rewards, crashed = [], False
