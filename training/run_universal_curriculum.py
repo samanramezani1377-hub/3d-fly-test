@@ -54,7 +54,7 @@ def main(argv=None):
     p.add_argument("--max-final-crash-rate", type=float, default=0.25)
     p.add_argument("--min-final-takeoff-rate", type=float, default=0.75)
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--run-prefix", default="universal-quad-v5")
+    p.add_argument("--run-prefix", default="universal-quad-v5-foundation")
     p.add_argument("--output-dir", type=Path, default=Path("training/runs"))
     p.add_argument("--vehicle-family", type=Path,
                    default=ROOT / "vehicle_models/family/vehicle_profiles.json")
