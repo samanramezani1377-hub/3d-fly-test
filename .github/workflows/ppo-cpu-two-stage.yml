@@ -94,7 +94,7 @@ jobs:
           for stage_dir in training/runs/universal-quad-v2-stage*; do
             if [ -d "$stage_dir" ]; then
               mkdir -p "training/models/universal-quad-v2/$(basename "$stage_dir")"
-              rsync -a --exclude 'tensorboard/' --exclude '*.csv' "$stage_dir/" "training/models/universal-quad/$(basename "$stage_dir")/"
+              rsync -a --exclude 'tensorboard/' --exclude '*.csv' "$stage_dir/" "training/models/universal-quad-v2/$(basename "$stage_dir")/"
             fi
           done
           if [ -d training/runs/release ]; then
@@ -110,7 +110,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add training/models/universal-quad-v2
           if ! git diff --cached --quiet; then
-            find training/models/universal-quad -type f -size +90M -print -quit | grep -q . && {
+            find training/models/universal-quad-v2 -type f -size +90M -print -quit | grep -q . && {
               echo "A checkpoint exceeds the safe 90 MB per-file repository limit."
               exit 1
             } || true
@@ -122,7 +122,7 @@ jobs:
         if: always() && github.event_name == 'workflow_dispatch'
         run: |
           echo '===== FIVE-STAGE MANIFEST ====='
-          if [ -f training/runs/universal-quad-curriculum-manifest.json ]; then cat training/runs/universal-quad-curriculum-manifest.json; else echo 'Manifest not produced'; fi
+          if [ -f training/runs/universal-quad-v2-curriculum-manifest.json ]; then cat training/runs/universal-quad-curriculum-manifest.json; else echo 'Manifest not produced'; fi
           echo '===== TRAINING LOG TAIL ====='
           if [ -f five-stage-training.log ]; then tail -c 50000 five-stage-training.log; else echo 'Training log not produced'; fi
 
@@ -133,7 +133,7 @@ jobs:
           name: universal-ppo-five-stage-backup
           path: |
             training/runs/
-            training/models/universal-quad/
+            training/models/universal-quad-v2/
             five-stage-training.log
           if-no-files-found: warn
           retention-days: 90
