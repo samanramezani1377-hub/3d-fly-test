@@ -68,3 +68,16 @@ config/drone.json still contains placeholder values until the actual aircraft is
 The imported `smooth2-parametric` CAD model and engineering metadata live under `assets/preflight/`. Read the [preflight asset index](../assets/preflight/README.md), [analysis plan](../assets/preflight/ANALYSIS_PLAN.md), and [data dictionary](../assets/preflight/DATA_DICTIONARY.md) before using aircraft-specific parameters.
 
 The current SkySim/PPO configuration is not automatically derived from this CAD. Do not copy design dimensions into mass, inertia, rotor thrust or motor parameters without validating the STEP geometry, material/density, exact motor/ESC/battery and rotor performance data. The preflight gates must pass before treating the model as the training plant.
+
+
+## Experimental robust/adaptive PPO on the smooth2 fast-physics plant
+
+The new `training/fast_physics/` package provides a separate simplified 6-DoF plant and Gymnasium environment. It keeps the imported smooth2 geometry fixed and randomizes uncertain physical properties per episode. The policy receives four frames of state/action history; mass, CG, inertia, motor effectiveness and voltage factor are not exposed as policy observations.
+
+**The aircraft calibration is intentionally incomplete.** By default, the environment refuses to load while measured mass/CG/inertia and motor/propeller coefficients are missing. For software-only development, synthetic values can be enabled explicitly:
+
+```bash
+python training/train_robust_ppo.py --timesteps 100000 --n-envs 4 --software-only-synthetic-calibration
+```
+
+Do not use a synthetic run as evidence of real hover capability or physical flight safety. This new entry point is additive and is not part of the existing SkySim five-stage checkpoint chain. Full details and current limitations are documented in [ROBUST_ADAPTIVE_FLIGHT_ARCHITECTURE.md](../docs/ROBUST_ADAPTIVE_FLIGHT_ARCHITECTURE.md).
