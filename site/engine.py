@@ -2,6 +2,7 @@
 import json
 import numpy as np
 from training.fast_physics.vehicle_family import VehicleFamilyEnv
+from training.fast_physics.diagnostics import diagnose_environment
 
 _env = None
 _last_obs = None
@@ -84,3 +85,8 @@ def engine_metadata():
         "randomization": _env.randomize,
         "curriculum_stage": _env.curriculum_stage,
     }))
+
+def engine_diagnostics():
+    if _env is None:
+        return json.dumps([{"level":"error","code":"env.not_initialized","message":"محیط هنوز مقداردهی اولیه نشده است"}], ensure_ascii=False)
+    return json.dumps(diagnose_environment(_env), ensure_ascii=False)
