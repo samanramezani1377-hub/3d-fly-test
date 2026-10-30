@@ -11,15 +11,18 @@ STABLE_ALTITUDE_ERROR_M = 0.15
 STABLE_HORIZONTAL_ERROR_M = 0.20
 STABLE_SPEED_M_S = 0.35
 STABLE_TILT_RAD = 0.25
+STABLE_ANGULAR_RATE_RAD_S = 0.5
 STABLE_HOVER_SECONDS = 5.0
 
 
 def stable_hover(info):
     velocity = info.get("state_velocity_m_s", [float("inf")] * 3)
     attitude = info.get("attitude_rad", [float("inf")] * 3)
+    angular_rate = info.get("angular_velocity_rad_s", [float("inf")] * 3)
     try:
         speed_sq = sum(float(v) ** 2 for v in velocity)
         tilt = max(abs(float(attitude[0])), abs(float(attitude[1])))
+        angular_rate_sq = sum(float(v) ** 2 for v in angular_rate)
         return bool(
             info.get("has_taken_off", False)
             and not info.get("crashed", False)
@@ -27,6 +30,7 @@ def stable_hover(info):
             and float(info.get("horizontal_error_m", float("inf"))) <= STABLE_HORIZONTAL_ERROR_M
             and speed_sq <= STABLE_SPEED_M_S ** 2
             and tilt <= STABLE_TILT_RAD
+            and angular_rate_sq <= STABLE_ANGULAR_RATE_RAD_S ** 2
             and info.get("state_finite", True)
         )
     except (TypeError, ValueError, IndexError):
@@ -151,6 +155,7 @@ def main(argv=None):
             "horizontal_error_m_max": STABLE_HORIZONTAL_ERROR_M,
             "speed_m_s_max": STABLE_SPEED_M_S,
             "absolute_roll_pitch_rad_max": STABLE_TILT_RAD,
+            "angular_rate_rad_s_max": STABLE_ANGULAR_RATE_RAD_S,
             "requires_takeoff": True,
             "crash_allowed": False,
         },
