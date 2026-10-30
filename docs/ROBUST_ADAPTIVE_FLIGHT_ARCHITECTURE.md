@@ -277,6 +277,8 @@ Keep three non-overlapping scenario sets:
 - Validation: different seeds and held-out combinations for model selection;
 - Unseen test: configurations and disturbance combinations never used during training or tuning.
 
+The dedicated `training/evaluate_robust_ppo.py` script evaluates checkpoints on held-out episode seeds and writes per-episode plus aggregate reports. The curriculum runner invokes it after every stage. These are held-out random seeds from the declared distribution, not proof of extrapolation outside the configured ranges.
+
 Report at minimum:
 
 - takeoff and sustained-hover success rates;
@@ -331,6 +333,7 @@ If the model is outside the validated parameter envelope, the correct response i
 | Four-frame state/action history + sensor noise | Implemented |
 | Online effective-lift response estimator | Implemented (approximate; not unique physical identification) |
 | Four-stage chained PPO curriculum | Implemented (fixed stage sequence) |
+| Held-out randomized scenario evaluator | Implemented (seed-separated, same configured bounds) |
 | New PPO training entry point | Implemented; calibration-gated by default |
 | Synthetic software-only mode | Implemented; explicit opt-in |
 | Automated unit tests | Added; CI result must be checked after push |

@@ -203,3 +203,6 @@ The v1 geometry is held fixed; mass, CG, inertia, motor effectiveness, voltage f
 Implementation status and limitations: [Robust/adaptive architecture](ROBUST_ADAPTIVE_FLIGHT_ARCHITECTURE.md).
 
 **Important:** the fast plant is a research approximation, not CFD or a validated model of the real aircraft. It has not yet been calibrated against thrust-stand measurements, verified mass properties or flight telemetry. Automatic curriculum scheduling, a dedicated online estimator, native-SkySim parity and physical validation remain future work. No model from this backend is cleared for real flight.
+
+
+The robust backend also now includes an online effective-lift RLS context estimator, configurable four-stage randomization, a chained curriculum runner and a held-out randomized-seed PPO evaluator. The evaluator reports success/crash/hover metrics per stage. Its held-out split uses different seeds within the same declared parameter bounds; out-of-range extrapolation remains a separate future test.

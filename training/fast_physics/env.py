@@ -202,6 +202,9 @@ class AdaptiveDroneEnv(gym.Env):
             "horizontal_error_m": horizontal_error,
             "scenario": dict(self._scenario_details),
             "online_estimator": self.estimator.diagnostics(),
+            "state_velocity_m_s": state[3:6].astype(float).tolist(),
+            "attitude_rad": state[6:9].astype(float).tolist(),
+            "angular_velocity_rad_s": state[9:12].astype(float).tolist(),
         }
         return obs, float(reward), terminated, truncated, info
 

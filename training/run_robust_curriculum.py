@@ -44,11 +44,26 @@ def main(argv=None):
         previous_model = output_dir / run_name / "final_model.zip"
         if not previous_model.is_file():
             raise RuntimeError(f"stage {stage} did not produce {previous_model}")
+        evaluation_path = output_dir / run_name / "held-out-evaluation.json"
+        evaluation_command = [
+            sys.executable, str(ROOT / "training" / "evaluate_robust_ppo.py"),
+            "--model", str(previous_model), "--episodes", "20",
+            "--seed", str(90_000 + stage * 1_000), "--output", str(evaluation_path),
+        ]
+        if args.software_only_synthetic_calibration:
+            evaluation_command.append("--software-only-synthetic-calibration")
+        subprocess.run(evaluation_command, cwd=ROOT, check=True)
+        import json
+        evaluation = json.loads(evaluation_path.read_text(encoding="utf-8"))
         stage_manifest.append({
             "stage": stage,
             "run_name": run_name,
             "model": str(previous_model),
             "initial_model": stage_manifest[-1]["model"] if stage_manifest else None,
+            "held_out_evaluation": str(evaluation_path),
+            "hover_success_rate": evaluation["hover_success_rate"],
+            "crash_rate": evaluation["crash_rate"],
+            "takeoff_success_rate": evaluation["takeoff_success_rate"],
         })
 
     import json
