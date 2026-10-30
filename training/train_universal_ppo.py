@@ -46,8 +46,12 @@ class BalancedProfileCallback(BaseCallback):
         selection_path = self.best_dir / "selection.json"
         if selection_path.is_file():
             saved = json.loads(selection_path.read_text(encoding="utf-8"))
-            self.best_score = tuple(saved.get("score", self.best_score))
-            self.best_report = saved.get("report")
+            saved_score = tuple(saved.get("score", ()))
+            # Old checkpoints used a different three-field score and are not
+            # comparable to the new sustained-hover/takeoff score.
+            if len(saved_score) == 4:
+                self.best_score = saved_score
+                self.best_report = saved.get("report")
 
     def _on_step(self):
         if self.n_calls % self.frequency:
