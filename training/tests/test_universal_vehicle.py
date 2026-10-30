@@ -10,6 +10,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "training"))
 
+from fast_physics.curriculum import randomization_for_stage
+from fast_physics.dynamics import FastQuadrotor
 from fast_physics.vehicle_family import (
     DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv, load_vehicle_profiles,
     profile_to_parameters, vehicle_feature_vector,
@@ -31,6 +33,43 @@ def test_profiles_build_valid_four_rotor_models():
         params.validate()
         assert len(params.rotor_positions_m) == 4
         assert params.inertia_matrix.shape == (3, 3)
+
+
+def test_every_profile_has_nominal_static_hover_equilibrium():
+    for profile in load_vehicle_profiles(DEFAULT_VEHICLE_FAMILY):
+        params = profile_to_parameters(profile)
+        hover_omega = np.sqrt(params.mass_kg * 9.80665 / (4.0 * params.thrust_coefficient_n_per_rad_s2))
+        assert 0.0 < hover_omega < params.max_rotor_speed_rad_s
+        command = np.full(4, hover_omega / params.max_rotor_speed_rad_s, dtype=np.float64)
+        plant = FastQuadrotor(params)
+        plant.reset(position=(0.0, 0.0, 1.0))
+        plant.motor_omega[:] = hover_omega
+        for _ in range(100):
+            state, telemetry = plant.step(command)
+        assert abs(float(state[2]) - 1.0) < 1e-5
+        assert np.linalg.norm(state[6:12]) < 1e-6
+        assert telemetry["total_thrust_n"] == pytest.approx(params.mass_kg * 9.80665, rel=1e-6)
+
+
+def test_all_curriculum_stages_preserve_minimum_hover_thrust_margin():
+    randomization_path = ROOT / "vehicle_models/smooth2_parametric/domain_randomization.json"
+    config = json.loads(randomization_path.read_text(encoding="utf-8"))
+    for profile in load_vehicle_profiles(DEFAULT_VEHICLE_FAMILY):
+        params = profile_to_parameters(profile)
+        nominal_twr = (
+            4.0 * params.thrust_coefficient_n_per_rad_s2 * params.max_rotor_speed_rad_s**2
+            / (params.mass_kg * 9.80665)
+        )
+        for stage_number in range(1, 5):
+            stage = randomization_for_stage(config, stage_number)
+            worst_mass = max(stage["mass"]["scale"])
+            worst_voltage = min(stage["battery"]["voltage_factor"])
+            worst_motor = min(stage["motor"]["effectiveness"])
+            worst_case_twr = nominal_twr * worst_voltage**2 * worst_motor / worst_mass
+            assert worst_case_twr > 1.05, (
+                f"{profile['vehicle_id']} stage {stage_number} has insufficient "
+                f"worst-case thrust-to-weight margin: {worst_case_twr:.3f}"
+            )
 
 
 def test_descriptor_is_fixed_size_finite_and_vehicle_specific():
