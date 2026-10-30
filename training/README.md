@@ -301,9 +301,9 @@ provisional estimates until measured and independently calibrated.
 
 ### Current PPO training mode: takeoff and sustained-hover foundation
 
-The existing universal PPO workflow is temporarily configured to train **stage 1 only**. Stages 2–5 remain in the curriculum runner and are dormant by default; they are not deleted. Reactivate them later with `--active-stages 5` after the stage-1 checkpoint meets the takeoff and sustained-hover goals.
+The manual universal PPO workflow is temporarily configured to train **stage 1 only**. Stages 2–5 remain in the curriculum runner and are dormant by default; they are not deleted. Reactivate them later with `--active-stages 5` after the stage-1 checkpoint meets the takeoff and sustained-hover goals.
 
-The current GitHub Actions manual run uses 2,000,000 aggregate environment transitions and 32 parallel environments. Its isolated checkpoint prefix is `universal-quad-v5-foundation`, so it does not mix with earlier v5 checkpoints or manifests. The held-out release evaluation is deferred until all five stages are explicitly activated.
+The current manually dispatched GitHub Actions run uses 2,000,000 aggregate environment transitions and 32 parallel environments. Its isolated checkpoint prefix is `universal-quad-v5-foundation`, so it does not mix with earlier v5 checkpoints or manifests. The held-out release evaluation is deferred until all five stages are explicitly activated.
 
 The trainer prints a `[PPO_SPEED]` line at each PPO rollout boundary. It reports rollout transitions/sec and cumulative average transitions/sec across all parallel environments. These records are streamed into the same GitHub Actions job log and retained in `single-stage-training.log`.
 
