@@ -22,6 +22,7 @@ def main(argv=None):
     if args.timesteps_per_stage <= 0 or args.n_envs <= 0:
         raise SystemExit("timesteps and n-envs must be positive")
 
+    output_dir = args.output_dir if args.output_dir.is_absolute() else ROOT / args.output_dir
     previous_model = None
     stage_manifest = []
     for stage in range(1, 5):
@@ -32,7 +33,7 @@ def main(argv=None):
             "--n-envs", str(args.n_envs),
             "--seed", str(args.seed + stage - 1),
             "--run-name", run_name,
-            "--output-dir", str(args.output_dir),
+            "--output-dir", str(output_dir),
             "--curriculum-stage", str(stage),
         ]
         if previous_model is not None:
@@ -40,7 +41,7 @@ def main(argv=None):
         if args.software_only_synthetic_calibration:
             command.append("--software-only-synthetic-calibration")
         subprocess.run(command, cwd=ROOT, check=True)
-        previous_model = args.output_dir / run_name / "final_model.zip"
+        previous_model = output_dir / run_name / "final_model.zip"
         if not previous_model.is_file():
             raise RuntimeError(f"stage {stage} did not produce {previous_model}")
         stage_manifest.append({
@@ -60,7 +61,7 @@ def main(argv=None):
         "simulation_only": True,
         "physical_flight_eligible": False,
     }
-    output = args.output_dir / f"{args.run_prefix}-curriculum-manifest.json"
+    output = output_dir / f"{args.run_prefix}-curriculum-manifest.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(f"Curriculum complete; manifest: {output}")
