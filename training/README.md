@@ -122,7 +122,7 @@ python -m pip install -r training/requirements.txt
 python training/train_universal_ppo.py --timesteps 200000 --n-envs 4 --run-name universal-quad-baseline
 ```
 
-The environment samples a vehicle profile at episode reset. The policy observation contains the existing state/action history and online effective-lift estimator context plus twelve normalized nominal hardware/provenance features (mass, arm radius, propeller diameter, motor speed/thrust/torque response, battery voltage/capacity and KV). Episode-randomized ground-truth mass, CG, inertia and actuator effectiveness remain hidden. This deliberately distinguishes declared setup values from uncertain episode physics.
+The trainer periodically evaluates a balanced-randomized vehicle family and stores the highest-mean-reward checkpoint at `best/best_model.zip`; the terminal training snapshot is saved separately as `final_model.zip`. The environment samples a vehicle profile at episode reset. The policy observation contains the existing state/action history and online effective-lift estimator context plus twelve normalized nominal hardware/provenance features (mass, arm radius, propeller diameter, motor speed/thrust/torque response, battery voltage/capacity and KV). Episode-randomized ground-truth mass, CG, inertia and actuator effectiveness remain hidden. This deliberately distinguishes declared setup values from uncertain episode physics.
 
 ### Four-stage universal curriculum
 
@@ -130,12 +130,12 @@ The environment samples a vehicle profile at episode reset. The policy observati
 python training/run_universal_curriculum.py --timesteps-per-stage 200000 --n-envs 4
 ```
 
-Each stage starts from the previous stage's checkpoint. It writes a per-stage checkpoint, metadata, held-out per-profile evaluation and a final curriculum manifest. Stage ranges are inherited from `vehicle_models/smooth2_parametric/domain_randomization.json`; the actuator, voltage and mass bounds are constrained so the four provisional profiles retain a nominal worst-case thrust-to-weight ratio above 1.05 in the simplified model. These remain provisional software ranges, not structural or electrical operating limits.
+Each stage starts from the previous stage's best evaluated checkpoint (`best/best_model.zip`), not the last training snapshot. Both best and final checkpoints, metadata, held-out per-profile evaluation and a final curriculum manifest are retained. Stage ranges are inherited from `vehicle_models/smooth2_parametric/domain_randomization.json`; the actuator, voltage and mass bounds are constrained so the four provisional profiles retain a nominal worst-case thrust-to-weight ratio above 1.05 in the simplified model. These remain provisional software ranges, not structural or electrical operating limits.
 
 ### Evaluate per airframe
 
 ```bash
-python training/evaluate_universal_ppo.py --model training/runs/universal-quad-baseline/final_model.zip --episodes 20
+python training/evaluate_universal_ppo.py --model training/runs/universal-quad-baseline/best/best_model.zip --episodes 20
 ```
 
 To evaluate only one profile, repeat `--vehicle-id <id>`. To add a new airframe, copy `vehicle_models/family/vehicle_config_template.json`, fill the known required fields (mass, frame geometry, rotor locations, motor KV and nominal battery voltage) and use the resulting JSON as `--vehicle-family`. A single profile JSON or a family JSON containing a `profiles` array is accepted. The loader rejects missing mass, geometry, rotor coordinates, motor KV or nominal battery voltage. Unknown inertia, loaded RPM, thrust coefficient, torque ratio and motor lag may receive explicit provisional estimates, recorded in the profile metadata and exposed to the policy as uncertainty/provenance features.
