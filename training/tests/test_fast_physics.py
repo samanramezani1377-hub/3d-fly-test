@@ -223,3 +223,22 @@ def test_online_estimator_uses_sensor_measurement_not_simulator_truth():
         )
     finally:
         env.close()
+
+
+
+def test_a2212_catalog_reference_is_recorded_without_claiming_physical_calibration():
+    motor = json.loads(
+        (ROOT / "vehicle_models/components/a2212_1000kv_motor.json").read_text(encoding="utf-8")
+    )
+    calibration = json.loads(CALIBRATION.read_text(encoding="utf-8"))
+    assert motor["identity"]["kv_rpm_per_volt"] == 1000
+    assert motor["confirmed_or_repeated_catalog_values"]["no_load_current_a_at_10v"] == pytest.approx(0.5)
+    assert motor["confirmed_or_repeated_catalog_values"]["internal_resistance_ohm_catalog"] == pytest.approx(0.09)
+    assert len(motor["published_static_test_points"]) >= 2
+    assert calibration["motor_propeller"]["kv_rpm_per_volt"] == 1000
+    assert calibration["motor_propeller"]["max_rotor_speed_rad_s"] is None
+    assert calibration["motor_propeller"]["thrust_coefficient_n_per_rad_s2"] is None
+    assert calibration["motor_propeller"]["torque_to_thrust_m"] is None
+    assert calibration["motor_propeller"]["motor_time_constant_s"] is None
+    with pytest.raises(ValueError, match="Physical calibration is incomplete"):
+        load_vehicle_parameters(AIRFRAME, CALIBRATION)
