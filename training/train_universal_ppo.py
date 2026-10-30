@@ -164,7 +164,10 @@ def main(argv=None):
                 ent_coef=0.005, verbose=1, seed=args.seed, device="cpu",
                 tensorboard_log=str(run_dir / "tensorboard"),
             )
-        remaining = max(args.timesteps - int(model.num_timesteps), 0) if args.load_model else args.timesteps
+        # Each curriculum stage gets its own additional training budget. PPO.load() preserves
+        # the cumulative timestep counter, so subtracting it from this stage's budget can
+        # skip learning and all evaluation callbacks in stages 2-5.
+        remaining = args.timesteps
         if remaining:
             model.learn(total_timesteps=remaining, callback=eval_callback,
                         progress_bar=False, reset_num_timesteps=not bool(args.load_model))
