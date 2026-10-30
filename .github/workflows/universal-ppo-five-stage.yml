@@ -25,7 +25,16 @@ on:
       - ".github/workflows/**"
   pull_request:
     paths:
-      - "training/**"
+      - "training/fast_physics/**"
+      - "training/tests/**"
+      - "training/train_universal_ppo.py"
+      - "training/run_universal_curriculum.py"
+      - "training/evaluate_universal_ppo.py"
+      - "training/native_env.py"
+      - "training/run_five_stage.py"
+      - "training/select_checkpoint.py"
+      - "training/test_reward_design.py"
+      - "training/requirements.txt"
       - "vehicle_models/family/**"
       - "vehicle_models/smooth2_parametric/domain_randomization.json"
       - "assets/preflight/**"
