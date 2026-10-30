@@ -371,3 +371,81 @@ HiModel publishes static test points at 11.1V: a GWS 9x4.7 prop at 7.5A typical 
 **Important model boundary:** KV is a no-load speed constant, not a loaded RPM guarantee. The model therefore records KV but leaves `max_rotor_speed_rad_s`, `thrust_coefficient_n_per_rad_s2`, `torque_to_thrust_m`, and the motor time constant unset. The previously stored 0.045s motor lag was an unvalidated default; this profile does not promote it to a measured value. The fast-physics loader must continue to fail closed for physical calibration until mass/CG/inertia and exact motor/ESC/battery/propeller response are measured.
 
 Before using the motor data for aircraft-specific simulation, identify the exact vendor/lot and run a guarded thrust-stand characterization of the actual motor, ESC, battery and propeller. Record voltage, current, RPM, thrust, torque and temperature over multiple steady operating points, plus step response for actuator lag. Never infer thrust or reaction torque coefficients by fitting across the mixed vendor points above.
+
+
+## 15. Universal hardware-conditioned policy and vehicle family
+
+The new universal path is additive and intentionally separate from the earlier smooth2-only PPO entry point.
+
+### Vehicle profile library
+
+`vehicle_models/family/vehicle_profiles.json` contains four starting profiles: the current smooth2/A2212 reference, a generic 5-inch quad, a generic 7-inch long-range quad, and a generic 3-inch cinewhoop. All four are labelled `provisional_estimate`. The generic profiles are not tied to specific verified bills of materials. Their masses, inertias, motor constants, propeller coefficients and battery values are plausible software starting points only.
+
+A custom vehicle is represented by `vehicle_models/family/vehicle_config_template.json`. Required inputs include:
+- complete takeoff mass, including battery and payload;
+- centre of mass in the simulator body frame;
+- positive-definite diagonal or full 3x3 inertia tensor;
+- four motor locations and verified spin signs;
+- propeller diameter and motor/propeller performance parameters;
+- nominal battery voltage and capacity;
+- evidence/source notes and calibration status.
+
+The loader accepts either one profile object or a family object with a profiles array. It fails closed for missing required fields, non-four-rotor geometry, invalid inertia, or invalid dimensions. The template intentionally contains nulls and is not loadable until completed.
+
+### Policy hardware conditioning
+
+`training/fast_physics/vehicle_family.py` wraps the existing Gymnasium plant. At each episode reset it selects a vehicle profile (or pins one when requested), builds a vehicle-specific set of physical parameters and appends ten normalized nominal configuration features to the observation:
+1. nominal mass;
+2. rotor arm radius;
+3. propeller diameter;
+4. maximum rotor angular speed;
+5. thrust coefficient;
+6. torque-to-thrust ratio;
+7. motor time constant;
+8. nominal battery voltage;
+9. battery capacity;
+10. motor KV.
+
+The policy receives the declared configuration. It does not receive the simulator's randomized episode ground truth. The existing history and online effective-lift estimator remain in place. This allows the same policy architecture to learn how nominal configuration changes its control response, while the history/estimator helps it adapt to deviations from nominal values.
+
+The current observation length for four history frames changes from 66 to 76. A universal checkpoint is not interchangeable with the earlier 66-feature smooth2-only checkpoint.
+
+### Universal training, curriculum and evaluation
+
+New entry points:
+- `training/train_universal_ppo.py`: PPO training over the vehicle family;
+- `training/run_universal_curriculum.py`: four chained training stages, each initialized from the prior stage's checkpoint;
+- `training/evaluate_universal_ppo.py`: held-out evaluation reported separately for each vehicle profile.
+
+The family sampler selects a vehicle per episode. Episode randomization continues to perturb mass, CG, inertia, motor effectiveness, battery voltage, drag, wind and sensor noise. Training metadata records the profile identities and the simulation-only boundary.
+
+### Deployment/configuration workflow target
+
+For a new aircraft, the intended software workflow is:
+1. Create a profile from the template and enter exact known specifications with units and source records.
+2. Validate geometry, frame convention, rotor numbering, mass, CG and inertia; reject inconsistent inputs.
+3. Load the universal checkpoint and condition it on the declared vehicle features.
+4. Run vehicle-specific simulation and held-out stress scenarios before any hardware test.
+5. Perform guarded system identification using measured RPM, voltage, current, thrust and torque; estimate effective response and uncertainty rather than assuming KV uniquely determines loaded motor performance.
+6. Keep the online estimator bounded and confidence-aware. If the aircraft lies outside the validated profile envelope or the estimator confidence is low, inhibit control/abort rather than extrapolating silently.
+7. Only after independent engineering validation, proceed through controlled bench and tethered test gates with independent failsafe and qualified supervision.
+
+This is a target workflow, not a completed autopilot deployment stack. The current estimator estimates effective collective lift response only; it does not uniquely recover mass, motor degradation, battery sag, wind or all inertia terms. The universal policy is not authorized for real flight.
+
+## 16. Current universal-path status
+
+| Capability | Status |
+|---|---|
+| Four provisional quadrotor profiles | Implemented |
+| User vehicle configuration template | Implemented |
+| Strict profile and inertia validation | Implemented |
+| Per-episode vehicle profile selection | Implemented |
+| Nominal hardware features in policy observation | Implemented |
+| Hidden episode-level parameter randomization | Implemented |
+| Universal PPO training entry point | Implemented; not yet trained |
+| Four-stage checkpoint handoff | Implemented; not yet executed |
+| Per-profile held-out evaluation script | Implemented; not yet run |
+| Automatic identification of full mass/CG/inertia/rotor curves | Not implemented |
+| Real-time motor/ESC/battery safety supervisor | Not implemented |
+| Native SkySim universal-policy adapter | Not implemented |
+| Real-hardware validation or flight clearance | Not performed |
