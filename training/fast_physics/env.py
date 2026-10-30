@@ -112,10 +112,19 @@ class AdaptiveDroneEnv(gym.Env):
         return measured
 
     def _policy_frame(self, state: np.ndarray, measured: np.ndarray | None = None) -> np.ndarray:
+        """Return dimensionless, bounded-scale state features for PPO."""
         if measured is None:
             measured = self._measure_state(state)
-        relative = measured[:3].astype(np.float32) - self.target.astype(np.float32)
-        return np.concatenate((relative, measured[3:12], self._last_action)).astype(np.float32)
+        relative = (measured[:3].astype(np.float32) - self.target.astype(np.float32)) / np.array(
+            [2.0, 2.0, 2.0], dtype=np.float32
+        )
+        velocity = measured[3:6].astype(np.float32) / 5.0
+        attitude = measured[6:9].astype(np.float32) / np.pi
+        angular_rate = measured[9:12].astype(np.float32) / 10.0
+        previous_motor_commands = 2.0 * self._last_action.astype(np.float32) - 1.0
+        return np.concatenate(
+            (relative, velocity, attitude, angular_rate, previous_motor_commands)
+        ).astype(np.float32)
 
     def _observation(self) -> np.ndarray:
         if not self._history:
@@ -147,6 +156,23 @@ class AdaptiveDroneEnv(gym.Env):
             raise ValueError("environment.wind_component_m_s lower bound must not exceed upper bound")
         wind = self.np_random.uniform(wind_low, wind_high, size=3) if self.randomize else np.zeros(3)
         state = self.plant.reset(wind=wind)
+        # Progressive ground-start perturbations: retain the takeoff task while
+        # gradually teaching recovery from small initial attitude/position errors.
+        stage_info = self.active_randomization.get("active_curriculum_stage") or {}
+        stage_number = int(stage_info.get("stage", 1))
+        perturbation = {
+            1: (0.00, 0.00), 2: (0.02, 0.02), 3: (0.04, 0.04),
+            4: (0.07, 0.07), 5: (0.10, 0.10),
+        }.get(stage_number, (0.0, 0.0))
+        position_bound_m, attitude_bound_rad = perturbation
+        if self.randomize and position_bound_m > 0:
+            self.plant.position[:2] = self.np_random.uniform(
+                -position_bound_m, position_bound_m, size=2
+            )
+            self.plant.attitude[:2] = self.np_random.uniform(
+                -attitude_bound_rad, attitude_bound_rad, size=2
+            )
+            state = self.plant.state()
         measured = self._measure_state(state)
         self.estimator.reset(float(measured[5]))
         self._history.clear()
@@ -166,6 +192,12 @@ class AdaptiveDroneEnv(gym.Env):
             "wind_m_s": wind.tolist(),
             "policy_observation_excludes_privileged_parameters": True,
             "curriculum_stage": self.active_randomization.get("active_curriculum_stage"),
+            "initial_position_xy_m": self.plant.position[:2].astype(float).tolist(),
+            "initial_roll_pitch_rad": self.plant.attitude[:2].astype(float).tolist(),
+            "initial_state_perturbation": {
+                "position_bound_m": position_bound_m,
+                "attitude_bound_rad": attitude_bound_rad,
+            },
         }
         return self._observation(), info
 
