@@ -67,8 +67,8 @@ class HoverReferenceController:
             raise ValueError("rotor geometry does not provide a full-rank four-axis allocation")
         return matrix
 
-    def act(self, state: np.ndarray) -> np.ndarray:
-        """Return four normalized motor commands for one 12-value plant state."""
+    def desired_wrench(self, state: np.ndarray) -> np.ndarray:
+        """Return oracle [collective, roll, pitch, yaw] wrench for a plant state."""
         s = np.asarray(state, dtype=np.float64)
         if s.shape != (12,) or not np.all(np.isfinite(s)):
             raise ValueError("state must be a finite 12-value vector")
@@ -120,14 +120,19 @@ class HoverReferenceController:
         collective = float(np.clip(collective, 0.0, 4.0 * p.thrust_coefficient_n_per_rad_s2
                                    * (p.max_rotor_speed_rad_s * p.voltage_factor) ** 2
                                    * max(p.motor_effectiveness)))
-        desired_wrench = np.array([collective, torque[0], torque[1], torque[2]], dtype=np.float64)
+        return np.array([collective, torque[0], torque[1], torque[2]], dtype=np.float64)
+
+    def act(self, state: np.ndarray) -> np.ndarray:
+        """Return four normalized motor commands for the legacy oracle benchmark."""
+        desired_wrench = self.desired_wrench(state)
         rotor_thrust = np.linalg.solve(self.allocation, desired_wrench)
-        max_thrust = p.thrust_coefficient_n_per_rad_s2 * (
-            p.max_rotor_speed_rad_s * p.voltage_factor
-        ) ** 2 * np.asarray(p.motor_effectiveness, dtype=np.float64)
+        max_thrust = self.params.thrust_coefficient_n_per_rad_s2 * (
+            self.params.max_rotor_speed_rad_s * self.params.voltage_factor
+        ) ** 2 * np.asarray(self.params.motor_effectiveness, dtype=np.float64)
         rotor_thrust = np.clip(rotor_thrust, 0.0, max_thrust)
         omega = np.sqrt(rotor_thrust / (
-            p.thrust_coefficient_n_per_rad_s2 * np.asarray(p.motor_effectiveness, dtype=np.float64)
+            self.params.thrust_coefficient_n_per_rad_s2
+            * np.asarray(self.params.motor_effectiveness, dtype=np.float64)
         ))
-        commands = omega / (p.max_rotor_speed_rad_s * p.voltage_factor)
+        commands = omega / (self.params.max_rotor_speed_rad_s * self.params.voltage_factor)
         return np.clip(commands, 0.0, 1.0).astype(np.float32)
