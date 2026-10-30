@@ -17,10 +17,20 @@ from fast_physics.vehicle_family import DEFAULT_RANDOMIZATION, DEFAULT_VEHICLE_F
 
 
 def run_episode(env, seed: int, settle_seconds: float, success_altitude_error: float,
-                success_horizontal_error: float, success_tilt_rad: float):
+                success_horizontal_error: float, success_tilt_rad: float, start_at_target: bool = False):
     obs, reset_info = env.reset(seed=seed)
     del obs
     plant = env.inner.plant
+    if start_at_target:
+        plant.position[:] = env.inner.target
+        plant.velocity[:] = 0.0
+        plant.attitude[:] = 0.0
+        plant.angular_velocity[:] = 0.0
+        plant.motor_omega[:] = np.sqrt(
+            plant.params.mass_kg * 9.80665
+            / (4.0 * plant.params.thrust_coefficient_n_per_rad_s2
+               * np.asarray(plant.params.motor_effectiveness, dtype=np.float64))
+        )
     controller = HoverReferenceController(plant.params, target_position=env.inner.target, wind_m_s=plant.wind)
     required_steps = int(round(settle_seconds / env.inner.dt))
     stable_steps = 0
@@ -69,6 +79,7 @@ def main(argv=None):
     parser.add_argument("--max-steps", type=int, default=1500)
     parser.add_argument("--settle-seconds", type=float, default=5.0)
     parser.add_argument("--randomize", action="store_true")
+    parser.add_argument("--start-at-target", action="store_true", help="Initialize at target altitude with nominal hover rotor speed; tests hover hold, not takeoff.")
     parser.add_argument("--wind-max", type=float, default=None, help="Override symmetric Stage 4 wind-component bound in m/s.")
     parser.add_argument("--output", type=Path, default=Path("training/runs/hover-reference-report.json"))
     args = parser.parse_args(argv)
@@ -100,7 +111,7 @@ def main(argv=None):
         try:
             episodes = [
                 run_episode(env, args.seed + profile_index * 10000 + episode,
-                            args.settle_seconds, 0.15, 0.20, 0.25)
+                            args.settle_seconds, 0.15, 0.20, 0.25, args.start_at_target)
                 for episode in range(args.episodes)
             ]
         finally:
@@ -117,6 +128,7 @@ def main(argv=None):
         "controller": "cascaded_pid_with_wrench_allocation",
         "controller_class": "privileged_parameter_oracle_reference_only",
         "randomized": args.randomize,
+        "start_at_target": args.start_at_target,
         "stage4_wind_component_max_m_s": args.wind_max if args.wind_max is not None else (2.0 if args.randomize else 0.0),
         "episodes_per_vehicle": args.episodes,
         "settle_seconds": args.settle_seconds,
