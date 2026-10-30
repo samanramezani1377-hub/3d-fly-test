@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PIPELINE_VERSION = 3
+PIPELINE_VERSION = 4
 
 
 def load_profile_ids(path):
@@ -50,7 +50,7 @@ def main(argv=None):
     p.add_argument("--max-final-crash-rate", type=float, default=0.25)
     p.add_argument("--min-final-takeoff-rate", type=float, default=0.75)
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--run-prefix", default="universal-quad-v3")
+    p.add_argument("--run-prefix", default="universal-quad-v4")
     p.add_argument("--output-dir", type=Path, default=Path("training/runs"))
     p.add_argument("--vehicle-family", type=Path,
                    default=ROOT / "vehicle_models/family/vehicle_profiles.json")
@@ -103,6 +103,9 @@ def main(argv=None):
             "stages": [],
             "checkpoint_handoff": "previous_stage_best_evaluated_checkpoint",
             "resume_policy": "same-stage latest checkpoint only; full fresh budget for each new stage",
+            "action_semantics": "collective-thrust-plus-body-torque-allocation-v1",
+            "observation_scaling": "dimensionless-state-history-v1",
+            "progressive_initial_recovery": "ground-start-with-stage-scaled-position-and-attitude-perturbations",
             "simulation_only": True,
             "physical_flight_eligible": False,
         }
