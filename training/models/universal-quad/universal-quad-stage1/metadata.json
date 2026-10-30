@@ -1,0 +1,52 @@
+{
+  "run_name": "universal-quad-stage1",
+  "created_at": "2026-10-30T18:21:12.172483+00:00",
+  "timesteps": 200000,
+  "n_envs": 4,
+  "seed": 42,
+  "evaluation_frequency_aggregate_steps": 20000,
+  "evaluation_episodes": 5,
+  "best_checkpoint": "/home/runner/work/3d-fly-test/3d-fly-test/training/runs/universal-quad-stage1/best/best_model.zip",
+  "balanced_selection_score": [
+    0.0,
+    -1.0,
+    198.98574640433986
+  ],
+  "balanced_selection_report": "profile-evaluation-200000.json",
+  "checkpoint_selection": "max_min_profile_success_then_min_worst_crash_then_mean_return",
+  "history_length": 4,
+  "curriculum_stage": 1,
+  "initial_model": null,
+  "domain_randomization": true,
+  "vehicle_family_file": "/home/runner/work/3d-fly-test/3d-fly-test/vehicle_models/family/vehicle_profiles.json",
+  "vehicle_profiles": [
+    {
+      "vehicle_id": "smooth2-a2212-custom-prop",
+      "calibration_status": "provisional_estimate",
+      "parameter_source": "CAD-derived rotor geometry plus synthetic mass, inertia and propulsion coefficients for software training"
+    },
+    {
+      "vehicle_id": "generic-5inch-quad",
+      "calibration_status": "provisional_estimate",
+      "parameter_source": "Generic 5-inch class engineering estimate; not tied to a verified bill of materials"
+    },
+    {
+      "vehicle_id": "generic-7inch-long-range",
+      "calibration_status": "provisional_estimate",
+      "parameter_source": "Generic 7-inch class engineering estimate; not tied to a verified bill of materials"
+    },
+    {
+      "vehicle_id": "generic-3inch-cinewhoop",
+      "calibration_status": "provisional_estimate",
+      "parameter_source": "Generic ducted 3-inch class engineering estimate; not tied to a verified bill of materials"
+    }
+  ],
+  "policy_observation": "state/action history + online lift estimate/confidence + 12 normalized nominal hardware features",
+  "policy_is_hardware_conditioned": true,
+  "episode_randomization_ground_truth_is_hidden": true,
+  "physics_backend": "training.fast_physics.FastQuadrotor",
+  "stable_baselines3_version": "2.9.2",
+  "simulation_only": true,
+  "physical_flight_eligible": false,
+  "warning": "Provisional profiles and this policy are not approved for physical flight."
+}

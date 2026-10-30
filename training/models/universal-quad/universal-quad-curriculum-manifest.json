@@ -1,0 +1,1496 @@
+{
+  "stages": [
+    {
+      "stage": 1,
+      "completed": true,
+      "final_checkpoint": "/home/runner/work/3d-fly-test/3d-fly-test/training/runs/universal-quad-stage1/final_model.zip",
+      "selected_best_checkpoint": "/home/runner/work/3d-fly-test/3d-fly-test/training/runs/universal-quad-stage1/best/best_model.zip",
+      "evaluation": "/home/runner/work/3d-fly-test/3d-fly-test/training/runs/universal-quad-stage1/held-out-evaluation.json",
+      "profiles": [
+        {
+          "vehicle_id": "smooth2-a2212-custom-prop",
+          "calibration_status": "provisional_estimate",
+          "episodes": [
+            {
+              "seed": 91000,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 636,
+              "mean_reward": 1.3004793833340218,
+              "final_altitude_error_m": 0.9928681943565607,
+              "final_horizontal_error_m": 6.487035689892532,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 11.322793231710403,
+                "vertical_acceleration_bias_m_s2": 3.4559504458288646,
+                "confidence": 0.8807620406150818,
+                "residual_ema_m_s2": 0.5559220664964596,
+                "samples": 636
+              },
+              "completed": false
+            },
+            {
+              "seed": 91001,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 214,
+              "mean_reward": -0.23110373139306015,
+              "final_altitude_error_m": 2.689138889312744,
+              "final_horizontal_error_m": 2.1327458984201586,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 12.266108494354567,
+                "vertical_acceleration_bias_m_s2": 0.1397464331772565,
+                "confidence": 0.8546388745307922,
+                "residual_ema_m_s2": 0.6741387965509786,
+                "samples": 214
+              },
+              "completed": false
+            },
+            {
+              "seed": 91002,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 436,
+              "mean_reward": 0.346407117423367,
+              "final_altitude_error_m": 0.9805709384381771,
+              "final_horizontal_error_m": 4.386297818167063,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 10.745099189185408,
+                "vertical_acceleration_bias_m_s2": 2.839607552477724,
+                "confidence": 0.8849733471870422,
+                "residual_ema_m_s2": 0.938498850425091,
+                "samples": 436
+              },
+              "completed": false
+            },
+            {
+              "seed": 91003,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 122,
+              "mean_reward": 0.022542929918635816,
+              "final_altitude_error_m": 0.9755298420786858,
+              "final_horizontal_error_m": 1.2137197513172804,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 11.793162632227556,
+                "vertical_acceleration_bias_m_s2": 1.9888656369432804,
+                "confidence": 0.7702261209487915,
+                "residual_ema_m_s2": 0.9887416652570189,
+                "samples": 122
+              },
+              "completed": false
+            },
+            {
+              "seed": 91004,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 228,
+              "mean_reward": 0.309762689043742,
+              "final_altitude_error_m": 0.9828009400516748,
+              "final_horizontal_error_m": 0.2872522153655188,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 11.543357793594945,
+                "vertical_acceleration_bias_m_s2": 1.1448137242515906,
+                "confidence": 0.8268956542015076,
+                "residual_ema_m_s2": 0.5493670622090105,
+                "samples": 228
+              },
+              "completed": false
+            },
+            {
+              "seed": 91005,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 177,
+              "mean_reward": -0.655138668988197,
+              "final_altitude_error_m": 5.008708477020264,
+              "final_horizontal_error_m": 3.687255836762829,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 11.604020471020931,
+                "vertical_acceleration_bias_m_s2": 2.7561858596693973,
+                "confidence": 0.8264620900154114,
+                "residual_ema_m_s2": 0.9198248291465126,
+                "samples": 177
+              },
+              "completed": false
+            },
+            {
+              "seed": 91006,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 71,
+              "mean_reward": -0.5485775246550428,
+              "final_altitude_error_m": 0.9890823904424906,
+              "final_horizontal_error_m": 0.6115863545074328,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 12.57626606434763,
+                "vertical_acceleration_bias_m_s2": -0.19431629183211452,
+                "confidence": 0.6894258856773376,
+                "residual_ema_m_s2": 1.3321509595308316,
+                "samples": 71
+              },
+              "completed": false
+            },
+            {
+              "seed": 91007,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 222,
+              "mean_reward": 0.6122286118568009,
+              "final_altitude_error_m": 0.9902880769222975,
+              "final_horizontal_error_m": 0.3961673775923699,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 10.41563895617507,
+                "vertical_acceleration_bias_m_s2": 2.3980418029492965,
+                "confidence": 0.8362456560134888,
+                "residual_ema_m_s2": 0.4399031103332152,
+                "samples": 222
+              },
+              "completed": false
+            },
+            {
+              "seed": 91008,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 596,
+              "mean_reward": 1.1902829800277017,
+              "final_altitude_error_m": 0.985986459068954,
+              "final_horizontal_error_m": 5.554480023289504,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 10.75682079648141,
+                "vertical_acceleration_bias_m_s2": 2.761800266900774,
+                "confidence": 0.867182731628418,
+                "residual_ema_m_s2": 0.5398573243318524,
+                "samples": 596
+              },
+              "completed": false
+            },
+            {
+              "seed": 91009,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 482,
+              "mean_reward": -0.024820535168554647,
+              "final_altitude_error_m": 2.6924073696136475,
+              "final_horizontal_error_m": 4.533172155263517,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 9.358309641962807,
+                "vertical_acceleration_bias_m_s2": 2.67767745329779,
+                "confidence": 0.892159640789032,
+                "residual_ema_m_s2": 3.0058186397092364,
+                "samples": 482
+              },
+              "completed": false
+            },
+            {
+              "seed": 91010,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 241,
+              "mean_reward": 0.1622722688148317,
+              "final_altitude_error_m": 0.9778419695794582,
+              "final_horizontal_error_m": 2.8239306559631085,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 10.019248491355697,
+                "vertical_acceleration_bias_m_s2": 2.8554700336252496,
+                "confidence": 0.8460828065872192,
+                "residual_ema_m_s2": 0.7129703090425813,
+                "samples": 241
+              },
+              "completed": false
+            },
+            {
+              "seed": 91011,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 97,
+              "mean_reward": -0.36248075776458294,
+              "final_altitude_error_m": 0.9784622974693775,
+              "final_horizontal_error_m": 1.3827909670575627,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 12.246367163488934,
+                "vertical_acceleration_bias_m_s2": 1.8238319737468152,
+                "confidence": 0.7434132695198059,
+                "residual_ema_m_s2": 1.1770426576039656,
+                "samples": 97
+              },
+              "completed": false
+            },
+            {
+              "seed": 91012,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 86,
+              "mean_reward": -0.16987681701119114,
+              "final_altitude_error_m": 0.9849424185231328,
+              "final_horizontal_error_m": 0.4644830048790902,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 12.471391666674991,
+                "vertical_acceleration_bias_m_s2": 1.0531067660433244,
+                "confidence": 0.7175737619400024,
+                "residual_ema_m_s2": 0.9395842546636731,
+                "samples": 86
+              },
+              "completed": false
+            },
+            {
+              "seed": 91013,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 335,
+              "mean_reward": 0.31401174015964056,
+              "final_altitude_error_m": 0.9893642049282789,
+              "final_horizontal_error_m": 4.717657292625068,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 13.174238988301875,
+                "vertical_acceleration_bias_m_s2": 2.066019669273545,
+                "confidence": 0.8765916228294373,
+                "residual_ema_m_s2": 1.5721980042525874,
+                "samples": 335
+              },
+              "completed": false
+            },
+            {
+              "seed": 91014,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 170,
+              "mean_reward": 0.2027453267120856,
+              "final_altitude_error_m": 0.9773298818618059,
+              "final_horizontal_error_m": 1.0759754729551636,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 12.890785673879751,
+                "vertical_acceleration_bias_m_s2": 1.07755748347926,
+                "confidence": 0.7819337844848633,
+                "residual_ema_m_s2": 0.8020694627030004,
+                "samples": 170
+              },
+              "completed": false
+            },
+            {
+              "seed": 91015,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 186,
+              "mean_reward": 0.2850541567268632,
+              "final_altitude_error_m": 0.9780938662588596,
+              "final_horizontal_error_m": 0.8319844319098396,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 10.63019570692944,
+                "vertical_acceleration_bias_m_s2": 3.014292133151828,
+                "confidence": 0.8234145641326904,
+                "residual_ema_m_s2": 0.8943218694895694,
+                "samples": 186
+              },
+              "completed": false
+            },
+            {
+              "seed": 91016,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 93,
+              "mean_reward": -0.3206572391777943,
+              "final_altitude_error_m": 0.9774021934717894,
+              "final_horizontal_error_m": 0.7702774319440757,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 11.501088006665642,
+                "vertical_acceleration_bias_m_s2": 0.9532042843298009,
+                "confidence": 0.7321411371231079,
+                "residual_ema_m_s2": 0.8389397304069324,
+                "samples": 93
+              },
+              "completed": false
+            },
+            {
+              "seed": 91017,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 237,
+              "mean_reward": 0.5606501471852869,
+              "final_altitude_error_m": 0.9880157066509128,
+              "final_horizontal_error_m": 0.909954310086444,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 13.47296630768812,
+                "vertical_acceleration_bias_m_s2": 1.2414536477509728,
+                "confidence": 0.8438328504562378,
+                "residual_ema_m_s2": 0.6720910041581146,
+                "samples": 237
+              },
+              "completed": false
+            },
+            {
+              "seed": 91018,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 320,
+              "mean_reward": 0.9431453506101748,
+              "final_altitude_error_m": 0.9967766921035945,
+              "final_horizontal_error_m": 5.8011655643960705,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 12.153713320303957,
+                "vertical_acceleration_bias_m_s2": 2.124468596026192,
+                "confidence": 0.8425442576408386,
+                "residual_ema_m_s2": 0.6237379507453648,
+                "samples": 320
+              },
+              "completed": false
+            },
+            {
+              "seed": 91019,
+              "vehicle_id": "smooth2-a2212-custom-prop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 82,
+              "mean_reward": -0.41187054338760853,
+              "final_altitude_error_m": 0.9806598611176014,
+              "final_horizontal_error_m": 0.7536285316510619,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 12.498969845985616,
+                "vertical_acceleration_bias_m_s2": 0.5008265313477825,
+                "confidence": 0.7148875594139099,
+                "residual_ema_m_s2": 0.9736593290489968,
+                "samples": 82
+              },
+              "completed": false
+            }
+          ],
+          "hover_success_rate": 0.0,
+          "crash_rate": 1.0,
+          "completion_rate": 0.0
+        },
+        {
+          "vehicle_id": "generic-5inch-quad",
+          "calibration_status": "provisional_estimate",
+          "episodes": [
+            {
+              "seed": 91020,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 629,
+              "mean_reward": 0.9357505845489889,
+              "final_altitude_error_m": 1.0085242688655853,
+              "final_horizontal_error_m": 4.505696116974786,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 17.29242758123227,
+                "vertical_acceleration_bias_m_s2": 3.0530035626141987,
+                "confidence": 0.8923599720001221,
+                "residual_ema_m_s2": 0.7468625825008373,
+                "samples": 629
+              },
+              "completed": false
+            },
+            {
+              "seed": 91021,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 373,
+              "mean_reward": 0.6644883105389875,
+              "final_altitude_error_m": 1.0349590294063091,
+              "final_horizontal_error_m": 6.933186903203828,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 24.02909855209126,
+                "vertical_acceleration_bias_m_s2": -0.15444722160868557,
+                "confidence": 0.8796113133430481,
+                "residual_ema_m_s2": 0.8992098057420467,
+                "samples": 373
+              },
+              "completed": false
+            },
+            {
+              "seed": 91022,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 416,
+              "mean_reward": 0.9320945883266882,
+              "final_altitude_error_m": 0.9769665002822876,
+              "final_horizontal_error_m": 2.1583168522880656,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 21.03554235007981,
+                "vertical_acceleration_bias_m_s2": 0.8478393845641634,
+                "confidence": 0.8958421349525452,
+                "residual_ema_m_s2": 1.1537740771471003,
+                "samples": 416
+              },
+              "completed": false
+            },
+            {
+              "seed": 91023,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 540,
+              "mean_reward": 0.515588876535647,
+              "final_altitude_error_m": 1.0037608235143125,
+              "final_horizontal_error_m": 7.938892086698445,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 13.368494883396464,
+                "vertical_acceleration_bias_m_s2": 3.2259609167948495,
+                "confidence": 0.8616406917572021,
+                "residual_ema_m_s2": 0.5348763102336851,
+                "samples": 540
+              },
+              "completed": false
+            },
+            {
+              "seed": 91024,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 442,
+              "mean_reward": 1.0788564833594378,
+              "final_altitude_error_m": 0.9802199434489012,
+              "final_horizontal_error_m": 1.8394412474515442,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 18.696719606244745,
+                "vertical_acceleration_bias_m_s2": 0.9895806385672944,
+                "confidence": 0.8967670202255249,
+                "residual_ema_m_s2": 0.9110460719985889,
+                "samples": 442
+              },
+              "completed": false
+            },
+            {
+              "seed": 91025,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 341,
+              "mean_reward": 0.662206621836374,
+              "final_altitude_error_m": 0.9839359000325203,
+              "final_horizontal_error_m": 0.8824888315056701,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 13.697408033846862,
+                "vertical_acceleration_bias_m_s2": 2.153892442061237,
+                "confidence": 0.866544783115387,
+                "residual_ema_m_s2": 0.8087654355232902,
+                "samples": 341
+              },
+              "completed": false
+            },
+            {
+              "seed": 91026,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 617,
+              "mean_reward": 0.9624747842902741,
+              "final_altitude_error_m": 0.9759745392948389,
+              "final_horizontal_error_m": 4.07649915073552,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 16.100605776783215,
+                "vertical_acceleration_bias_m_s2": 3.8090764210624175,
+                "confidence": 0.8804681897163391,
+                "residual_ema_m_s2": 0.8321437624306102,
+                "samples": 617
+              },
+              "completed": false
+            },
+            {
+              "seed": 91027,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 308,
+              "mean_reward": 0.5144416027110984,
+              "final_altitude_error_m": 0.9923904538154602,
+              "final_horizontal_error_m": 7.100472349822875,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 18.208487480993952,
+                "vertical_acceleration_bias_m_s2": 1.0569513508294377,
+                "confidence": 0.8295376896858215,
+                "residual_ema_m_s2": 1.3656420736028032,
+                "samples": 308
+              },
+              "completed": false
+            },
+            {
+              "seed": 91028,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 674,
+              "mean_reward": 1.4533025247072788,
+              "final_altitude_error_m": 0.9810218270868063,
+              "final_horizontal_error_m": 4.949529564372769,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 16.794363847130107,
+                "vertical_acceleration_bias_m_s2": 1.2366757229846408,
+                "confidence": 0.8856856822967529,
+                "residual_ema_m_s2": 0.5523210116674178,
+                "samples": 674
+              },
+              "completed": false
+            },
+            {
+              "seed": 91029,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 616,
+              "mean_reward": 0.8685910540763824,
+              "final_altitude_error_m": 0.9756732452660799,
+              "final_horizontal_error_m": 2.4640725239072423,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 21.185679011143435,
+                "vertical_acceleration_bias_m_s2": 1.878107363387568,
+                "confidence": 0.9056452512741089,
+                "residual_ema_m_s2": 1.2110400999669206,
+                "samples": 616
+              },
+              "completed": false
+            },
+            {
+              "seed": 91030,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 485,
+              "mean_reward": 0.5983575370849621,
+              "final_altitude_error_m": 1.0019753454253078,
+              "final_horizontal_error_m": 6.680502741844126,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 25.984623823296765,
+                "vertical_acceleration_bias_m_s2": 2.772159040387106,
+                "confidence": 0.8391316533088684,
+                "residual_ema_m_s2": 0.6374608485086075,
+                "samples": 485
+              },
+              "completed": false
+            },
+            {
+              "seed": 91031,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 472,
+              "mean_reward": 0.718309931118031,
+              "final_altitude_error_m": 1.024582851678133,
+              "final_horizontal_error_m": 8.591453788069357,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 19.214215165850273,
+                "vertical_acceleration_bias_m_s2": 1.0836910418179344,
+                "confidence": 0.8887123465538025,
+                "residual_ema_m_s2": 1.906732500945858,
+                "samples": 472
+              },
+              "completed": false
+            },
+            {
+              "seed": 91032,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 493,
+              "mean_reward": 0.9108601802145119,
+              "final_altitude_error_m": 0.9799014125019312,
+              "final_horizontal_error_m": 4.834268029321856,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 18.151888125388215,
+                "vertical_acceleration_bias_m_s2": 2.973904931285823,
+                "confidence": 0.8697731494903564,
+                "residual_ema_m_s2": 0.5235153004620335,
+                "samples": 493
+              },
+              "completed": false
+            },
+            {
+              "seed": 91033,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 399,
+              "mean_reward": 1.0815051846918884,
+              "final_altitude_error_m": 0.9751696959137917,
+              "final_horizontal_error_m": 2.358305204325907,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 16.06725115782417,
+                "vertical_acceleration_bias_m_s2": 2.1658449346128394,
+                "confidence": 0.8848076462745667,
+                "residual_ema_m_s2": 0.860824023317661,
+                "samples": 399
+              },
+              "completed": false
+            },
+            {
+              "seed": 91034,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 446,
+              "mean_reward": 0.2908392312582154,
+              "final_altitude_error_m": 0.9896011091768742,
+              "final_horizontal_error_m": 8.223552279112477,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 21.173719886193485,
+                "vertical_acceleration_bias_m_s2": 2.665706630969278,
+                "confidence": 0.8352381587028503,
+                "residual_ema_m_s2": 0.7576990172591082,
+                "samples": 446
+              },
+              "completed": false
+            },
+            {
+              "seed": 91035,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 494,
+              "mean_reward": 0.6831185583667743,
+              "final_altitude_error_m": 1.0096101826056838,
+              "final_horizontal_error_m": 5.179580829920144,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 20.71284624973139,
+                "vertical_acceleration_bias_m_s2": 2.0395863476594362,
+                "confidence": 0.883224368095398,
+                "residual_ema_m_s2": 0.9625171463526733,
+                "samples": 494
+              },
+              "completed": false
+            },
+            {
+              "seed": 91036,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 148,
+              "mean_reward": 0.6722772167569836,
+              "final_altitude_error_m": 1.0106041636317968,
+              "final_horizontal_error_m": 1.8329058421700517,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 19.66719467548864,
+                "vertical_acceleration_bias_m_s2": 0.16700534963372993,
+                "confidence": 0.7974276542663574,
+                "residual_ema_m_s2": 0.8287802496703441,
+                "samples": 148
+              },
+              "completed": false
+            },
+            {
+              "seed": 91037,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 455,
+              "mean_reward": 0.31633835592898735,
+              "final_altitude_error_m": 0.9830039609223604,
+              "final_horizontal_error_m": 5.734824375217787,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 17.608515217812712,
+                "vertical_acceleration_bias_m_s2": 4.045340277468516,
+                "confidence": 0.8679693341255188,
+                "residual_ema_m_s2": 1.9511878023302032,
+                "samples": 455
+              },
+              "completed": false
+            },
+            {
+              "seed": 91038,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 603,
+              "mean_reward": 0.9417013314921194,
+              "final_altitude_error_m": 0.982318002730608,
+              "final_horizontal_error_m": 4.091275738475399,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 27.050473284688113,
+                "vertical_acceleration_bias_m_s2": 1.3660089076006174,
+                "confidence": 0.8419275879859924,
+                "residual_ema_m_s2": 0.5620839930644969,
+                "samples": 603
+              },
+              "completed": false
+            },
+            {
+              "seed": 91039,
+              "vehicle_id": "generic-5inch-quad",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 319,
+              "mean_reward": 1.1966597794056018,
+              "final_altitude_error_m": 0.9862762540578842,
+              "final_horizontal_error_m": 1.736671615958033,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 19.223590560760996,
+                "vertical_acceleration_bias_m_s2": 0.6156164703408304,
+                "confidence": 0.8803113102912903,
+                "residual_ema_m_s2": 0.845467923297689,
+                "samples": 319
+              },
+              "completed": false
+            }
+          ],
+          "hover_success_rate": 0.0,
+          "crash_rate": 1.0,
+          "completion_rate": 0.0
+        },
+        {
+          "vehicle_id": "generic-7inch-long-range",
+          "calibration_status": "provisional_estimate",
+          "episodes": [
+            {
+              "seed": 91040,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 431,
+              "mean_reward": 0.8322891305757734,
+              "final_altitude_error_m": 0.9890558142215014,
+              "final_horizontal_error_m": 4.042208861521951,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 15.421389788964966,
+                "vertical_acceleration_bias_m_s2": 2.1496900643536914,
+                "confidence": 0.8975977897644043,
+                "residual_ema_m_s2": 0.8658628445934927,
+                "samples": 431
+              },
+              "completed": false
+            },
+            {
+              "seed": 91041,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 205,
+              "mean_reward": 0.3913957541784283,
+              "final_altitude_error_m": 1.0577880926430225,
+              "final_horizontal_error_m": 2.166523289534507,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 19.127913049886143,
+                "vertical_acceleration_bias_m_s2": 0.27881620015156977,
+                "confidence": 0.8414333462715149,
+                "residual_ema_m_s2": 1.1525050343453507,
+                "samples": 205
+              },
+              "completed": false
+            },
+            {
+              "seed": 91042,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 255,
+              "mean_reward": 0.35171584860022753,
+              "final_altitude_error_m": 0.9838043693453074,
+              "final_horizontal_error_m": 2.1512947395764654,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 13.017375310330122,
+                "vertical_acceleration_bias_m_s2": 2.7730914680470335,
+                "confidence": 0.8520090579986572,
+                "residual_ema_m_s2": 1.8907950871055093,
+                "samples": 255
+              },
+              "completed": false
+            },
+            {
+              "seed": 91043,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 185,
+              "mean_reward": 0.4902930364417802,
+              "final_altitude_error_m": 0.9938321644440293,
+              "final_horizontal_error_m": 1.112256418166159,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 10.720210202894586,
+                "vertical_acceleration_bias_m_s2": 3.1100658729752215,
+                "confidence": 0.8323886394500732,
+                "residual_ema_m_s2": 2.3228695213912376,
+                "samples": 185
+              },
+              "completed": false
+            },
+            {
+              "seed": 91044,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 321,
+              "mean_reward": 0.8809680414931307,
+              "final_altitude_error_m": 0.9799101799726486,
+              "final_horizontal_error_m": 2.0475635678323543,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 12.420671607793235,
+                "vertical_acceleration_bias_m_s2": 3.880292604735335,
+                "confidence": 0.8827575445175171,
+                "residual_ema_m_s2": 1.5515695640300349,
+                "samples": 321
+              },
+              "completed": false
+            },
+            {
+              "seed": 91045,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 144,
+              "mean_reward": -0.03707164221022355,
+              "final_altitude_error_m": 0.9848264800384641,
+              "final_horizontal_error_m": 2.8002991547839797,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 11.967495620442342,
+                "vertical_acceleration_bias_m_s2": 1.9840926038117321,
+                "confidence": 0.8009958267211914,
+                "residual_ema_m_s2": 1.97140848205788,
+                "samples": 144
+              },
+              "completed": false
+            },
+            {
+              "seed": 91046,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 218,
+              "mean_reward": 0.4347532695871299,
+              "final_altitude_error_m": 1.0162333101034164,
+              "final_horizontal_error_m": 1.9213042959577755,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 19.587461100910033,
+                "vertical_acceleration_bias_m_s2": 1.7611735121760903,
+                "confidence": 0.8376888632774353,
+                "residual_ema_m_s2": 0.6788834422032943,
+                "samples": 218
+              },
+              "completed": false
+            },
+            {
+              "seed": 91047,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 380,
+              "mean_reward": 0.1356337295434064,
+              "final_altitude_error_m": 0.7579579949378967,
+              "final_horizontal_error_m": 8.7066347080551,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 14.588407964260215,
+                "vertical_acceleration_bias_m_s2": 3.0819429843930246,
+                "confidence": 0.8860046863555908,
+                "residual_ema_m_s2": 2.541540715894114,
+                "samples": 380
+              },
+              "completed": false
+            },
+            {
+              "seed": 91048,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 219,
+              "mean_reward": 0.2920750198903831,
+              "final_altitude_error_m": 1.0413552783429623,
+              "final_horizontal_error_m": 1.5468092358352856,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 15.060996567750959,
+                "vertical_acceleration_bias_m_s2": 2.037945980018234,
+                "confidence": 0.8517640829086304,
+                "residual_ema_m_s2": 0.8823260224743649,
+                "samples": 219
+              },
+              "completed": false
+            },
+            {
+              "seed": 91049,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 223,
+              "mean_reward": 0.750496211126327,
+              "final_altitude_error_m": 0.990147297270596,
+              "final_horizontal_error_m": 1.5961059800861295,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 15.275016253152625,
+                "vertical_acceleration_bias_m_s2": 1.7255694213709643,
+                "confidence": 0.8438043594360352,
+                "residual_ema_m_s2": 1.012478589563735,
+                "samples": 223
+              },
+              "completed": false
+            },
+            {
+              "seed": 91050,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 213,
+              "mean_reward": 0.051180009744095416,
+              "final_altitude_error_m": 0.9898163629695773,
+              "final_horizontal_error_m": 0.5191198130844621,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 7.918751483781516,
+                "vertical_acceleration_bias_m_s2": 4.981494526290678,
+                "confidence": 0.8308702111244202,
+                "residual_ema_m_s2": 1.6927205777137369,
+                "samples": 213
+              },
+              "completed": false
+            },
+            {
+              "seed": 91051,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 218,
+              "mean_reward": 0.5485824501523644,
+              "final_altitude_error_m": 0.992918879725039,
+              "final_horizontal_error_m": 1.9027439117823934,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 17.84000576189668,
+                "vertical_acceleration_bias_m_s2": 1.2813880607130723,
+                "confidence": 0.8491670489311218,
+                "residual_ema_m_s2": 0.7949213193348639,
+                "samples": 218
+              },
+              "completed": false
+            },
+            {
+              "seed": 91052,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 202,
+              "mean_reward": 0.3135203833643869,
+              "final_altitude_error_m": 1.0128629682585597,
+              "final_horizontal_error_m": 2.0796791002397024,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 17.479003842587943,
+                "vertical_acceleration_bias_m_s2": 0.9631774324298644,
+                "confidence": 0.8421244025230408,
+                "residual_ema_m_s2": 1.531355927917345,
+                "samples": 202
+              },
+              "completed": false
+            },
+            {
+              "seed": 91053,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 216,
+              "mean_reward": 0.8660878234897224,
+              "final_altitude_error_m": 1.0227282848209143,
+              "final_horizontal_error_m": 2.180108104260425,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 15.639926160767773,
+                "vertical_acceleration_bias_m_s2": 2.1610246598828895,
+                "confidence": 0.8500562906265259,
+                "residual_ema_m_s2": 1.0697252460562647,
+                "samples": 216
+              },
+              "completed": false
+            },
+            {
+              "seed": 91054,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 206,
+              "mean_reward": 0.8887937206387322,
+              "final_altitude_error_m": 1.0025275917723775,
+              "final_horizontal_error_m": 0.5086410979842247,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 14.087495221413764,
+                "vertical_acceleration_bias_m_s2": 2.0392127845571064,
+                "confidence": 0.850726306438446,
+                "residual_ema_m_s2": 0.9783932118522518,
+                "samples": 206
+              },
+              "completed": false
+            },
+            {
+              "seed": 91055,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 210,
+              "mean_reward": 0.21163405275043473,
+              "final_altitude_error_m": 0.9900550758466125,
+              "final_horizontal_error_m": 1.8719089867907892,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 18.9887715629293,
+                "vertical_acceleration_bias_m_s2": 0.5314675044427173,
+                "confidence": 0.8373427987098694,
+                "residual_ema_m_s2": 0.9021819744312852,
+                "samples": 210
+              },
+              "completed": false
+            },
+            {
+              "seed": 91056,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 419,
+              "mean_reward": 0.4190800406602958,
+              "final_altitude_error_m": 1.0042877588421106,
+              "final_horizontal_error_m": 6.801534453213804,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 18.775102726961638,
+                "vertical_acceleration_bias_m_s2": 1.8102388845466026,
+                "confidence": 0.8859601020812988,
+                "residual_ema_m_s2": 1.8829550444885612,
+                "samples": 419
+              },
+              "completed": false
+            },
+            {
+              "seed": 91057,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 414,
+              "mean_reward": 0.4728708329078108,
+              "final_altitude_error_m": 0.9826713912189007,
+              "final_horizontal_error_m": 5.73732429633177,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 13.779440910350894,
+                "vertical_acceleration_bias_m_s2": 3.368217105914568,
+                "confidence": 0.882774293422699,
+                "residual_ema_m_s2": 1.6336227913541237,
+                "samples": 414
+              },
+              "completed": false
+            },
+            {
+              "seed": 91058,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 501,
+              "mean_reward": 0.5500842633385952,
+              "final_altitude_error_m": 0.9770810101181269,
+              "final_horizontal_error_m": 3.86234786334137,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 20.796421745634568,
+                "vertical_acceleration_bias_m_s2": 1.7378950578658636,
+                "confidence": 0.8882446885108948,
+                "residual_ema_m_s2": 0.6784273561635998,
+                "samples": 501
+              },
+              "completed": false
+            },
+            {
+              "seed": 91059,
+              "vehicle_id": "generic-7inch-long-range",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 423,
+              "mean_reward": 0.9915639230493065,
+              "final_altitude_error_m": 0.9975934985559434,
+              "final_horizontal_error_m": 6.253916427549243,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 13.732031837547556,
+                "vertical_acceleration_bias_m_s2": 2.3647117922936984,
+                "confidence": 0.8804807066917419,
+                "residual_ema_m_s2": 0.825644009557976,
+                "samples": 423
+              },
+              "completed": false
+            }
+          ],
+          "hover_success_rate": 0.0,
+          "crash_rate": 1.0,
+          "completion_rate": 0.0
+        },
+        {
+          "vehicle_id": "generic-3inch-cinewhoop",
+          "calibration_status": "provisional_estimate",
+          "episodes": [
+            {
+              "seed": 91060,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 258,
+              "mean_reward": 1.0675029341454911,
+              "final_altitude_error_m": 0.9880250049754977,
+              "final_horizontal_error_m": 2.2541494519372995,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 21.79902680068512,
+                "vertical_acceleration_bias_m_s2": 0.33573337985303914,
+                "confidence": 0.8528727293014526,
+                "residual_ema_m_s2": 0.805685214347944,
+                "samples": 258
+              },
+              "completed": false
+            },
+            {
+              "seed": 91061,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 497,
+              "mean_reward": 0.7987087249480612,
+              "final_altitude_error_m": 0.979137659072876,
+              "final_horizontal_error_m": 5.649926855519202,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 21.48693179689823,
+                "vertical_acceleration_bias_m_s2": 2.204836164900793,
+                "confidence": 0.8673022985458374,
+                "residual_ema_m_s2": 0.6856363145568364,
+                "samples": 497
+              },
+              "completed": false
+            },
+            {
+              "seed": 91062,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 597,
+              "mean_reward": 0.4962914269743449,
+              "final_altitude_error_m": 0.9813418556004763,
+              "final_horizontal_error_m": 5.025269176773519,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 26.35691032980395,
+                "vertical_acceleration_bias_m_s2": 2.782129169351645,
+                "confidence": 0.8838268518447876,
+                "residual_ema_m_s2": 1.0553224162338029,
+                "samples": 597
+              },
+              "completed": false
+            },
+            {
+              "seed": 91063,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 609,
+              "mean_reward": 0.8928177684464148,
+              "final_altitude_error_m": 0.9791668727993965,
+              "final_horizontal_error_m": 2.8318790380195065,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 23.51997008822015,
+                "vertical_acceleration_bias_m_s2": -0.1453474093633124,
+                "confidence": 0.9013305902481079,
+                "residual_ema_m_s2": 0.9617385146905584,
+                "samples": 609
+              },
+              "completed": false
+            },
+            {
+              "seed": 91064,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 365,
+              "mean_reward": 0.22339769830065198,
+              "final_altitude_error_m": 0.977179940789938,
+              "final_horizontal_error_m": 6.57789979417524,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 25.605564712963456,
+                "vertical_acceleration_bias_m_s2": 1.1585016515075999,
+                "confidence": 0.8609304428100586,
+                "residual_ema_m_s2": 0.7939548818111207,
+                "samples": 365
+              },
+              "completed": false
+            },
+            {
+              "seed": 91065,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 391,
+              "mean_reward": 0.27650991373659406,
+              "final_altitude_error_m": 0.9925205479376018,
+              "final_horizontal_error_m": 8.466742458175085,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 17.656066933743137,
+                "vertical_acceleration_bias_m_s2": 2.8054049046476206,
+                "confidence": 0.8243675231933594,
+                "residual_ema_m_s2": 0.6468329739136217,
+                "samples": 391
+              },
+              "completed": false
+            },
+            {
+              "seed": 91066,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 275,
+              "mean_reward": 0.9978802543692956,
+              "final_altitude_error_m": 1.0007768046925776,
+              "final_horizontal_error_m": 2.450012956799278,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 20.52777989502765,
+                "vertical_acceleration_bias_m_s2": 1.0228551114837061,
+                "confidence": 0.8598498106002808,
+                "residual_ema_m_s2": 0.9874278983072188,
+                "samples": 275
+              },
+              "completed": false
+            },
+            {
+              "seed": 91067,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 352,
+              "mean_reward": 0.43781644398062997,
+              "final_altitude_error_m": 0.9987582375761122,
+              "final_horizontal_error_m": 3.0415806640589795,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 31.761726482696577,
+                "vertical_acceleration_bias_m_s2": -0.08783263915096179,
+                "confidence": 0.8752045035362244,
+                "residual_ema_m_s2": 1.2268473639525141,
+                "samples": 352
+              },
+              "completed": false
+            },
+            {
+              "seed": 91068,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 1284,
+              "mean_reward": 0.9506847043437511,
+              "final_altitude_error_m": 0.9913875879719853,
+              "final_horizontal_error_m": 2.0091490252082065,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 23.410512316783436,
+                "vertical_acceleration_bias_m_s2": 0.05567023194948779,
+                "confidence": 0.9286707043647766,
+                "residual_ema_m_s2": 0.9452282959933154,
+                "samples": 1284
+              },
+              "completed": false
+            },
+            {
+              "seed": 91069,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 541,
+              "mean_reward": 0.4107106162651128,
+              "final_altitude_error_m": 0.9879073007032275,
+              "final_horizontal_error_m": 6.3732702643980526,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 20.783319439540335,
+                "vertical_acceleration_bias_m_s2": 2.512140566164065,
+                "confidence": 0.8679167032241821,
+                "residual_ema_m_s2": 1.6741894992475461,
+                "samples": 541
+              },
+              "completed": false
+            },
+            {
+              "seed": 91070,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 545,
+              "mean_reward": 0.182318261409121,
+              "final_altitude_error_m": 0.9922124906443059,
+              "final_horizontal_error_m": 8.955091879851159,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 22.402150662330378,
+                "vertical_acceleration_bias_m_s2": 2.3489897217940023,
+                "confidence": 0.8436117172241211,
+                "residual_ema_m_s2": 0.5542614742641149,
+                "samples": 545
+              },
+              "completed": false
+            },
+            {
+              "seed": 91071,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 285,
+              "mean_reward": 1.2708503343896422,
+              "final_altitude_error_m": 0.9783899988979101,
+              "final_horizontal_error_m": 2.2698797234592862,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 20.157958918544477,
+                "vertical_acceleration_bias_m_s2": 1.3623528830631446,
+                "confidence": 0.8563373684883118,
+                "residual_ema_m_s2": 0.9133803706488939,
+                "samples": 285
+              },
+              "completed": false
+            },
+            {
+              "seed": 91072,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 654,
+              "mean_reward": 0.3372133041116148,
+              "final_altitude_error_m": 1.020439937710762,
+              "final_horizontal_error_m": 9.527011858186272,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 30.412446433536374,
+                "vertical_acceleration_bias_m_s2": 2.2856814605278095,
+                "confidence": 0.8657909035682678,
+                "residual_ema_m_s2": 0.7836215239061258,
+                "samples": 654
+              },
+              "completed": false
+            },
+            {
+              "seed": 91073,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 633,
+              "mean_reward": 0.6050600673499241,
+              "final_altitude_error_m": 0.9792618360370398,
+              "final_horizontal_error_m": 6.169743714249929,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 23.063922914568963,
+                "vertical_acceleration_bias_m_s2": 2.756132820891543,
+                "confidence": 0.8698928952217102,
+                "residual_ema_m_s2": 1.5153538367974715,
+                "samples": 633
+              },
+              "completed": false
+            },
+            {
+              "seed": 91074,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 192,
+              "mean_reward": 0.956952774135341,
+              "final_altitude_error_m": 0.999356368847657,
+              "final_horizontal_error_m": 2.3185079707741796,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 20.52844521545054,
+                "vertical_acceleration_bias_m_s2": 0.523766272664955,
+                "confidence": 0.8280506730079651,
+                "residual_ema_m_s2": 0.8133679209851951,
+                "samples": 192
+              },
+              "completed": false
+            },
+            {
+              "seed": 91075,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 599,
+              "mean_reward": 1.030486790681694,
+              "final_altitude_error_m": 0.9823423437774181,
+              "final_horizontal_error_m": 2.141691723111669,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 17.654132767466397,
+                "vertical_acceleration_bias_m_s2": 2.592883608807142,
+                "confidence": 0.9061751365661621,
+                "residual_ema_m_s2": 0.7696329794490098,
+                "samples": 599
+              },
+              "completed": false
+            },
+            {
+              "seed": 91076,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 405,
+              "mean_reward": 0.5704898325374648,
+              "final_altitude_error_m": 0.533343493938446,
+              "final_horizontal_error_m": 6.532896320498118,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 23.228841777078312,
+                "vertical_acceleration_bias_m_s2": 0.14496511750725244,
+                "confidence": 0.8906787037849426,
+                "residual_ema_m_s2": 1.4785918909158622,
+                "samples": 405
+              },
+              "completed": false
+            },
+            {
+              "seed": 91077,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 412,
+              "mean_reward": 0.34579589661332927,
+              "final_altitude_error_m": 0.9950091140344739,
+              "final_horizontal_error_m": 8.32247443340146,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 22.28282531056189,
+                "vertical_acceleration_bias_m_s2": 1.992690298707609,
+                "confidence": 0.8274173736572266,
+                "residual_ema_m_s2": 0.6022306238769635,
+                "samples": 412
+              },
+              "completed": false
+            },
+            {
+              "seed": 91078,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 699,
+              "mean_reward": 0.8420271687104183,
+              "final_altitude_error_m": 0.9753024317324162,
+              "final_horizontal_error_m": 3.0483332013280413,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 33.32056475356031,
+                "vertical_acceleration_bias_m_s2": -0.4220891686055036,
+                "confidence": 0.8924570679664612,
+                "residual_ema_m_s2": 0.9622496459234832,
+                "samples": 699
+              },
+              "completed": false
+            },
+            {
+              "seed": 91079,
+              "vehicle_id": "generic-3inch-cinewhoop",
+              "hover_success": false,
+              "crashed": true,
+              "steps": 420,
+              "mean_reward": 0.3707633403657233,
+              "final_altitude_error_m": 1.0404375456273556,
+              "final_horizontal_error_m": 7.962547777456012,
+              "online_estimator": {
+                "effective_lift_gain_m_s2": 23.15265773702688,
+                "vertical_acceleration_bias_m_s2": 3.2526169459329615,
+                "confidence": 0.8750247359275818,
+                "residual_ema_m_s2": 0.6881173067057105,
+                "samples": 420
+              },
+              "completed": false
+            }
+          ],
+          "hover_success_rate": 0.0,
+          "crash_rate": 1.0,
+          "completion_rate": 0.0
+        }
+      ],
+      "all_profiles_evaluated": true
+    }
+  ],
+  "checkpoint_handoff": "previous_stage_balanced_best_checkpoint",
+  "simulation_only": true,
+  "physical_flight_eligible": false,
+  "timesteps_per_stage": 200000,
+  "vehicle_family": "/home/runner/work/3d-fly-test/3d-fly-test/vehicle_models/family/vehicle_profiles.json",
+  "held_out_distribution": "/home/runner/work/3d-fly-test/3d-fly-test/training/runs/held-out-domain-randomization.json"
+}

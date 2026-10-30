@@ -1,0 +1,227 @@
+{
+  "timesteps": 40000,
+  "selection_score": [
+    0.0,
+    -1.0,
+    -446.23445958511513
+  ],
+  "selection_rule": [
+    "maximize minimum per-profile takeoff-hover success",
+    "minimize worst-profile crash rate",
+    "maximize mean return"
+  ],
+  "profiles": [
+    {
+      "vehicle_id": "smooth2-a2212-custom-prop",
+      "success_rate": 0.0,
+      "crash_rate": 1.0,
+      "mean_return": -531.4311558869856,
+      "episodes": [
+        {
+          "seed": 1500042,
+          "success": false,
+          "crashed": true,
+          "steps": 84,
+          "return": -531.4231214565993,
+          "altitude_error_m": 12.584092140197754,
+          "horizontal_error_m": 0.055746507370365364
+        },
+        {
+          "seed": 1500043,
+          "success": false,
+          "crashed": true,
+          "steps": 84,
+          "return": -531.4412599544626,
+          "altitude_error_m": 12.584027290344238,
+          "horizontal_error_m": 0.05588043052331474
+        },
+        {
+          "seed": 1500044,
+          "success": false,
+          "crashed": true,
+          "steps": 84,
+          "return": -531.4263697677388,
+          "altitude_error_m": 12.584400177001953,
+          "horizontal_error_m": 0.05565265728698591
+        },
+        {
+          "seed": 1500045,
+          "success": false,
+          "crashed": true,
+          "steps": 84,
+          "return": -531.4379554691051,
+          "altitude_error_m": 12.584333419799805,
+          "horizontal_error_m": 0.05566937022228066
+        },
+        {
+          "seed": 1500046,
+          "success": false,
+          "crashed": true,
+          "steps": 84,
+          "return": -531.4270727870223,
+          "altitude_error_m": 12.583778381347656,
+          "horizontal_error_m": 0.0558768430842299
+        }
+      ]
+    },
+    {
+      "vehicle_id": "generic-5inch-quad",
+      "success_rate": 0.0,
+      "crash_rate": 1.0,
+      "mean_return": -423.4235379742333,
+      "episodes": [
+        {
+          "seed": 1501042,
+          "success": false,
+          "crashed": true,
+          "steps": 78,
+          "return": -423.4184744847887,
+          "altitude_error_m": 10.836636543273926,
+          "horizontal_error_m": 0.08593815217440352
+        },
+        {
+          "seed": 1501043,
+          "success": false,
+          "crashed": true,
+          "steps": 78,
+          "return": -423.4276351749901,
+          "altitude_error_m": 10.836981773376465,
+          "horizontal_error_m": 0.0858555173873883
+        },
+        {
+          "seed": 1501044,
+          "success": false,
+          "crashed": true,
+          "steps": 78,
+          "return": -423.40806211621623,
+          "altitude_error_m": 10.836429595947266,
+          "horizontal_error_m": 0.08600328947264908
+        },
+        {
+          "seed": 1501045,
+          "success": false,
+          "crashed": true,
+          "steps": 78,
+          "return": -423.418103741496,
+          "altitude_error_m": 10.837004661560059,
+          "horizontal_error_m": 0.08569815129800755
+        },
+        {
+          "seed": 1501046,
+          "success": false,
+          "crashed": true,
+          "steps": 78,
+          "return": -423.44541435367523,
+          "altitude_error_m": 10.837112426757812,
+          "horizontal_error_m": 0.08587267912212206
+        }
+      ]
+    },
+    {
+      "vehicle_id": "generic-7inch-long-range",
+      "success_rate": 0.0,
+      "crash_rate": 1.0,
+      "mean_return": -488.29195664031494,
+      "episodes": [
+        {
+          "seed": 1502042,
+          "success": false,
+          "crashed": true,
+          "steps": 83,
+          "return": -488.31608492546593,
+          "altitude_error_m": 12.04111099243164,
+          "horizontal_error_m": 0.07733517051605145
+        },
+        {
+          "seed": 1502043,
+          "success": false,
+          "crashed": true,
+          "steps": 83,
+          "return": -488.29228791614855,
+          "altitude_error_m": 12.040929794311523,
+          "horizontal_error_m": 0.07727488622840104
+        },
+        {
+          "seed": 1502044,
+          "success": false,
+          "crashed": true,
+          "steps": 83,
+          "return": -488.2748587365844,
+          "altitude_error_m": 12.0402193069458,
+          "horizontal_error_m": 0.07750059235752918
+        },
+        {
+          "seed": 1502045,
+          "success": false,
+          "crashed": true,
+          "steps": 83,
+          "return": -488.2868738756787,
+          "altitude_error_m": 12.041104316711426,
+          "horizontal_error_m": 0.07722495056549897
+        },
+        {
+          "seed": 1502046,
+          "success": false,
+          "crashed": true,
+          "steps": 83,
+          "return": -488.28967774769706,
+          "altitude_error_m": 12.040553092956543,
+          "horizontal_error_m": 0.07755315176461341
+        }
+      ]
+    },
+    {
+      "vehicle_id": "generic-3inch-cinewhoop",
+      "success_rate": 0.0,
+      "crash_rate": 1.0,
+      "mean_return": -341.7911878389267,
+      "episodes": [
+        {
+          "seed": 1503042,
+          "success": false,
+          "crashed": true,
+          "steps": 80,
+          "return": -341.7973682976822,
+          "altitude_error_m": 10.042097091674805,
+          "horizontal_error_m": 0.09196599615554008
+        },
+        {
+          "seed": 1503043,
+          "success": false,
+          "crashed": true,
+          "steps": 80,
+          "return": -341.79711136095307,
+          "altitude_error_m": 10.041199684143066,
+          "horizontal_error_m": 0.09253676827961405
+        },
+        {
+          "seed": 1503044,
+          "success": false,
+          "crashed": true,
+          "steps": 80,
+          "return": -341.789447933672,
+          "altitude_error_m": 10.041412353515625,
+          "horizontal_error_m": 0.09231082027610311
+        },
+        {
+          "seed": 1503045,
+          "success": false,
+          "crashed": true,
+          "steps": 80,
+          "return": -341.7863460314532,
+          "altitude_error_m": 10.04066276550293,
+          "horizontal_error_m": 0.0928297585839192
+        },
+        {
+          "seed": 1503046,
+          "success": false,
+          "crashed": true,
+          "steps": 80,
+          "return": -341.785665570873,
+          "altitude_error_m": 10.040948867797852,
+          "horizontal_error_m": 0.09264749783904405
+        }
+      ]
+    }
+  ]
+}
