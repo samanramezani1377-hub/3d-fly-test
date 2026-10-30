@@ -188,13 +188,18 @@ class AdaptiveDroneEnv(gym.Env):
             - 0.025 * float(np.dot(rates, rates))
             - 0.015 * float(np.dot(action - self._last_action, action - self._last_action))
         )
-        crashed = bool(
-            (self._taken_off and state[2] <= 0.025)
-            or state[2] > 10.0
-            or horizontal_error > 10.0
-            or np.max(np.abs(attitude[:2])) > 1.25
-            or not np.all(np.isfinite(state))
-        )
+        crash_reasons = []
+        if self._taken_off and state[2] <= 0.025:
+            crash_reasons.append("ground_impact_after_takeoff")
+        if state[2] > 10.0:
+            crash_reasons.append("altitude_limit_exceeded")
+        if horizontal_error > 10.0:
+            crash_reasons.append("horizontal_boundary_exceeded")
+        if np.max(np.abs(attitude[:2])) > 1.25:
+            crash_reasons.append("attitude_limit_exceeded")
+        if not np.all(np.isfinite(state)):
+            crash_reasons.append("non_finite_state")
+        crashed = bool(crash_reasons)
         if crashed:
             reward -= 100.0
         terminated = crashed
@@ -206,8 +211,11 @@ class AdaptiveDroneEnv(gym.Env):
         info = {
             **telemetry,
             "crashed": crashed,
-            "crash_reason": "state_or_boundary_limit" if crashed else None,
+            "crash_reason": crash_reasons[0] if crash_reasons else None,
+            "crash_reasons": crash_reasons,
             "has_taken_off": self._taken_off,
+            "altitude_m": float(state[2]),
+            "position_xyz_m": state[:3].astype(float).tolist(),
             "position_error_m": float(np.linalg.norm(position_error)),
             "altitude_error_m": altitude_error,
             "horizontal_error_m": horizontal_error,
