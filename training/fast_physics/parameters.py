@@ -99,9 +99,9 @@ def load_vehicle_parameters(
         )
 
     synthetic = {
-        "mass_kg": 1.5,
+        "mass_kg": 0.6,
         "center_of_mass_m": [0.0, 0.0, 0.0],
-        "inertia_kg_m2": [0.02, 0.035, 0.02],
+        "inertia_kg_m2": [0.004, 0.006, 0.004],
         "max_rotor_speed_rad_s": 1100.0,
         "thrust_coefficient_n_per_rad_s2": 2.0e-6,
         "torque_to_thrust_m": 0.012,
