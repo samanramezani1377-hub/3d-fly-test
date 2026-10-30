@@ -42,7 +42,7 @@ def nominal_hover_commands(params: VehicleParameters) -> np.ndarray:
 
 
 def policy_action_to_motor_commands(action, params: VehicleParameters) -> np.ndarray:
-    """Map [collective, roll, pitch, yaw] in [-1,1] to physical motor commands."""
+    """Map raw Gaussian [collective, roll, pitch, yaw] samples to motor commands."""
     action = np.asarray(action, dtype=np.float64)
     if action.shape != (4,):
         raise ValueError("policy action must contain collective, roll, pitch and yaw")
@@ -79,8 +79,8 @@ def policy_action_to_motor_commands(action, params: VehicleParameters) -> np.nda
     return np.clip(commands, 0.0, 1.0).astype(np.float32)
 
 
-class SymmetricHoverActionWrapper(gym.ActionWrapper):
-    """Expose normalized body-wrench actions while preserving the plant API."""
+class BodyWrenchActionWrapper(gym.ActionWrapper):
+    """Expose raw Gaussian body-wrench actions while preserving the plant API."""
     def __init__(self, env):
         super().__init__(env)
         self.action_space = gym.spaces.Box(
@@ -92,3 +92,7 @@ class SymmetricHoverActionWrapper(gym.ActionWrapper):
         if profile is None:
             raise RuntimeError("environment must be reset before mapping PPO actions")
         return policy_action_to_motor_commands(action, profile_to_parameters(profile))
+
+
+# Backwards-compatible import name; action semantics are body-wrench, not motor deltas.
+SymmetricHoverActionWrapper = BodyWrenchActionWrapper
