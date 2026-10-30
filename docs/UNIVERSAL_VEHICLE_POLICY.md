@@ -52,7 +52,7 @@ The test suite also checks nominal static-hover force balance for every example 
 
 ## Reference hover controller and plant feasibility gate
 
-- `training/fast_physics/hover_reference.py` implements a cascaded position/attitude PID controller with a four-rotor wrench allocator.
+- `training/fast_physics/hover_reference.py` implements a cascaded position/attitude PID controller with bounded integral disturbance rejection and a four-rotor wrench allocator.
 - `training/evaluate_hover_reference.py` runs sustained-hover episodes independently for every profile, in nominal or Stage 4 randomized conditions.
 - `training/tests/test_hover_reference.py` checks sustained nominal hover for all four profiles.
 - CI runs the nominal reference benchmark and requires every provisional profile to meet the sustained-hover criteria.
