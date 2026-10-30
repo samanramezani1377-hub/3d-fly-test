@@ -50,6 +50,10 @@ def main(argv=None):
             "--episodes", str(args.evaluation_episodes), "--seed", str(90000 + stage * 1000), "--output", str(report), "--randomization-config", str(ROOT / "vehicle_models/family/domain_randomization.json"), "--curriculum-stage", str(stage)],
             cwd=ROOT, check=True)
         evaluation = json.loads(report.read_text(encoding="utf-8"))
+        expected_profiles = set(load_profile_ids(args.vehicle_family))
+        evaluated_profiles = {item["vehicle_id"] for item in evaluation.get("profiles", [])}
+        if evaluated_profiles != expected_profiles:
+            raise RuntimeError(f"stage {stage} evaluation profile mismatch: expected {sorted(expected_profiles)}, got {sorted(evaluated_profiles)}")
         stages.append({"stage":stage,"final_checkpoint":str(final_checkpoint),
                        "selected_best_checkpoint":str(previous),
                        "checkpoint_selection":"stable_baselines3_eval_callback_mean_reward",

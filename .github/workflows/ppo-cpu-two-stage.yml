@@ -97,7 +97,7 @@ jobs:
           name: universal-ppo-five-stage-results
           path: |
             final-model.zip
-            training/runs/five-stage-training-manifest.json
+            training/runs/universal-quad-curriculum-manifest.json
             training/runs/stage1-selected-model.zip
             training/runs/stage2-selected-model.zip
             training/runs/stage3-selected-model.zip
@@ -107,7 +107,6 @@ jobs:
             training/runs/universal-quad-stage2/
             training/runs/universal-quad-stage3/
             training/runs/universal-quad-stage4/
-            training/runs/universal-quad-stage5/
             training/runs/universal-quad-stage5/
             training/runs/control-diagnostics.json
             observation-validation.json
