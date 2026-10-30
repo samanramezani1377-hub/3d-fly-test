@@ -88,6 +88,7 @@ def main(argv=None):
                 max_stable_steps = stable_steps = 0
                 crash_reasons = set()
                 saturation_samples = []
+                zero_command_samples = []
                 terminated = truncated = False
                 info = {}
                 while True:
@@ -96,6 +97,7 @@ def main(argv=None):
                     rewards.append(float(reward))
                     crashed = crashed or bool(info.get("crashed", False))
                     saturation_samples.append(float(info.get("motor_saturation_fraction", 0.0)))
+                    zero_command_samples.append(float(info.get("motor_zero_command_fraction", 0.0)))
                     takeoff_seen = takeoff_seen or bool(info.get("has_taken_off", False))
                     max_altitude_m = max(max_altitude_m, float(info.get("altitude_m", 0.08)))
                     crash_reasons.update(info.get("crash_reasons", []))
@@ -126,6 +128,7 @@ def main(argv=None):
                     "mean_reward": sum(rewards) / max(len(rewards), 1),
                     "episode_return": sum(rewards),
                     "mean_motor_saturation_fraction": sum(saturation_samples) / max(len(saturation_samples), 1),
+                    "mean_motor_zero_command_fraction": sum(zero_command_samples) / max(len(zero_command_samples), 1),
                     "final_altitude_error_m": info.get("altitude_error_m"),
                     "final_horizontal_error_m": info.get("horizontal_error_m"),
                     "online_estimator": info.get("online_estimator"),
@@ -148,6 +151,7 @@ def main(argv=None):
             "mean_reward": sum(e["mean_reward"] for e in episodes) / count,
             "mean_return": sum(e["episode_return"] for e in episodes) / count,
             "mean_motor_saturation_fraction": sum(e["mean_motor_saturation_fraction"] for e in episodes) / count,
+            "mean_motor_zero_command_fraction": sum(e["mean_motor_zero_command_fraction"] for e in episodes) / count,
             "mission_completion_rate": sum(e["mission_completed"] for e in episodes) / count,
             "survived_to_time_limit_rate": sum(e["survived_to_time_limit"] for e in episodes) / count,
             # Kept as an explicit compatibility alias; it now means mission completion,
