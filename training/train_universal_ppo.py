@@ -72,15 +72,18 @@ class BalancedProfileCallback(BaseCallback):
                         took_off = took_off or bool(info.get("has_taken_off", False))
                         velocity = info.get("state_velocity_m_s", [float("inf")] * 3)
                         attitude = info.get("attitude_rad", [float("inf")] * 3)
+                        angular_rate = info.get("angular_velocity_rad_s", [float("inf")] * 3)
                         try:
                             speed_sq = sum(float(v) ** 2 for v in velocity)
                             tilt = max(abs(float(attitude[0])), abs(float(attitude[1])))
+                            angular_rate_sq = sum(float(v) ** 2 for v in angular_rate)
                             stable = bool(info.get("has_taken_off", False)
                                 and not info.get("crashed", False)
                                 and info.get("state_finite", True)
                                 and float(info.get("altitude_error_m", 999)) <= 0.15
                                 and float(info.get("horizontal_error_m", 999)) <= 0.20
-                                and speed_sq <= 0.35 ** 2 and tilt <= 0.25)
+                                and speed_sq <= 0.35 ** 2 and tilt <= 0.25
+                                and angular_rate_sq <= 0.5 ** 2)
                         except (TypeError, ValueError, IndexError):
                             stable = False
                         if stable:
