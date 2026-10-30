@@ -14,13 +14,14 @@ def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--timesteps-per-stage", type=int, default=200000)
     p.add_argument("--n-envs", type=int, default=4)
+    p.add_argument("--evaluation-episodes", type=int, default=20)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--run-prefix", default="universal-quad")
     p.add_argument("--output-dir", type=Path, default=Path("training/runs"))
     p.add_argument("--vehicle-family", type=Path, default=ROOT / "vehicle_models/family/vehicle_profiles.json")
     args = p.parse_args(argv)
-    if args.timesteps_per_stage <= 0 or args.n_envs <= 0:
-        raise SystemExit("timesteps and n-envs must be positive")
+    if args.timesteps_per_stage <= 0 or args.n_envs <= 0 or args.evaluation_episodes <= 0:
+        raise SystemExit("timesteps, n-envs and evaluation-episodes must be positive")
     output, previous, stages = args.output_dir.resolve(), None, []
     for stage in range(1, 5):
         name = f"{args.run_prefix}-stage{stage}"
@@ -41,7 +42,7 @@ def main(argv=None):
         report = output / name / "held-out-evaluation.json"
         subprocess.run([sys.executable, str(ROOT / "training/evaluate_universal_ppo.py"),
             "--model", str(previous), "--vehicle-family", str(args.vehicle_family),
-            "--episodes", "20", "--seed", str(90000 + stage * 1000), "--output", str(report)],
+            "--episodes", str(args.evaluation_episodes), "--seed", str(90000 + stage * 1000), "--output", str(report)],
             cwd=ROOT, check=True)
         evaluation = json.loads(report.read_text(encoding="utf-8"))
         stages.append({"stage":stage,"final_checkpoint":str(final_checkpoint),
