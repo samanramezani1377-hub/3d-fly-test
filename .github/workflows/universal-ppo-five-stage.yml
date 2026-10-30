@@ -84,7 +84,7 @@ jobs:
           before="${BEFORE_SHA:-}"
           if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
             changed=true
-          elif git diff --name-only "$before" "$GITHUB_SHA" | grep -Eq '^(site/|training/fast_physics/|vehicle_models/family/|\\.github/workflows/universal-ppo-five-stage\\.yml$)'; then
+          elif git diff --name-only "$before" "$GITHUB_SHA" | grep -Eq '^(site/|training/fast_physics/|vehicle_models/family/|\.github/workflows/universal-ppo-five-stage\.yml$)'; then
             changed=true
           else
             changed=false
