@@ -1,10 +1,13 @@
 """Hardware-conditioned vehicle family environment.
 
-Declared nominal vehicle features are visible to the policy. Episode-level
-randomized mass, CG, inertia and actuator disturbances remain hidden.
+Known nominal configuration is exposed to the policy. Unknown but necessary
+plant values may be initialized with explicit engineering estimates; those
+estimates are recorded in metadata and must be replaced by measurements.
+Episode-level randomized physical parameters remain hidden from the policy.
 """
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -19,18 +22,92 @@ from .parameters import VehicleParameters
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_VEHICLE_FAMILY = ROOT / "vehicle_models" / "family" / "vehicle_profiles.json"
 DEFAULT_RANDOMIZATION = ROOT / "vehicle_models" / "smooth2_parametric" / "domain_randomization.json"
-VEHICLE_FEATURE_SIZE = 10
+VEHICLE_FEATURE_SIZE = 12
+DERIVED_DEFAULTS = {
+    "torque_to_thrust_m": 0.015,
+    "motor_time_constant_s": 0.05,
+    "assumed_max_thrust_to_weight": 2.0,
+}
+
+
+def resolve_profile(profile: dict[str, Any]) -> dict[str, Any]:
+    """Fill missing secondary physics with documented estimates, never silently."""
+    p = copy.deepcopy(profile)
+    physical, geometry, propulsion = p.setdefault("physical", {}), p.setdefault("geometry", {}), p.setdefault("propulsion", {})
+    derived = list(p.get("derived_estimates", []))
+    mass = physical.get("mass_kg")
+    if mass is None or not np.isfinite(float(mass)) or float(mass) <= 0:
+        raise ValueError(f"{p.get('vehicle_id')}: a measured or explicitly chosen positive takeoff mass is required")
+
+    positions = p.get("rotors")
+    if not isinstance(positions, list) or len(positions) != 4:
+        raise ValueError(f"{p.get('vehicle_id')}: exactly four rotor positions are required")
+    rotor_xyz = []
+    for i, rotor in enumerate(positions):
+        point = np.asarray(rotor.get("position_m"), dtype=np.float64)
+        if point.shape != (3,) or not np.all(np.isfinite(point)):
+            raise ValueError(f"{p.get('vehicle_id')}: rotor {i} needs three finite position coordinates in metres")
+        if rotor.get("spin_sign") not in (-1, 1, -1.0, 1.0):
+            raise ValueError(f"{p.get('vehicle_id')}: rotor {i} spin_sign must be +1 or -1")
+        rotor_xyz.append(point)
+    rotor_xyz = np.asarray(rotor_xyz)
+    arm_radius_sq = float(np.mean(np.sum(rotor_xyz[:, :2] ** 2, axis=1)))
+
+    inertia = physical.get("inertia_kg_m2")
+    if inertia is None:
+        # Four point masses at the rotor radius: a rough rigid-body initializer.
+        # This is not a measured inertia tensor and ignores body mass distribution.
+        ixy = max(float(mass) * arm_radius_sq * 0.5, 1e-6)
+        izz = max(float(mass) * arm_radius_sq, 1e-6)
+        physical["inertia_kg_m2"] = [ixy, ixy, izz]
+        derived.append("inertia_kg_m2:point-mass-arm-estimate")
+    else:
+        arr = np.asarray(inertia, dtype=np.float64)
+        if arr.shape not in ((3,), (3, 3)) or not np.all(np.isfinite(arr)):
+            raise ValueError(f"{p.get('vehicle_id')}: inertia must be a diagonal 3-vector or finite 3x3 matrix")
+        physical["inertia_kg_m2"] = arr.reshape(-1).tolist()
+
+    voltage = propulsion.get("nominal_battery_voltage_v")
+    kv = propulsion.get("kv_rpm_per_volt")
+    if voltage is None or kv is None or float(voltage) <= 0 or float(kv) <= 0:
+        raise ValueError(f"{p.get('vehicle_id')}: nominal battery voltage and motor KV are required to initialize propulsion")
+
+    omega = propulsion.get("max_rotor_speed_rad_s")
+    if omega is None:
+        # Approximate loaded speed as 80% of KV no-load speed at nominal voltage.
+        omega = float(kv) * float(voltage) * (2.0 * np.pi / 60.0) * 0.80
+        propulsion["max_rotor_speed_rad_s"] = omega
+        derived.append("max_rotor_speed_rad_s:0.80x-kv-no-load-estimate")
+
+    kf = propulsion.get("thrust_coefficient_n_per_rad_s2")
+    if kf is None:
+        twr = float(propulsion.get("assumed_max_thrust_to_weight", DERIVED_DEFAULTS["assumed_max_thrust_to_weight"]))
+        if twr <= 1.0:
+            raise ValueError(f"{p.get('vehicle_id')}: assumed max thrust-to-weight must exceed 1")
+        kf = float(mass) * 9.80665 * twr / (4.0 * float(omega) ** 2)
+        propulsion["thrust_coefficient_n_per_rad_s2"] = kf
+        derived.append(f"thrust_coefficient_n_per_rad_s2:derived-from-{twr:g}-max-TWR")
+
+    if propulsion.get("torque_to_thrust_m") is None:
+        propulsion["torque_to_thrust_m"] = DERIVED_DEFAULTS["torque_to_thrust_m"]
+        derived.append("torque_to_thrust_m:generic-estimate")
+    if propulsion.get("motor_time_constant_s") is None:
+        propulsion["motor_time_constant_s"] = DERIVED_DEFAULTS["motor_time_constant_s"]
+        derived.append("motor_time_constant_s:generic-estimate")
+    geometry.setdefault("rotor_count", 4)
+    p["derived_estimates"] = sorted(set(derived))
+    return p
 
 
 def profile_to_parameters(profile: dict[str, Any]) -> VehicleParameters:
-    physical, propulsion = profile["physical"], profile["propulsion"]
-    rotors = profile["rotors"]
+    p = resolve_profile(profile)
+    physical, propulsion = p["physical"], p["propulsion"]
     return VehicleParameters(
         mass_kg=float(physical["mass_kg"]),
         center_of_mass_m=tuple(float(v) for v in physical.get("center_of_mass_m", [0, 0, 0])),
         inertia_kg_m2=tuple(float(v) for v in np.asarray(physical["inertia_kg_m2"], dtype=np.float64).reshape(-1)),
-        rotor_positions_m=tuple(tuple(float(v) for v in r["position_m"]) for r in rotors),
-        spin_signs=tuple(float(r["spin_sign"]) for r in rotors),
+        rotor_positions_m=tuple(tuple(float(v) for v in r["position_m"]) for r in p["rotors"]),
+        spin_signs=tuple(float(r["spin_sign"]) for r in p["rotors"]),
         max_rotor_speed_rad_s=float(propulsion["max_rotor_speed_rad_s"]),
         thrust_coefficient_n_per_rad_s2=float(propulsion["thrust_coefficient_n_per_rad_s2"]),
         torque_to_thrust_m=float(propulsion["torque_to_thrust_m"]),
@@ -42,7 +119,7 @@ def profile_to_parameters(profile: dict[str, Any]) -> VehicleParameters:
 
 
 def load_vehicle_profiles(path: str | Path = DEFAULT_VEHICLE_FAMILY) -> list[dict[str, Any]]:
-    """Load a family library or a single filled vehicle profile and validate it."""
+    """Load a family library or a single partially specified vehicle profile."""
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     profiles = data.get("profiles") if isinstance(data, dict) else None
     if profiles is None and isinstance(data, dict) and "vehicle_id" in data:
@@ -50,46 +127,40 @@ def load_vehicle_profiles(path: str | Path = DEFAULT_VEHICLE_FAMILY) -> list[dic
     if not isinstance(profiles, list) or not profiles:
         raise ValueError("profile file must contain a non-empty profiles list or one profile object")
     seen: set[str] = set()
-    for p in profiles:
-        if not isinstance(p, dict):
+    resolved = []
+    for raw in profiles:
+        if not isinstance(raw, dict):
             raise ValueError("each vehicle profile must be an object")
-        vid = str(p.get("vehicle_id", "")).strip()
+        vid = str(raw.get("vehicle_id", "")).strip()
         if not vid or vid in seen:
             raise ValueError("vehicle_id values must be non-empty and unique")
         seen.add(vid)
-        g, ph, pr = p.get("geometry", {}), p.get("physical", {}), p.get("propulsion", {})
-        required = {
-            "mass_kg": ph.get("mass_kg"),
-            "inertia_kg_m2": ph.get("inertia_kg_m2"),
-            "arm_span_diagonal_m": g.get("arm_span_diagonal_m"),
-            "propeller_diameter_m": g.get("propeller_diameter_m"),
-            "max_rotor_speed_rad_s": pr.get("max_rotor_speed_rad_s"),
-            "thrust_coefficient_n_per_rad_s2": pr.get("thrust_coefficient_n_per_rad_s2"),
-            "torque_to_thrust_m": pr.get("torque_to_thrust_m"),
-            "motor_time_constant_s": pr.get("motor_time_constant_s"),
-            "nominal_battery_voltage_v": pr.get("nominal_battery_voltage_v"),
-            "battery_capacity_ah": pr.get("battery_capacity_ah"),
-        }
-        missing = [k for k, v in required.items() if v is None]
-        if missing:
-            raise ValueError(f"{vid}: missing required configuration fields: {', '.join(missing)}")
-        if int(g.get("rotor_count", 0)) != 4 or not isinstance(p.get("rotors"), list) or len(p["rotors"]) != 4:
-            raise ValueError(f"{vid}: v1 supports exactly four rotor definitions")
-        params = profile_to_parameters(p)
-        params.validate()
+        p = resolve_profile(raw)
+        g, pr = p["geometry"], p["propulsion"]
+        if int(g.get("rotor_count", 0)) != 4:
+            raise ValueError(f"{vid}: v1 supports exactly four rotors")
+        if g.get("arm_span_diagonal_m") is None or g.get("propeller_diameter_m") is None:
+            raise ValueError(f"{vid}: arm span and propeller diameter are required in metres")
         if min(float(g["arm_span_diagonal_m"]), float(g["propeller_diameter_m"]),
-               float(pr["nominal_battery_voltage_v"]), float(pr["battery_capacity_ah"])) <= 0:
+               float(pr["nominal_battery_voltage_v"]), float(pr["battery_capacity_ah"] or 1.0)) <= 0:
             raise ValueError(f"{vid}: geometry and battery values must be positive")
         if p.get("calibration_status") not in {"provisional_estimate", "user_supplied", "measured"}:
             raise ValueError(f"{vid}: calibration_status must be provisional_estimate, user_supplied or measured")
-    return profiles
+        profile_to_parameters(p).validate()
+        resolved.append(p)
+    return resolved
 
 
 def vehicle_feature_vector(profile: dict[str, Any]) -> np.ndarray:
-    """Ten bounded, dimensionless hardware features supplied to the policy."""
-    ph, g, pr = profile["physical"], profile["geometry"], profile["propulsion"]
-    positions = np.asarray([r["position_m"] for r in profile["rotors"]], dtype=np.float64)
+    """Twelve bounded dimensionless hardware features, including provenance confidence."""
+    p = resolve_profile(profile)
+    ph, g, pr = p["physical"], p["geometry"], p["propulsion"]
+    positions = np.asarray([r["position_m"] for r in p["rotors"]], dtype=np.float64)
     arm_radius = float(np.mean(np.linalg.norm(positions[:, :2], axis=1)))
+    derived_fraction = len(p.get("derived_estimates", [])) / 5.0
+    status_confidence = {"provisional_estimate": 0.25, "user_supplied": 0.60, "measured": 1.0}[
+        p["calibration_status"]
+    ]
     values = np.asarray([
         float(ph["mass_kg"]) / 2.0,
         arm_radius / 0.25,
@@ -99,16 +170,18 @@ def vehicle_feature_vector(profile: dict[str, Any]) -> np.ndarray:
         float(pr["torque_to_thrust_m"]) / 0.05,
         float(pr["motor_time_constant_s"]) / 0.2,
         float(pr["nominal_battery_voltage_v"]) / 25.0,
-        float(pr["battery_capacity_ah"]) / 10.0,
+        float(pr.get("battery_capacity_ah") or 0.0) / 10.0,
         float(pr.get("kv_rpm_per_volt") or 0.0) / 3000.0,
+        min(derived_fraction, 1.0),
+        status_confidence,
     ], dtype=np.float32)
     if not np.all(np.isfinite(values)) or np.any(values < 0):
-        raise ValueError(f"{profile.get('vehicle_id')}: invalid vehicle descriptor")
+        raise ValueError(f"{p.get('vehicle_id')}: invalid vehicle descriptor")
     return np.clip(values, 0.0, 5.0)
 
 
 class VehicleFamilyEnv(gym.Env):
-    """Sample a vehicle each episode and condition one shared PPO policy on its specs."""
+    """Sample a vehicle per episode and condition one shared PPO policy on its specs."""
     metadata = {"render_modes": []}
 
     def __init__(
@@ -150,6 +223,7 @@ class VehicleFamilyEnv(gym.Env):
             "vehicle_id": self.active_profile["vehicle_id"],
             "calibration_status": self.active_profile["calibration_status"],
             "parameter_source": self.active_profile.get("parameter_source", "unspecified"),
+            "derived_estimates": list(self.active_profile.get("derived_estimates", [])),
             "synthetic_calibration_used": self.active_profile["calibration_status"] == "provisional_estimate",
             "profile_is_measured": self.active_profile["calibration_status"] == "measured",
             "missing_fields": [],
