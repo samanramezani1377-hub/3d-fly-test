@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "vehicle_id": "smooth2-parametric-v1",
+  "source": {
+    "repository_path": "assets/preflight/smooth2-parametric",
+    "cad_script": "cad/parametric/drone_parametric.py",
+    "parameter_file": "assets/preflight/smooth2-parametric/drone_parametric.params.json",
+    "assembly_manifest": "assets/preflight/smooth2-parametric/assembly-manifest.json",
+    "geometry_revision": "smooth2-parametric imported baseline",
+    "evidence": "cad-derived design parameters; not a metrology certificate"
+  },
+  "coordinate_frame": {
+    "frame": "CAD_EXPORT_Z_UP",
+    "x_axis": "airframe lateral",
+    "y_axis": "airframe longitudinal; camera/front is negative Y",
+    "z_axis": "up",
+    "design_to_export": "(x, y, z) -> (x, -z, y)",
+    "simulator_frame": "right-handed ENU; X lateral, Y longitudinal, Z up",
+    "export_to_simulator": "(X, Y, Z) -> (X, Y, Z)",
+    "units": "metres internally; source CAD parameters are millimetres"
+  },
+  "geometry": {
+    "model_scale": 1.414028,
+    "body_height_mm_design": 13.0,
+    "body_half_width_mm_design": 38.0,
+    "body_front_z_mm_design": 66.0,
+    "body_rear_z_mm_design": -52.0,
+    "arm_count": 4,
+    "motor_x_mm_design": 58.0,
+    "motor_z_mm_design": 58.0,
+    "propeller_count": 4,
+    "propeller_blade_count": 2,
+    "propeller_radius_mm_design": 26.45,
+    "propeller_pitch_mm_design": 53.086,
+    "guard_outer_radius_mm_design": 35.5,
+    "camera_tilt_down_deg": 35.0
+  },
+  "rotors": [
+    {"id": "rotor_xp_yp", "position_m": [0.082013624, 0.082013624, 0.0], "axis_body": [0.0, 0.0, 1.0], "spin_sign": 1},
+    {"id": "rotor_xp_yn", "position_m": [0.082013624, -0.082013624, 0.0], "axis_body": [0.0, 0.0, 1.0], "spin_sign": -1},
+    {"id": "rotor_xn_yn", "position_m": [-0.082013624, -0.082013624, 0.0], "axis_body": [0.0, 0.0, 1.0], "spin_sign": 1},
+    {"id": "rotor_xn_yp", "position_m": [-0.082013624, 0.082013624, 0.0], "axis_body": [0.0, 0.0, 1.0], "spin_sign": -1}
+  ],
+  "uncertain_physical_properties": {
+    "takeoff_mass_kg": null,
+    "center_of_mass_m": null,
+    "inertia_tensor_kg_m2": null,
+    "material_densities_kg_m3": null,
+    "motor_model": null,
+    "esc_model": null,
+    "battery_model": null,
+    "rotor_thrust_curve": null,
+    "rotor_torque_curve": null
+  },
+  "geometry_policy": {
+    "fixed_in_v1": ["body geometry", "arm geometry", "motor mount positions", "propeller geometry", "propeller guard geometry", "rotor count", "rotor axes"],
+    "randomized_in_training": ["total mass", "center of mass", "inertia tensor", "per-motor effectiveness", "battery voltage factor", "body drag", "wind", "sensor noise"],
+    "not_claimed": ["CAD-derived mass", "measured CG", "measured inertia", "verified propeller thrust", "flight readiness"]
+  },
+  "notes": [
+    "Rotor locations are transformed from design coordinates using the CAD model_scale and the documented 90-degree X export rotation.",
+    "The CAD source uses a 26.45 mm design propeller radius and model_scale 1.414028; the resulting scaled diameter is approximately 74.8 mm. Existing README text contains a conflicting 63.5 mm statement; do not use that conflicting statement as a trusted dimension.",
+    "Alternating spin signs are a conventional quad-X modelling assumption and must be confirmed against the actual motor wiring/propeller rotation direction.",
+    "Mass and inertia values are deliberately null here. The legacy config/drone.json values are simulator placeholders and are not copied as aircraft facts."
+  ]
+}
