@@ -38,9 +38,11 @@ class BalancedProfileCallback(BaseCallback):
         super().__init__(verbose=1)
         self.profiles, self.family_path = profiles, family_path
         self.randomization_path, self.history_length = randomization_path, history_length
-        self.stage, self.episodes = stage, max(1, min(int(episodes), 2))
+        self.stage, self.episodes = stage, max(1, int(episodes))
         self.frequency, self.best_dir, self.reports_dir = max(1, frequency), Path(best_dir), Path(reports_dir)
         self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, float("-inf")), None
+        self.latest_dir = self.best_dir.parent
+        self.latest_dir.mkdir(parents=True, exist_ok=True)
 
     def _on_step(self):
         if self.n_calls % self.frequency:
@@ -87,6 +89,11 @@ class BalancedProfileCallback(BaseCallback):
         self.reports_dir.mkdir(parents=True,exist_ok=True)
         report_path=self.reports_dir/f"profile-evaluation-{self.num_timesteps}.json"
         report_path.write_text(json.dumps(report,indent=2),encoding="utf-8")
+        self.model.save(str(self.latest_dir / "latest_model"))
+        (self.latest_dir / "training_state.json").write_text(json.dumps({
+            "num_timesteps": int(self.num_timesteps), "stage": self.stage,
+            "seed": self.seed, "latest_checkpoint": "latest_model.zip"
+        }, indent=2), encoding="utf-8")
         if score > self.best_score:
             self.best_score,self.best_report=score,report_path.name
             self.best_dir.mkdir(parents=True,exist_ok=True)
@@ -152,8 +159,16 @@ def main(argv=None):
                 ent_coef=0.005, verbose=1, seed=args.seed, device="cpu",
                 tensorboard_log=str(run_dir / "tensorboard"),
             )
-        model.learn(total_timesteps=args.timesteps, callback=eval_callback, progress_bar=False)
+        remaining = max(args.timesteps - int(model.num_timesteps), 0) if args.load_model else args.timesteps
+        if remaining:
+            model.learn(total_timesteps=remaining, callback=eval_callback,
+                        progress_bar=False, reset_num_timesteps=not bool(args.load_model))
         model.save(str(run_dir / "final_model"))
+        model.save(str(run_dir / "latest_model"))
+        (run_dir / "training_state.json").write_text(json.dumps({
+            "num_timesteps": int(model.num_timesteps), "stage": args.curriculum_stage,
+            "completed": True, "latest_checkpoint": "latest_model.zip"
+        }, indent=2), encoding="utf-8")
         best_checkpoint = run_dir / "best" / "best_model.zip"
         if not best_checkpoint.is_file():
             raise RuntimeError("evaluation did not produce best/best_model.zip; refusing to continue curriculum without an evaluated checkpoint")
