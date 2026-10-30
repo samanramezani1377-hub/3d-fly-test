@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from fast_physics.vehicle_family import DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv, load_vehicle_profiles
+from fast_physics.ppo_action import policy_action_to_motor_commands
 
 STABLE_ALTITUDE_ERROR_M = 0.15
 STABLE_HORIZONTAL_ERROR_M = 0.20
@@ -88,7 +89,8 @@ def main(argv=None):
                 terminated = truncated = False
                 info = {}
                 while True:
-                    action, _ = model.predict(obs, deterministic=True)
+                    policy_action, _ = model.predict(obs, deterministic=True)
+                    action = policy_action_to_motor_commands(policy_action, env.inner.base_params)
                     obs, reward, terminated, truncated, info = env.step(action)
                     rewards.append(float(reward))
                     crashed = crashed or bool(info.get("crashed", False))
