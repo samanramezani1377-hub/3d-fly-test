@@ -394,7 +394,7 @@ The loader accepts either one profile object or a family object with a profiles 
 
 ### Policy hardware conditioning
 
-`training/fast_physics/vehicle_family.py` wraps the existing Gymnasium plant. At each episode reset it selects a vehicle profile (or pins one when requested), builds a vehicle-specific set of physical parameters and appends ten normalized nominal configuration features to the observation:
+`training/fast_physics/vehicle_family.py` wraps the existing Gymnasium plant. At each episode reset it selects a vehicle profile (or pins one when requested), builds a vehicle-specific set of physical parameters and appends twelve normalized nominal configuration features to the observation:
 1. nominal mass;
 2. rotor arm radius;
 3. propeller diameter;
