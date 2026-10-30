@@ -19,7 +19,8 @@ def score(report):
     profiles = report["profiles"]
     return (min(x["hover_success_rate"] for x in profiles),
             -max(x["crash_rate"] for x in profiles),
-            sum(x["completion_rate"] for x in profiles) / len(profiles))
+            min(x["takeoff_success_rate"] for x in profiles),
+            sum(x["mean_stable_hover_seconds"] for x in profiles) / len(profiles))
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
@@ -29,6 +30,7 @@ def main(argv=None):
     p.add_argument("--checkpoint-eval-episodes", type=int, default=5)
     p.add_argument("--min-final-success-rate", type=float, default=0.50)
     p.add_argument("--max-final-crash-rate", type=float, default=0.25)
+    p.add_argument("--min-final-takeoff-rate", type=float, default=0.75)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--run-prefix", default="universal-quad")
     p.add_argument("--output-dir", type=Path, default=Path("training/runs"))
@@ -36,7 +38,7 @@ def main(argv=None):
     a = p.parse_args(argv)
     if min(a.timesteps_per_stage, a.n_envs, a.evaluation_episodes, a.checkpoint_eval_episodes) <= 0:
         raise SystemExit("training and evaluation counts must be positive")
-    if not 0 <= a.min_final_success_rate <= 1 or not 0 <= a.max_final_crash_rate <= 1:
+    if not 0 <= a.min_final_success_rate <= 1 or not 0 <= a.max_final_crash_rate <= 1 or not 0 <= a.min_final_takeoff_rate <= 1:
         raise SystemExit("acceptance thresholds must be between zero and one")
     out = a.output_dir.resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -121,12 +123,17 @@ def main(argv=None):
     shutil.copy2(Path(winner["model"]), release_dir / "best_model.zip")
     min_success = min(x["hover_success_rate"] for x in winner["profiles"])
     max_crash = max(x["crash_rate"] for x in winner["profiles"])
-    accepted = min_success >= a.min_final_success_rate and max_crash <= a.max_final_crash_rate
+    min_takeoff = min(x["takeoff_success_rate"] for x in winner["profiles"])
+    accepted = (min_success >= a.min_final_success_rate
+                and max_crash <= a.max_final_crash_rate
+                and min_takeoff >= a.min_final_takeoff_rate)
     release = {"winner": winner["label"], "selection_basis": "final held-out evaluation on identical seeds",
         "candidates": tested, "minimum_profile_hover_success_rate": min_success,
         "maximum_profile_crash_rate": max_crash,
-        "acceptance_thresholds": {"minimum_hover_success_rate": a.min_final_success_rate,
-                                  "maximum_crash_rate": a.max_final_crash_rate},
+        "minimum_profile_takeoff_success_rate": min_takeoff,
+        "acceptance_thresholds": {"minimum_sustained_hover_success_rate": a.min_final_success_rate,
+                                  "maximum_crash_rate": a.max_final_crash_rate,
+                                  "minimum_takeoff_success_rate": a.min_final_takeoff_rate},
         "accepted": accepted, "simulation_only": True, "physical_flight_eligible": False}
     write_json(release_dir / "release-manifest.json", release)
     manifest["final_test"] = release
