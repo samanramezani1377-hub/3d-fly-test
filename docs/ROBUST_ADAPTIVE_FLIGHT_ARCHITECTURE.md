@@ -404,7 +404,9 @@ The loader accepts either one profile object or a family object with a profiles 
 7. motor time constant;
 8. nominal battery voltage;
 9. battery capacity;
-10. motor KV.
+10. motor KV;
+11. fraction of secondary physical parameters initialized from estimates;
+12. profile provenance confidence (provisional, user-supplied or measured).
 
 The policy receives the declared configuration. It does not receive the simulator's randomized episode ground truth. The existing history and online effective-lift estimator remain in place. This allows the same policy architecture to learn how nominal configuration changes its control response, while the history/estimator helps it adapt to deviations from nominal values.
 
