@@ -86,3 +86,31 @@ The command-effort term is only a normalized control-effort proxy. The plant doe
 Non-finite states are detected before reward/estimator/observation use. The environment substitutes the last finite state for the returned observation, emits a finite terminal penalty and records the failure reason. The ground plane is enforced as a unilateral contact constraint: the simulated vehicle cannot continue below z=0; contact before takeoff is allowed, while contact after takeoff is a crash.
 
 Evaluation reports separately track takeoff success/failure, sustained-hover success, crash rate, maximum altitude, stable-hover duration and merely surviving to the time limit. Surviving to the time limit is not mission completion. The release gate requires minimum per-profile sustained-hover success, maximum per-profile crash rate, and minimum per-profile takeoff success. Simulation acceptance is not physical-flight approval.
+
+
+## PPO control and learning pipeline v4
+
+The universal PPO path now emits an unbounded four-dimensional Gaussian sample
+which is smoothly squashed with tanh and interpreted as collective thrust,
+roll torque, pitch torque and yaw torque. A geometry-derived full-rank wrench
+allocation matrix maps the requested body wrench into per-rotor thrust and
+then into normalized motor commands. The allocator uses the nominal declared
+vehicle profile only; randomized episode ground truth remains hidden.
+
+The fast-physics state/action history is dimensionlessly scaled before entering
+the policy. Ground takeoff remains required in all five curriculum stages;
+small initial horizontal-position and roll/pitch perturbations grow from stage
+2 to stage 5. The reward retains altitude progress, takeoff transition and
+sustained-hover shaping, with an additional vertical-speed damping term.
+
+The PPO policy/value networks use separate 128-unit layers, reduced initial
+Gaussian standard deviation, a 0.15 clipping range, target-KL guard and
+gradient-norm cap. These are training design choices to improve conditioning,
+not empirically proven optimal hyperparameters.
+
+The existing workflow now stores these incompatible action/observation
+semantics under `training/models/universal-quad-v4/`. Do not load v2 or v3
+checkpoints into v4. No training run or new test suite is triggered by these
+changes. The four included vehicle profiles are provisional estimates; static
+mixer rank and nominal thrust-envelope calculations do not validate the real
+aircraft or establish sim-to-real transfer.
