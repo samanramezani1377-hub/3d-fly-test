@@ -45,7 +45,8 @@ class BalancedProfileCallback(BaseCallback):
         self.frequency = max(1, frequency)
         self.checkpoint_frequency = max(1, checkpoint_frequency)
         self.best_dir, self.reports_dir = Path(best_dir), Path(reports_dir)
-        self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, -1.0, float("-inf")), None
+        self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, -1.0, -1.0, float("-inf")), None
+        self.sampling_weights_path = self.latest_dir / "profile-sampling-weights.json"
         self.latest_dir = self.best_dir.parent
         self.latest_dir.mkdir(parents=True, exist_ok=True)
         self.last_eval_timesteps = 0
@@ -54,7 +55,7 @@ class BalancedProfileCallback(BaseCallback):
         if selection_path.is_file():
             saved = json.loads(selection_path.read_text(encoding="utf-8"))
             saved_score = tuple(saved.get("score", ()))
-            # v4 four-field scores are not comparable to the v5 five-field rule.
+            # Older selection rules are not comparable to the v5 five-field rule.
             if len(saved_score) == 5:
                 self.best_score = saved_score
                 self.best_report = saved.get("report")
@@ -165,6 +166,34 @@ class BalancedProfileCallback(BaseCallback):
         self.reports_dir.mkdir(parents=True, exist_ok=True)
         report_path = self.reports_dir / f"profile-evaluation-{self.num_timesteps}.json"
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+        # Increase sampling probability for profiles with weaker mission results.
+        weaknesses = {
+            item["vehicle_id"]: (
+                1.0 - item["success_rate"]
+                + 0.5 * item["crash_rate"]
+                + 0.25 * (1.0 - item["takeoff_success_rate"])
+            )
+            for item in profile_reports
+        }
+        mean_weakness = sum(weaknesses.values()) / len(weaknesses)
+        previous = {}
+        if self.sampling_weights_path.is_file():
+            previous = json.loads(self.sampling_weights_path.read_text(encoding="utf-8"))
+        proposed = {
+            vid: float(np.clip(1.0 + 1.5 * (weakness - mean_weakness), 0.5, 2.5))
+            for vid, weakness in weaknesses.items()
+        }
+        proposed_mean = sum(proposed.values()) / len(proposed)
+        proposed = {vid: value / proposed_mean for vid, value in proposed.items()}
+        smoothed = {
+            vid: 0.65 * float(previous.get(vid, 1.0)) + 0.35 * proposed[vid]
+            for vid in proposed
+        }
+        weight_tmp = self.sampling_weights_path.with_suffix(".json.tmp")
+        weight_tmp.write_text(json.dumps(smoothed, indent=2), encoding="utf-8")
+        weight_tmp.replace(self.sampling_weights_path)
+
         self._save_latest(completed=False)
         self.last_checkpoint_timesteps = int(self.num_timesteps)
         if score > self.best_score:
@@ -209,6 +238,11 @@ def main(argv=None):
 
     run_dir = args.output_dir.resolve() / args.run_name
     run_dir.mkdir(parents=True, exist_ok=True)
+    sampling_weights_path = run_dir / "profile-sampling-weights.json"
+    if not sampling_weights_path.is_file():
+        sampling_weights_path.write_text(json.dumps({
+            profile["vehicle_id"]: 1.0 for profile in profiles
+        }, indent=2), encoding="utf-8")
     family_path = args.vehicle_family
     if args.vehicle_id:
         family_path = run_dir / "selected_vehicle_profiles.json"
@@ -221,6 +255,7 @@ def main(argv=None):
                 randomization_path=args.randomization_config,
                 history_length=args.history_length, randomize=not args.no_randomization,
                 curriculum_stage=args.curriculum_stage,
+                sampling_weights_path=sampling_weights_path,
             )
             return BodyWrenchActionWrapper(base_env)
         return _init
@@ -294,6 +329,10 @@ def main(argv=None):
             "policy_action_semantics": "unbounded_gaussian_tanh_squashed_collective_roll_pitch_yaw_body_wrench",
             "motor_allocator": "geometry-derived nominal-profile wrench allocation; randomized episode parameters hidden",
             "policy_is_hardware_conditioned": True,
+            "profile_sampling": "adaptive weakness-weighted sampling; smoothed updates from balanced profile evaluation",
+            "reference_teacher_schedule": {"stage_1": 0.80, "stage_2": 0.60, "stage_3": 0.40, "stage_4": 0.20, "stage_5": 0.0},
+            "evaluation_metrics": ["takeoff_success", "five_second_sustained_hover", "crash_rate", "stable_hover_duration", "motor_saturation_fraction", "mean_return"],
+            "sb3_diagnostics": ["train/approx_kl", "train/explained_variance", "train/entropy_loss", "train/value_loss", "train/policy_gradient_loss"],
             "episode_randomization_ground_truth_is_hidden": True,
             "physics_backend": "training.fast_physics.FastQuadrotor",
             "stable_baselines3_version": stable_baselines3.__version__,
