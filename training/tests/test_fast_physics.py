@@ -7,10 +7,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from fast_physics import AdaptiveDroneEnv, FastQuadrotor, VehicleParameters, load_vehicle_parameters, sample_scenario
-
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "training"))
+
+from fast_physics import AdaptiveDroneEnv, FastQuadrotor, VehicleParameters, load_vehicle_parameters, sample_scenario
 AIRFRAME = ROOT / "vehicle_models/smooth2_parametric/base_airframe.json"
 CALIBRATION = ROOT / "vehicle_models/smooth2_parametric/physics_calibration.json"
 RANDOMIZATION = ROOT / "vehicle_models/smooth2_parametric/domain_randomization.json"
