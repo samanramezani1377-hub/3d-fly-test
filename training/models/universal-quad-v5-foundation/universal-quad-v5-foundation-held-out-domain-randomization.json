@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "description": "Independent wider held-out distribution; excluded from all training and checkpoint selection; evaluated once after stage 5.",
+  "mass": {
+    "scale": [
+      0.76,
+      1.12
+    ]
+  },
+  "center_of_mass": {
+    "offset_arm_fraction": 0.12
+  },
+  "inertia": {
+    "scale": [
+      0.65,
+      1.45
+    ]
+  },
+  "motor": {
+    "effectiveness": [
+      0.86,
+      1.1
+    ]
+  },
+  "battery": {
+    "voltage_factor": [
+      0.92,
+      1.0
+    ]
+  },
+  "aerodynamics": {
+    "drag_scale": [
+      0.65,
+      1.45
+    ]
+  },
+  "environment": {
+    "wind_component_m_s": [
+      -2.5,
+      2.5
+    ],
+    "sensor_noise_std": {
+      "position_m": 0.002,
+      "velocity_m_s": 0.01,
+      "attitude_rad": 0.002,
+      "angular_rate_rad_s": 0.005
+    }
+  },
+  "active_curriculum_stage": {
+    "stage": 5,
+    "name": "held-out-stage5-initial-condition"
+  }
+}
