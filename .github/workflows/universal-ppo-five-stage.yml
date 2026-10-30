@@ -1,0 +1,261 @@
+name: Universal PPO - Five-stage curriculum (stage 1 active)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "training/**"
+      - "vehicle_models/family/**"
+      - "vehicle_models/smooth2-parametric/domain_randomization.json"
+      - "assets/preflight/**"
+      - "output/smooth2-parametric/**"
+      - "cad/parametric/**"
+      - "scripts/validate_preflight_assets.py"
+      - "tests/test_preflight_asset_validator.py"
+      - ".github/workflows/**"
+  pull_request:
+    paths:
+      - "training/**"
+      - "vehicle_models/family/**"
+      - "vehicle_models/smooth2-parametric/domain_randomization.json"
+      - "assets/preflight/**"
+      - "output/smooth2-parametric/**"
+      - "cad/parametric/**"
+      - "scripts/validate_preflight_assets.py"
+      - "tests/test_preflight_asset_validator.py"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: universal-ppo-five-stage-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  OMP_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  OPENBLAS_NUM_THREADS: "1"
+  NUMEXPR_NUM_THREADS: "1"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  validate-repository:
+    name: Existing reward and CAD asset validation
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      pages_changed: ${{ steps.pages.outputs.changed }}
+    steps:
+      - name: Checkout full history for change detection
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install lightweight validation dependencies
+        run: python -m pip install --upgrade numpy gymnasium pytest
+
+      - name: Compile Python training modules
+        run: python -m compileall -q training
+
+      - name: Run existing reward and checkpoint regression tests
+        run: python -m unittest training.test_reward_design
+
+      - name: Validate committed CAD asset package
+        run: python scripts/validate_preflight_assets.py
+
+      - name: Run existing CAD validator unit tests
+        run: python -m pytest -q tests/test_preflight_asset_validator.py
+
+      - name: Detect whether Flight Lab needs redeployment
+        id: pages
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          before="${GITHUB_EVENT_BEFORE:-}"
+          if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+            changed=true
+          elif git diff --name-only "$before" "$GITHUB_SHA" | grep -Eq '^(site/|training/fast_physics/|vehicle_models/family/|\\.github/workflows/universal-ppo-five-stage\\.yml$)'; then
+            changed=true
+          else
+            changed=false
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+  validate-universal-ppo:
+    name: Existing universal PPO physics and hover validation
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: training/requirements.txt
+
+      - name: Install CPU-only dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -r training/requirements.txt
+          python -c "import torch; assert torch.version.cuda is None; print('CPU-only PyTorch:', torch.__version__)"
+
+      - name: Run existing physics, family, and hover regression tests
+        run: |
+          python -m pytest -q \
+            training/tests/test_fast_physics.py \
+            training/tests/test_universal_vehicle.py \
+            training/tests/test_hover_reference.py
+
+  deploy-flight-lab:
+    name: Deploy Flight Lab to GitHub Pages
+    needs: validate-repository
+    if: github.event_name == 'push' && needs.validate-repository.outputs.pages_changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Assemble shared-engine Flight Lab
+        run: |
+          mkdir -p _site/training _site/vehicle_models/family
+          cp -a site/. _site/
+          cp -a training/fast_physics _site/training/
+          cp vehicle_models/family/vehicle_profiles.json _site/vehicle_models/family/
+          cp vehicle_models/family/domain_randomization.json _site/vehicle_models/family/
+          touch _site/.nojekyll
+          test -s _site/index.html
+          test -s _site/app.js
+          test -s _site/engine.py
+          test -s _site/training/fast_physics/vehicle_family.py
+          test -s _site/training/fast_physics/dynamics.py
+          test -s _site/training/fast_physics/env.py
+          test -s _site/vehicle_models/family/vehicle_profiles.json
+          test -s _site/vehicle_models/family/domain_randomization.json
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  train-five-stage-ppo:
+    name: Five-stage PPO training (stage 1 currently active)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: training/requirements.txt
+
+      - name: Install CPU-only dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -r training/requirements.txt
+          python -c "import torch; assert torch.version.cuda is None; print('CPU-only PyTorch:', torch.__version__)"
+
+      - name: Restore resumable stage-1 foundation checkpoints
+        run: |
+          mkdir -p training/runs
+          if [ -d training/models/universal-quad-v5-foundation ]; then
+            cp -a training/models/universal-quad-v5-foundation/. training/runs/
+          fi
+
+      - name: Train active curriculum stages
+        run: |
+          set -o pipefail
+          python training/run_universal_curriculum.py \
+            --active-stages 1 --timesteps-per-stage 2000000 \
+            --n-envs 32 \
+            --run-prefix universal-quad-v5-foundation \
+            --checkpoint-eval-episodes 2 \
+            --eval-frequency 100000 \
+            --checkpoint-frequency 20000 \
+            --evaluation-episodes 20 \
+            2>&1 | tee single-stage-training.log
+
+      - name: Commit resumable checkpoints and evaluated models
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p training/models/universal-quad-v5-foundation
+          for stage_dir in training/runs/universal-quad-v5-foundation-stage*; do
+            if [ -d "$stage_dir" ]; then
+              mkdir -p "training/models/universal-quad-v5-foundation/$(basename "$stage_dir")"
+              rsync -a --exclude 'tensorboard/' --exclude '*.csv' "$stage_dir/" "training/models/universal-quad-v5-foundation/$(basename "$stage_dir")/"
+            fi
+          done
+          if [ -d training/runs/release ]; then
+            cp -a training/runs/release training/models/universal-quad-v5-foundation/
+          fi
+          if [ -f training/runs/universal-quad-v5-foundation-curriculum-manifest.json ]; then
+            cp training/runs/universal-quad-v5-foundation-curriculum-manifest.json training/models/universal-quad-v5-foundation/
+          fi
+          if [ -f training/runs/universal-quad-v5-foundation-held-out-domain-randomization.json ]; then
+            cp training/runs/universal-quad-v5-foundation-held-out-domain-randomization.json training/models/universal-quad-v5-foundation/
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add training/models/universal-quad-v5-foundation
+          if ! git diff --cached --quiet; then
+            find training/models/universal-quad-v5-foundation -type f -size +90M -print -quit | grep -q . && {
+              echo "A checkpoint exceeds the safe 90 MB per-file repository limit."
+              exit 1
+            } || true
+            git commit -m "Store final-tested PPO models and resumable checkpoints"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
+      - name: Print training manifest and log tail
+        if: always()
+        run: |
+          echo '===== FIVE-STAGE CURRICULUM MANIFEST ====='
+          if [ -f training/runs/universal-quad-v5-foundation-curriculum-manifest.json ]; then cat training/runs/universal-quad-v5-foundation-curriculum-manifest.json; else echo 'Manifest not produced'; fi
+          echo '===== TRAINING LOG TAIL ====='
+          if [ -f single-stage-training.log ]; then tail -c 50000 single-stage-training.log; else echo 'Training log not produced'; fi
+
+      - name: Upload training backup
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: universal-ppo-five-stage-backup
+          path: |
+            training/runs/
+            training/models/universal-quad-v5-foundation/
+            single-stage-training.log
+          if-no-files-found: warn
+          retention-days: 90

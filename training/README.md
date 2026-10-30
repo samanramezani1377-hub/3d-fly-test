@@ -15,7 +15,7 @@ This folder provides a native C++ build of SkySim DroneCore, a Gymnasium adapter
 
 ## Backend architecture
 
-The browser simulator compiles pinned upstream C++ sources to WebAssembly. build_native_core.py checks out the same pinned upstream revision used by .github/workflows/pages.yml, applies this repository's configuration and battery compatibility patch, then compiles those sources as a native shared library. native_env.py exposes that C API through Gymnasium; PPO trains against that physics source rather than a separate Godot server.
+The browser simulator compiles pinned upstream C++ sources to WebAssembly. build_native_core.py checks out the same pinned upstream revision used by .github/workflows/universal-ppo-five-stage.yml, applies this repository's configuration and battery compatibility patch, then compiles those sources as a native shared library. native_env.py exposes that C API through Gymnasium; PPO trains against that physics source rather than a separate Godot server.
 
 **Important:** shared source code does not prove bit-for-bit native/WASM parity. CI and deterministic trajectory comparisons are still needed. This is a simplified simulation, not sim-to-real validation.
 
@@ -28,27 +28,29 @@ Requires Python 3.10+ and a C++ compiler with C++20 support (for example, g++).
     python training/train_ppo.py --timesteps 50000 --seed 42 --run-name ppo-hover-50000 --save-freq 5000 --eval-freq 5000
     python training/evaluate.py --model training/runs/ppo-hover-50000/final_model.zip --episodes 10
 
-## Universal five-stage CPU PPO training
+## Consolidated GitHub Actions workflow
 
-The existing workflow is .github/workflows/ppo-cpu-two-stage.yml. Its event modes are intentionally separate:
+The repository has exactly one workflow: `.github/workflows/universal-ppo-five-stage.yml`. It combines the necessary automation:
 
-- Pull requests run only the existing physics/family/hover regression tests. They do not start PPO training.
-- A manual workflow_dispatch run executes one sequential five-stage universal PPO curriculum.
+- **Push to main:** runs the existing reward/checkpoint regression and CAD asset-integrity checks. It deploys Flight Lab only when the simulator site, shared fast-physics engine, vehicle profiles, or deployment workflow changes.
+- **Pull request:** runs the existing reward/CAD checks plus the existing universal physics, vehicle-family, and hover-reference regression tests. No PPO training is started.
+- **Manual Run workflow:** runs the universal five-stage PPO curriculum. All five stages remain implemented, but only stage 1 is active.
 
-The manual run uses one shared policy, 16 parallel simulator environments, and exactly 1,000,000 aggregate PPO transitions in each of five stages (5,000,000 stage transitions total). The PPO rollout is 500 steps × 16 environments = 8,000 transitions, so the stage budget and resumable checkpoints align to complete rollouts. Each stage warm-starts from the previous stage's best evaluated checkpoint. A previous-stage PPO timestep counter is reset for the new stage budget; restarting an interrupted stage resumes from that same stage's latest checkpoint and consumes only its remaining budget.
+Current manual training configuration:
 
-To keep evaluation from becoming the main workload:
+| Setting | Value |
+|---|---:|
+| Active stages | 1 of 5 |
+| Transitions in active stage | 2,000,000 aggregate |
+| Parallel environments | 32 |
+| Rollout length | 500 per environment |
+| Aggregate transitions per rollout | 16,000 |
+| Stage-1 teacher weight | 0.80 |
+| Run prefix | `universal-quad-v5-foundation` |
 
-- The latest resumable training checkpoint is saved at the first complete PPO rollout after each 20,000-transition interval (24,000 transitions with the current 16-environment, 500-step rollout).
-- Checkpoint-selection evaluation runs every 100,000 transitions, with 2 episodes per vehicle profile.
-- Independent held-out evaluation runs only once, after all five training stages, comparing the final and best stage-5 checkpoints (20 episodes per vehicle profile per candidate).
-- No separate training workflow, benchmark workflow, or extra test suite is launched by this pipeline.
+Stages 2–5 are retained but dormant. The workflow uses `--active-stages 1`; it does not delete or rewrite later curriculum stages. PPO training starts only when **Run workflow** is selected on `main`. Push and pull-request events never start training.
 
-The workflow restores committed universal-quad-v2 checkpoints before a manual run and saves updated checkpoints, reports and the release manifest under training/models/universal-quad-v2/. Resume with the same settings and profile file; the runner rejects a manifest with mismatched settings rather than silently mixing runs.
-
-Manual run: open the existing workflow in GitHub Actions and select Run workflow on main. Pull-request checks are validation only; they are not the training run.
-
-The five-stage chain remains a simulation research experiment. The supplied vehicle profiles are provisional estimates, and a passing held-out simulation gate is not physical flight certification.
+The workflow logs aggregate transitions/sec as `[PPO_SPEED]`, stores resumable checkpoints and uploads a 90-day artifact backup. See the [complete single-stage guide](../docs/UNIVERSAL_PPO_SINGLE_STAGE_GUIDE.md) for checkpoint/resume rules, evaluation semantics, and the simulation-only safety boundary.
 
 ## Google Colab
 
@@ -213,7 +215,7 @@ The current universal fast-physics path (train_universal_ppo.py, evaluate_univer
 - Checkpoint selection prioritizes weakest-profile sustained-hover success, worst-profile crash rate, weakest-profile takeoff rate, then mean return. Final held-out selection uses the same safety priorities and stable-hover duration as a tie-breaker.
 - The final release gate checks minimum sustained-hover success, maximum crash rate and minimum takeoff success on every profile. Passing this simulation gate never certifies physical flight.
 
-No additional workflow or test suite was introduced for these changes. The existing PR workflow remains the only automated validation path; no training or evaluation run is started by editing these files.
+No additional workflow or test suite was introduced for these changes. The consolidated workflow is the only GitHub Actions workflow. Push and PR jobs perform validation/deployment only; PPO training is manual and stage 1 is currently the only active curriculum stage.
 
 
 ### Universal PPO body-wrench control and observation scaling (pipeline v4)
@@ -312,4 +314,4 @@ No new workflow or test suite is added. The existing PR validation path remains 
 
 **Current source of truth:** [Single-stage takeoff/hover training guide](../docs/UNIVERSAL_PPO_SINGLE_STAGE_GUIDE.md). The existing GitHub Actions workflow now runs stage 1 only, with 2,000,000 aggregate transitions and 32 parallel environments. Stages 2–5 remain implemented but dormant. Throughput is logged per PPO rollout as `[PPO_SPEED]` in the same Actions job log and `single-stage-training.log`.
 
-Older sections below describe earlier experimental configurations and historical defaults. For the current manual GitHub Actions run, follow the linked guide and the arguments in `.github/workflows/ppo-cpu-two-stage.yml`; do not use the legacy five-stage command examples as the current workflow settings.
+Older sections below describe earlier experimental configurations and historical defaults. For the current manual GitHub Actions run, follow the linked guide and the arguments in `.github/workflows/universal-ppo-five-stage.yml`; do not use the legacy five-stage command examples as the current workflow settings.

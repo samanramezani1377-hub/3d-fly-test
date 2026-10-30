@@ -2,7 +2,7 @@
 
 ## 1. Current operating mode
 
-The existing workflow, `.github/workflows/ppo-cpu-two-stage.yml`, is temporarily configured for a **single active training stage**. The immediate objective is deliberately narrow:
+The existing workflow, `.github/workflows/universal-ppo-five-stage.yml`, is temporarily configured for a **single active training stage**. The immediate objective is deliberately narrow:
 
 1. learn to leave the ground reliably;
 2. reach the target altitude without crashing;
@@ -153,11 +153,11 @@ The adaptive profile sampler updates profile weights from observed weaknesses. T
 ## 8. How to launch the training
 
 1. Open the repository's **Actions** tab.
-2. Select **Universal PPO - PR validation / manual single-stage training**.
+2. Select **Universal PPO - Five-stage curriculum (stage 1 active)**.
 3. Select the `main` branch.
 4. Choose **Run workflow**.
 
-A pull request follows the existing validation path only. A push to `main` that touches the workflow's relevant paths is acknowledged by a lightweight no-op job: it does not check out the repository, install dependencies, run tests, or launch PPO training. The 2-million-transition training run starts only through the manual `workflow_dispatch` event.
+A push to `main` runs the existing reward/checkpoint and CAD asset-integrity checks, and deploys Flight Lab only when its source files change. A pull request runs those existing checks plus the universal physics, vehicle-family and hover-reference regression tests. Neither event starts PPO training. The two-million-transition training run starts only through the manual `workflow_dispatch` event. All repository automation is consolidated in the single workflow `.github/workflows/universal-ppo-five-stage.yml`.
 
 Do not start duplicate manual runs concurrently. The workflow concurrency group prevents overlapping runs on the same ref from proceeding independently.
 
@@ -213,7 +213,7 @@ The privileged teacher is a simulator-side training aid. Neither the teacher nor
 
 The current runtime settings are defined by:
 
-- `.github/workflows/ppo-cpu-two-stage.yml` — GitHub Actions entry point and run arguments;
+- `.github/workflows/universal-ppo-five-stage.yml` — GitHub Actions entry point and run arguments;
 - `training/run_universal_curriculum.py` — active-stage selection, budgets, resume and deferred final evaluation;
 - `training/train_universal_ppo.py` — PPO configuration, evaluation/checkpoint callback and throughput logging;
 - `training/fast_physics/ppo_action.py` — policy body-wrench action mapping and stage teacher blending;

@@ -5,7 +5,7 @@ This repository prepares a customizable SkySim browser flight-test environment.
 ## What this repository does
 
 - Deploys the upstream SkySim WebAssembly flight simulator to this repository's GitHub Pages.
-- Builds the physics core in GitHub Actions whenever `main` changes, or on manual workflow dispatch.
+- Validates the repository and deploys Flight Lab from one consolidated GitHub Actions workflow when relevant files on `main` change.
 - Loads the Python controller from `controllers/controller.py` as the default policy in the browser.
 - Records repeatable flight-test telemetry in the browser and exports JSON (metadata + samples) or CSV (time series).
 - Applies physical parameters from `config/drone.json` to the simulator before building.
@@ -14,7 +14,7 @@ This repository prepares a customizable SkySim browser flight-test environment.
 ## Quick start
 
 1. Open **Settings → Pages** and set **Build and deployment → Source** to **GitHub Actions**.
-2. Open **Actions → Deploy SkySim flight test → Run workflow** (or push a commit to `main`).
+2. Push a relevant commit to `main`; the consolidated workflow validates the repository and automatically deploys Flight Lab when its source files change.
 3. Wait for the workflow to finish, then open the GitHub Pages URL shown in the deployment.
 4. Select **Python** in the simulator and press **Run Python ▶**. The controller in `controllers/controller.py` is preloaded by the deployment.
 
@@ -63,7 +63,7 @@ The browser tier runs Python through Pyodide and is intended for classical/light
 - This is a simulation and software-development setup, not proof that a real aircraft is safe to fly.
 - The browser simulator currently models a quad-X. Changing the GLB changes the displayed shape only. The rotor layout and physical parameters remain a simplified model.
 - Verify mass, rotor size, motor/prop performance, battery, inertia and centre of gravity before interpreting results as representative of a real drone.
-- The upstream SkySim source is fetched at a pinned commit during deployment; see `.github/workflows/pages.yml`. The pinned upstream revision omits its documented battery header, so `sim_support/battery.hpp` supplies a small deterministic compatibility battery model with configurable capacity, cell count and internal resistance.
+- The upstream SkySim source is fetched at a pinned commit during deployment; see `.github/workflows/universal-ppo-five-stage.yml`. The pinned upstream revision omits its documented battery header, so `sim_support/battery.hpp` supplies a small deterministic compatibility battery model with configurable capacity, cell count and internal resistance.
 - SkySim is MIT-licensed; see `THIRD_PARTY_NOTICES.md`.
 
 ## Project documentation
