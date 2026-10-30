@@ -124,8 +124,13 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
     """Blend PPO body-wrench requests with a teacher that fades across stages."""
     def __init__(self, env):
         super().__init__(env)
+        # SB3 PPO requires finite Box bounds. Keep a deliberately wide
+        # symmetric envelope because the policy emits raw Gaussian samples;
+        # policy_action_to_wrench() performs the smooth tanh squashing. A
+        # narrow [-1, 1] Box would clip those raw samples before that mapping
+        # and unintentionally reduce the available control authority.
         self.action_space = gym.spaces.Box(
-            low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32
+            low=-5.0, high=5.0, shape=(4,), dtype=np.float32
         )
         self._cached_profile_id = None
         self._cached_params = None
