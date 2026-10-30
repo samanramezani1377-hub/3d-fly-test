@@ -28,23 +28,27 @@ Requires Python 3.10+ and a C++ compiler with C++20 support (for example, g++).
     python training/train_ppo.py --timesteps 50000 --seed 42 --run-name ppo-hover-50000 --save-freq 5000 --eval-freq 5000
     python training/evaluate.py --model training/runs/ppo-hover-50000/final_model.zip --episodes 10
 
-## Production five-stage CPU training
+## Universal five-stage CPU PPO training
 
-The production workflow is `.github/workflows/ppo-cpu-two-stage.yml` and runs `training/run_five_stage.py` on CPU. Its current configuration is:
+The existing workflow is .github/workflows/ppo-cpu-two-stage.yml. Its event modes are intentionally separate:
 
-- Five chained stages, each requesting 100,000 aggregate environment transitions.
-- Stage 1 trains two independent candidates (seeds 42 and 40) concurrently; each candidate uses 4 environments.
-- Stages 2–5 each use 4 environments and continue from the previous stage's selected checkpoint.
-- Stage 1 therefore runs 8 simulator environments concurrently in total (two training processes × four environments); each later stage runs four.
-- Checkpoints and periodic evaluation are every 20,000 aggregate transitions. Periodic evaluation uses 5 episodes.
-- Candidate screening uses 2 episodes; up to 3 finalists receive 10 evaluation episodes each, split evenly across two independent evaluation seeds.
-- The standalone 1/4/8-environment benchmarks are separate workflows/scripts and are not invoked by production five-stage training.
+- Pull requests run only the existing physics/family/hover regression tests. They do not start PPO training.
+- A manual workflow_dispatch run executes one sequential five-stage universal PPO curriculum.
 
-Run locally after building the native core:
+The manual run uses one shared policy, 16 parallel simulator environments, and 1,000,000 aggregate PPO transitions in each of five stages (5,000,000 stage transitions total). Each stage warm-starts from the previous stage's best evaluated checkpoint. A previous-stage PPO timestep counter is reset for the new stage budget; restarting an interrupted stage resumes from that same stage's latest checkpoint and consumes only its remaining budget.
 
-    python training/run_five_stage.py
+To keep evaluation from becoming the main workload:
 
-The GitHub Actions workflow installs CPU-only PyTorch and runs the five-stage chain. The full run can take several hours. The manifest records the selected seed/checkpoint at each stage and whether the final model meets the simulation-only eligibility gate.
+- The latest resumable training checkpoint is saved every 20,000 aggregate transitions.
+- Checkpoint-selection evaluation runs every 100,000 transitions, with 2 episodes per vehicle profile.
+- Independent held-out evaluation runs only once, after all five training stages, comparing the final and best stage-5 checkpoints (20 episodes per vehicle profile per candidate).
+- No separate training workflow, benchmark workflow, or extra test suite is launched by this pipeline.
+
+The workflow restores committed universal-quad-v2 checkpoints before a manual run and saves updated checkpoints, reports and the release manifest under training/models/universal-quad-v2/. Resume with the same settings and profile file; the runner rejects a manifest with mismatched settings rather than silently mixing runs.
+
+Manual run: open the existing workflow in GitHub Actions and select Run workflow on main. Pull-request checks are validation only; they are not the training run.
+
+The five-stage chain remains a simulation research experiment. The supplied vehicle profiles are provisional estimates, and a passing held-out simulation gate is not physical flight certification.
 
 ## Google Colab
 
