@@ -47,6 +47,8 @@ class BalancedProfileCallback(BaseCallback):
         self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, -1.0, float("-inf")), None
         self.latest_dir = self.best_dir.parent
         self.latest_dir.mkdir(parents=True, exist_ok=True)
+        self.last_eval_timesteps = 0
+        self.last_checkpoint_timesteps = None
         selection_path = self.best_dir / "selection.json"
         if selection_path.is_file():
             saved = json.loads(selection_path.read_text(encoding="utf-8"))
@@ -63,14 +65,23 @@ class BalancedProfileCallback(BaseCallback):
         (self.latest_dir / "training_state.json").write_text(json.dumps({
             "num_timesteps": int(self.num_timesteps), "stage": self.stage,
             "seed": self.seed, "completed": bool(completed),
+            "last_eval_timesteps": int(self.last_eval_timesteps),
             "latest_checkpoint": "latest_model.zip"
         }, indent=2), encoding="utf-8")
 
-    def _on_step(self):
-        if self.n_calls % self.checkpoint_frequency == 0:
+    def _on_training_start(self):
+        if self.last_checkpoint_timesteps is None:
+            self.last_checkpoint_timesteps = int(self.num_timesteps)
+
+    def _on_rollout_end(self):
+        # Save only at rollout boundaries so a resume never counts discarded,
+        # partially collected PPO experience as completed training.
+        if int(self.num_timesteps) - self.last_checkpoint_timesteps >= self.checkpoint_frequency:
             self._save_latest(completed=False)
-        if self.n_calls % self.frequency:
-            return True
+            self.last_checkpoint_timesteps = int(self.num_timesteps)
+        if int(self.num_timesteps) - self.last_eval_timesteps < self.frequency:
+            return
+        self.last_eval_timesteps = int(self.num_timesteps)
         profile_reports = []
         for pi, profile in enumerate(self.profiles):
             e = VehicleFamilyEnv(vehicle_family_path=self.family_path,
@@ -144,6 +155,7 @@ class BalancedProfileCallback(BaseCallback):
         report_path = self.reports_dir / f"profile-evaluation-{self.num_timesteps}.json"
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
         self._save_latest(completed=False)
+        self.last_checkpoint_timesteps = int(self.num_timesteps)
         if score > self.best_score:
             self.best_score, self.best_report = score, report_path.name
             self.best_dir.mkdir(parents=True, exist_ok=True)
@@ -162,6 +174,12 @@ def main(argv=None):
         raise SystemExit("--timesteps, --n-envs, --eval-frequency, --checkpoint-frequency and --eval-episodes must be positive")
     if args.resume and not args.load_model:
         raise SystemExit("--resume requires --load-model pointing to this stage latest_model.zip")
+    rollout_transitions = args.n_envs * 500
+    if args.timesteps % rollout_transitions:
+        raise SystemExit(
+            f"--timesteps must be divisible by n_envs * 500 ({rollout_transitions}) "
+            "so each stage and same-stage resume finish on a complete PPO rollout."
+        )
     profiles = load_vehicle_profiles(args.vehicle_family)
     if args.vehicle_id:
         selected = set(args.vehicle_id)
@@ -199,17 +217,18 @@ def main(argv=None):
     aggregate_eval_frequency = args.eval_frequency
     eval_callback = BalancedProfileCallback(profiles, family_path, args.randomization_config,
         args.history_length, args.curriculum_stage, args.eval_episodes,
-        max((aggregate_eval_frequency + args.n_envs - 1) // args.n_envs, 1),
-        max((args.checkpoint_frequency + args.n_envs - 1) // args.n_envs, 1), run_dir / "best",
+        aggregate_eval_frequency, args.checkpoint_frequency, run_dir / "best",
         run_dir / "profile-evaluations", args.seed + 500000)
     try:
         if args.load_model:
             model = PPO.load(str(args.load_model), env=env, device="cpu")
             model.tensorboard_log = str(run_dir / "tensorboard")
+            if model.n_steps != 500 or model.batch_size != 250:
+                raise RuntimeError("Checkpoint PPO rollout settings do not match the v2 training pipeline.")
         else:
             model = PPO(
-                "MlpPolicy", env, learning_rate=args.learning_rate, n_steps=1024,
-                batch_size=256, gamma=0.99, gae_lambda=0.95, clip_range=0.2,
+                "MlpPolicy", env, learning_rate=args.learning_rate, n_steps=500,
+                batch_size=250, gamma=0.99, gae_lambda=0.95, clip_range=0.2,
                 ent_coef=0.005, verbose=1, seed=args.seed, device="cpu",
                 tensorboard_log=str(run_dir / "tensorboard"),
             )
@@ -218,6 +237,7 @@ def main(argv=None):
             if not state_path.is_file():
                 raise RuntimeError("--resume requested but this stage has no training_state.json")
             state = json.loads(state_path.read_text(encoding="utf-8"))
+            eval_callback.last_eval_timesteps = int(state.get("last_eval_timesteps", 0))
             if state.get("completed") or state.get("stage") != args.curriculum_stage:
                 raise RuntimeError("Refusing to resume a completed or mismatched curriculum stage")
             if int(state.get("num_timesteps", -1)) != int(model.num_timesteps):
