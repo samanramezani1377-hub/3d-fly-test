@@ -46,7 +46,7 @@ class BalancedProfileCallback(BaseCallback):
         self.frequency = max(1, frequency)
         self.checkpoint_frequency = max(1, checkpoint_frequency)
         self.best_dir, self.reports_dir = Path(best_dir), Path(reports_dir)
-        self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, -1.0, -1.0, float("-inf")), None
+        self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, -1.0, -1.0, float("-inf"), float("-inf")), None
         self.sampling_weights_path = self.latest_dir / "profile-sampling-weights.json"
         self.latest_dir = self.best_dir.parent
         self.latest_dir.mkdir(parents=True, exist_ok=True)
@@ -57,7 +57,7 @@ class BalancedProfileCallback(BaseCallback):
             saved = json.loads(selection_path.read_text(encoding="utf-8"))
             saved_score = tuple(saved.get("score", ()))
             # Older selection rules are not comparable to the v5 five-field rule.
-            if len(saved_score) == 5:
+            if len(saved_score) == 6:
                 self.best_score = saved_score
                 self.best_report = saved.get("report")
 
@@ -159,11 +159,13 @@ class BalancedProfileCallback(BaseCallback):
             -max(x["crash_rate"] for x in profile_reports),
             min(x["takeoff_success_rate"] for x in profile_reports),
             sum(x["mean_stable_hover_seconds"] for x in profile_reports) / len(profile_reports),
+            -sum(x["mean_motor_saturation_fraction"] for x in profile_reports) / len(profile_reports),
             sum(x["mean_return"] for x in profile_reports) / len(profile_reports))
         report = {"timesteps": int(self.num_timesteps), "selection_score": list(score),
             "selection_rule": ["maximize minimum per-profile five-second sustained-hover success",
                 "minimize worst-profile crash rate", "maximize minimum per-profile takeoff rate",
-                "maximize mean stable-hover duration", "maximize mean return as final tie-breaker"], "profiles": profile_reports}
+                "maximize mean stable-hover duration", "minimize motor saturation",
+                "maximize mean return as final tie-breaker"], "profiles": profile_reports}
         self.reports_dir.mkdir(parents=True, exist_ok=True)
         report_path = self.reports_dir / f"profile-evaluation-{self.num_timesteps}.json"
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
