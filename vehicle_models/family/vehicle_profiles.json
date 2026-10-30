@@ -61,7 +61,7 @@
         {"position_m":[-0.0654,-0.0654,0],"spin_sign":1},
         {"position_m":[-0.0654,0.0654,0],"spin_sign":-1}
       ],
-      "propulsion": {"motor_name":"Generic 14xx cinewhoop motor class","kv_rpm_per_volt":3800,"max_rotor_speed_rad_s":1700,"thrust_coefficient_n_per_rad_s2":0.0000015,"torque_to_thrust_m":0.014,"motor_time_constant_s":0.030,"nominal_battery_voltage_v":22.2,"battery_cells":6,"battery_capacity_ah":1.0}
+      "propulsion": {"motor_name":"Generic 14xx cinewhoop motor class","kv_rpm_per_volt":3800,"max_rotor_speed_rad_s":1700,"thrust_coefficient_n_per_rad_s2":0.0000015,"torque_to_thrust_m":0.014,"motor_time_constant_s":0.030,"nominal_battery_voltage_v":14.8,"battery_cells":4,"battery_capacity_ah":1.0}
     }
   ],
   "policy_conditioning": {
