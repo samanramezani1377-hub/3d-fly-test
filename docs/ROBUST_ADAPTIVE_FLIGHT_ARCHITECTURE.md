@@ -358,3 +358,16 @@ To turn the software scaffold into an aircraft-specific predictive model, collec
 8. actual rotor numbering and spin directions.
 
 Until these inputs are available, the model can be tested as software but cannot produce defensible aircraft-specific flight predictions.
+
+
+## 14. A2212/13T 1000KV motor reference profile
+
+A sourced generic reference profile is stored at `vehicle_models/components/a2212_1000kv_motor.json` and referenced from `physics_calibration.json`. The sources agree on the 1000KV class, 2S–3S LiPo use, approximately 0.5A no-load current at 10V, approximately 90mΩ catalog resistance, 3.17mm shaft, and roughly 28mm-class motor envelope. Several vendor sheets identify a 14-pole motor and recommend an ESC of at least 18–20A, with 30A commonly suggested as additional margin.
+
+The catalog sources are not fully consistent. Published mass spans approximately 47–61g depending on vendor and included accessories; maximum current is listed as 12A/60s by some vendors and 13A/60s by another; maximum power is listed as 150W in common A2212/13T sheets, while a separate A2212-series 1000KV/1047/3S performance row reports 173W and 15.6A. These are preserved as vendor-specific records, not averaged into a fictitious universal rating. Do not treat the 15.6A/173W row as a safe operating limit.
+
+HiModel publishes static test points at 11.1V: a GWS 9x4.7 prop at 7.5A typical / 11.3A peak and 650g typical / 730g maximum thrust; and an APC 10x4.7 prop at 10A typical / 12A peak and 790g typical / 915g maximum thrust. A different E-S Motor data sheet publishes an 1047 propeller point at 15.6A, 885g and 173W. These test points use different propellers and vendor test setups. They are useful reference evidence, but they are not a single continuous thrust curve and do not describe the custom smooth2 CAD propeller.
+
+**Important model boundary:** KV is a no-load speed constant, not a loaded RPM guarantee. The model therefore records KV but leaves `max_rotor_speed_rad_s`, `thrust_coefficient_n_per_rad_s2`, `torque_to_thrust_m`, and the motor time constant unset. The previously stored 0.045s motor lag was an unvalidated default; this profile does not promote it to a measured value. The fast-physics loader must continue to fail closed for physical calibration until mass/CG/inertia and exact motor/ESC/battery/propeller response are measured.
+
+Before using the motor data for aircraft-specific simulation, identify the exact vendor/lot and run a guarded thrust-stand characterization of the actual motor, ESC, battery and propeller. Record voltage, current, RPM, thrust, torque and temperature over multiple steady operating points, plus step response for actuator lag. Never infer thrust or reaction torque coefficients by fitting across the mixed vendor points above.
