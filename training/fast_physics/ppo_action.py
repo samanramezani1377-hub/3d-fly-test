@@ -62,10 +62,9 @@ def policy_action_to_motor_commands(action, params: VehicleParameters) -> np.nda
     rotor_thrust = np.linalg.solve(_allocation_matrix(params), desired_wrench)
     max_per_rotor = (
         params.thrust_coefficient_n_per_rad_s2
-        * params.motor_effectiveness
+        * np.asarray(params.motor_effectiveness, dtype=np.float64)
         * (params.max_rotor_speed_rad_s * params.voltage_factor) ** 2
     )
-    max_per_rotor = np.asarray(max_per_rotor, dtype=np.float64)
     if np.any(max_per_rotor <= 0) or not np.all(np.isfinite(max_per_rotor)):
         raise ValueError("invalid per-rotor thrust authority")
     rotor_thrust = np.clip(rotor_thrust, 0.0, max_per_rotor)
