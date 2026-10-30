@@ -178,3 +178,19 @@ Example:
 These sample profiles are deliberately marked `provisional_estimate`: they are software-development starting points, not measured or validated flight models. The current smooth2 custom propeller's thrust and torque coefficients are not established by the A2212 catalog data. Do not use any resulting checkpoint to control a physical aircraft. A real aircraft profile needs complete takeoff mass, CG, inertia, exact rotor geometry/directions, motor/ESC/battery details, and thrust/torque/RPM/current/voltage and motor-step-response measurements for the exact propulsion combination. Bench validation and staged safety testing remain separate requirements.
 
 This first implementation conditions the policy on declared nominal hardware specifications. It does not yet infer every unknown parameter online, guarantee zero-shot transfer to unseen aircraft, or provide an automatic physical calibration procedure. New aircraft must be represented in the profile library and independently evaluated before being considered supported.
+
+
+## Final-tested universal PPO releases and resumable checkpoints
+
+The existing five-stage workflow now writes an optimizer-inclusive `latest_model.zip` checkpoint and `training_state.json` at each existing periodic evaluation point. Re-running the same manual workflow resumes the first incomplete stage from its latest checkpoint and skips stages already marked complete in the curriculum manifest. Resume with the same vehicle-family file and training settings; changing these between runs invalidates a strict apples-to-apples continuation.
+
+At the end of stage 5, both the terminal `final_model.zip` and balanced training-selected `best/best_model.zip` are evaluated on the same independent held-out seeds (20 episodes per vehicle by default). The release `best_model.zip` is the candidate that wins this final held-out comparison. The terminal training snapshot is always preserved separately as `final_model.zip`.
+
+The default release gate requires at least 50% hover success for every vehicle profile and no more than 25% crash rate for any profile. If the gate fails, the workflow reports failure but retains and publishes the models and evaluation reports for diagnosis; a failed model is not silently labelled accepted.
+
+On manual runs, the existing workflow commits stage checkpoints, model weights, evaluation reports, metadata and manifests under `training/models/universal-quad/` in this repository. It also uploads a 90-day Actions backup. Portable release files are:
+- `training/models/universal-quad/release/best_model.zip`
+- `training/models/universal-quad/release/final_model.zip`
+- `training/models/universal-quad/release/release-manifest.json`
+
+These artifacts are simulation research outputs only. They are not flight-certified and must not be loaded onto a physical aircraft.
