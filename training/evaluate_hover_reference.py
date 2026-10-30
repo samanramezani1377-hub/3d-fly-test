@@ -21,7 +21,7 @@ def run_episode(env, seed: int, settle_seconds: float, success_altitude_error: f
     obs, reset_info = env.reset(seed=seed)
     del obs
     plant = env.inner.plant
-    controller = HoverReferenceController(plant.params, target_position=env.inner.target)
+    controller = HoverReferenceController(plant.params, target_position=env.inner.target, wind_m_s=plant.wind)
     required_steps = int(round(settle_seconds / env.inner.dt))
     stable_steps = 0
     crashed = False
