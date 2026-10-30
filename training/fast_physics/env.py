@@ -138,8 +138,11 @@ class AdaptiveDroneEnv(gym.Env):
             }
         self.plant = FastQuadrotor(episode_params, dt=self.dt)
         env_cfg = self.active_randomization.get("environment", {})
-        wind_bound = float(env_cfg.get("wind_component_m_s", [-2.0, 2.0])[1])
-        wind = self.np_random.uniform(-wind_bound, wind_bound, size=3) if self.randomize else np.zeros(3)
+        wind_bounds = env_cfg.get("wind_component_m_s", [-2.0, 2.0])
+        wind_low, wind_high = float(wind_bounds[0]), float(wind_bounds[1])
+        if wind_low > wind_high:
+            raise ValueError("environment.wind_component_m_s lower bound must not exceed upper bound")
+        wind = self.np_random.uniform(wind_low, wind_high, size=3) if self.randomize else np.zeros(3)
         state = self.plant.reset(wind=wind)
         measured = self._measure_state(state)
         self.estimator.reset(float(measured[5]))

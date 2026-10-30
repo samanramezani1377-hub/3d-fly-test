@@ -13,6 +13,9 @@ def main(argv=None):
     p.add_argument("--model", type=Path, required=True)
     p.add_argument("--vehicle-family", type=Path, default=DEFAULT_VEHICLE_FAMILY)
     p.add_argument("--vehicle-id", action="append", default=None)
+    p.add_argument("--randomization-config", type=Path, default=Path(__file__).resolve().parents[1] / "vehicle_models/family/domain_randomization.json")
+    p.add_argument("--curriculum-stage", type=int, choices=(1,2,3,4,5), default=5)
+    p.add_argument("--held-out", action="store_true", help="Use independent evaluation bounds without applying a training stage.")
     p.add_argument("--episodes", type=int, default=20)
     p.add_argument("--seed", type=int, default=90000)
     p.add_argument("--output", type=Path, default=Path("training/runs/universal-evaluation.json"))
@@ -31,7 +34,7 @@ def main(argv=None):
     model = PPO.load(str(args.model), device="auto")
     reports, episode_index = [], 0
     for profile in selected:
-        env = VehicleFamilyEnv(vehicle_family_path=args.vehicle_family, vehicle_id=profile["vehicle_id"], randomize=True)
+        env = VehicleFamilyEnv(vehicle_family_path=args.vehicle_family, randomization_path=args.randomization_config, curriculum_stage=None if args.held_out else args.curriculum_stage, vehicle_id=profile["vehicle_id"], randomize=True)
         episodes = []
         try:
             for _ in range(args.episodes):
@@ -56,6 +59,7 @@ def main(argv=None):
                     "final_altitude_error_m": info.get("altitude_error_m"),
                     "final_horizontal_error_m": info.get("horizontal_error_m"),
                     "online_estimator": info.get("online_estimator"),
+                    "completed": bool(truncated and not crashed),
                 })
         finally:
             env.close()
@@ -64,10 +68,12 @@ def main(argv=None):
             "episodes": episodes,
             "hover_success_rate": sum(e["hover_success"] for e in episodes) / len(episodes),
             "crash_rate": sum(e["crashed"] for e in episodes) / len(episodes),
+            "completion_rate": sum(e["completed"] for e in episodes) / len(episodes),
         })
     result = {
         "model": str(args.model), "vehicle_family": str(args.vehicle_family),
         "episodes_per_vehicle": args.episodes, "seed_start": args.seed, "profiles": reports,
+        "evaluation_distribution": "independent_held_out" if args.held_out else f"curriculum_stage_{args.curriculum_stage}",
         "simulation_only": True, "physical_flight_eligible": False,
         "warning": "Held-out simulation evaluation is not real-world flight safety certification."
     }

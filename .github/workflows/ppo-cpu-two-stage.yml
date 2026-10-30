@@ -1,13 +1,29 @@
-name: PPO five-stage chained CPU training
+name: Universal five-stage PPO training
 
 on:
+  pull_request:
+    paths:
+      - "training/fast_physics/**"
+      - "training/train_universal_ppo.py"
+      - "training/run_universal_curriculum.py"
+      - "training/evaluate_universal_ppo.py"
+      - "training/tests/test_fast_physics.py"
+      - "training/tests/test_universal_vehicle.py"
+      - "training/tests/test_hover_reference.py"
+      - "training/fast_physics/hover_reference.py"
+      - "training/evaluate_hover_reference.py"
+      - "vehicle_models/family/**"
+      - "vehicle_models/smooth2_parametric/domain_randomization.json"
+      - "docs/UNIVERSAL_VEHICLE_POLICY.md"
+      - "training/README.md"
+      - ".github/workflows/ppo-cpu-two-stage.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ppo-five-stage-${{ github.ref }}
+  group: universal-ppo-five-stage-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -19,11 +35,11 @@ env:
 
 jobs:
   five-stage-training:
-    name: Five-stage chained PPO training (CPU)
+    name: Universal PPO validation or full five-stage training
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -33,85 +49,52 @@ jobs:
           cache: pip
           cache-dependency-path: training/requirements.txt
 
-      - name: Install native build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y g++ make
-
-      - name: Install Python dependencies
+      - name: Install CPU-only dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
           python -m pip install -r training/requirements.txt
           python -c "import torch; assert torch.version.cuda is None; print('CPU-only PyTorch:', torch.__version__)"
 
-      - name: Cache native simulator core and pinned upstream source
-        id: native-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            training/libskysim_core.so
-            .cache/skysim-upstream
-          key: native-core-ubuntu-${{ hashFiles('training/build_native_core.py', 'scripts/prepare_site.py', 'config/drone.json', 'controllers/controller.py', 'sim_support/battery.hpp') }}
-
-      - name: Build native simulator core (cache miss only)
-        if: steps.native-cache.outputs.cache-hit != 'true'
-        run: python training/build_native_core.py
-
-      - name: Verify CPU-only runtime and validate observations/actions
+      - name: Run existing physics, family, and hover regression tests
+        if: github.event_name == 'pull_request'
         run: |
-          python -m compileall -q training
-          python -m pytest -q training/tests/test_native_env.py
-          python -m unittest training.test_reward_design
-          python - <<'PY'
-          import torch
-          print("PyTorch:", torch.__version__)
-          print("CUDA available:", torch.cuda.is_available())
-          print("Training device: CPU (explicit)")
-          assert torch.version.cuda is None, "Expected CPU-only PyTorch"
-          PY
-          python training/validate_observations.py | tee observation-validation.json
-          python training/diagnose_control.py --steps 250 --throttles -0.5 -0.3 -0.2 -0.1 0 0.1 0.2 0.5 --output training/runs/control-diagnostics.json | tee control-diagnostics-summary.json
+          python -m pytest -q \
+            training/tests/test_fast_physics.py \
+            training/tests/test_universal_vehicle.py \
+            training/tests/test_hover_reference.py
 
-      - name: Run five chained training stages
+      - name: Run the complete five-stage, one-million-transition PPO curriculum
+        if: github.event_name == 'workflow_dispatch'
         run: |
           set -o pipefail
-          python training/run_five_stage.py 2>&1 | tee five-stage-training.log
+          python training/run_universal_curriculum.py \
+            --timesteps-per-stage 200000 \
+            --n-envs 4 \
+            --evaluation-episodes 20 \
+            2>&1 | tee five-stage-training.log
 
-      - name: Print full result reports for direct log retrieval
-        if: always()
+      - name: Print training manifest and log tail
+        if: always() && github.event_name == 'workflow_dispatch'
         run: |
           echo '===== FIVE-STAGE MANIFEST ====='
-          if [ -f training/runs/five-stage-training-manifest.json ]; then cat training/runs/five-stage-training-manifest.json; else echo 'Manifest not produced'; fi
-          echo '===== OBSERVATION VALIDATION ====='
-          if [ -f observation-validation.json ]; then cat observation-validation.json; else echo 'Validation not produced'; fi
-          echo '===== CONTROL DIAGNOSTICS ====='
-          if [ -f training/runs/control-diagnostics.json ]; then cat training/runs/control-diagnostics.json; else echo 'Diagnostics not produced'; fi
+          if [ -f training/runs/universal-quad-curriculum-manifest.json ]; then cat training/runs/universal-quad-curriculum-manifest.json; else echo 'Manifest not produced'; fi
           echo '===== TRAINING LOG TAIL ====='
-          if [ -f five-stage-training.log ]; then tail -c 30000 five-stage-training.log; else echo 'Training log not produced'; fi
+          if [ -f five-stage-training.log ]; then tail -c 50000 five-stage-training.log; else echo 'Training log not produced'; fi
 
-      - name: Upload models, stage reports, diagnostics, and logs
-        if: always()
+      - name: Upload checkpoints, per-profile evaluations, manifest, and logs
+        if: always() && github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: ppo-five-stage-results
+          name: universal-ppo-five-stage-results
           path: |
-            final-model.zip
-            training/runs/five-stage-training-manifest.json
-            training/runs/stage1-selected-model.zip
-            training/runs/stage2-selected-model.zip
-            training/runs/stage3-selected-model.zip
-            training/runs/stage4-selected-model.zip
-            training/runs/stage5-selected-model.zip
-            training/runs/ppo-stage1-seed42/
-            training/runs/ppo-stage1-seed40/
-            training/runs/ppo-stage2-continued/
-            training/runs/ppo-stage3-continued/
-            training/runs/ppo-stage4-continued/
-            training/runs/ppo-stage5-continued/
-            training/runs/control-diagnostics.json
-            observation-validation.json
-            control-diagnostics-summary.json
+            training/runs/universal-quad-curriculum-manifest.json
+            training/runs/held-out-domain-randomization.json
+            training/runs/universal-quad-stage1/
+            training/runs/universal-quad-stage2/
+            training/runs/universal-quad-stage3/
+            training/runs/universal-quad-stage4/
+            training/runs/universal-quad-stage5/
             five-stage-training.log
           if-no-files-found: warn
           retention-days: 30

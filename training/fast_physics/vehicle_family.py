@@ -21,7 +21,7 @@ from .parameters import VehicleParameters
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_VEHICLE_FAMILY = ROOT / "vehicle_models" / "family" / "vehicle_profiles.json"
-DEFAULT_RANDOMIZATION = ROOT / "vehicle_models" / "smooth2_parametric" / "domain_randomization.json"
+DEFAULT_RANDOMIZATION = ROOT / "vehicle_models" / "family" / "domain_randomization.json"
 VEHICLE_FEATURE_SIZE = 12
 DERIVED_DEFAULTS = {
     "torque_to_thrust_m": 0.015,
