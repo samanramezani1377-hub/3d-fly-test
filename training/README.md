@@ -122,7 +122,7 @@ python -m pip install -r training/requirements.txt
 python training/train_universal_ppo.py --timesteps 200000 --n-envs 4 --run-name universal-quad-baseline
 ```
 
-The trainer periodically evaluates a balanced-randomized vehicle family and stores the highest-mean-reward checkpoint at `best/best_model.zip`; the terminal training snapshot is saved separately as `final_model.zip`. The environment samples a vehicle profile at episode reset. The policy observation contains the existing state/action history and online effective-lift estimator context plus twelve normalized nominal hardware/provenance features (mass, arm radius, propeller diameter, motor speed/thrust/torque response, battery voltage/capacity and KV). Episode-randomized ground-truth mass, CG, inertia and actuator effectiveness remain hidden. This deliberately distinguishes declared setup values from uncertain episode physics.
+The trainer periodically evaluates a randomized vehicle family and stores the highest-mean-reward checkpoint at `best/best_model.zip`; the terminal training snapshot is saved separately as `final_model.zip`. The environment samples a vehicle profile at episode reset. The policy observation contains the existing state/action history and online effective-lift estimator context plus twelve normalized nominal hardware/provenance features (mass, arm radius, propeller diameter, motor speed/thrust/torque response, battery voltage/capacity and KV). Episode-randomized ground-truth mass, CG, inertia and actuator effectiveness remain hidden. This deliberately distinguishes declared setup values from uncertain episode physics.
 
 ### Four-stage universal curriculum
 
@@ -154,13 +154,13 @@ The experimental multi-airframe path is separate from the existing smooth2-only 
 - `training/fast_physics/vehicle_family.py` selects a vehicle at reset and appends twelve normalized nominal hardware/provenance descriptors to the observation. Episode-randomized mass, CG, inertia, motor effectiveness and voltage remain hidden from the policy.
 - `training/train_universal_ppo.py` trains one shared PPO model over the selected family.
 - `training/evaluate_universal_ppo.py` reports results separately for each vehicle.
-- `training/run_universal_curriculum.py` runs four sequential curriculum stages, handing each stage's final checkpoint to the next stage (not a separately selected best checkpoint) and evaluating after every stage.
+- `training/run_universal_curriculum.py` runs four sequential curriculum stages, handing each stage's best evaluated checkpoint to the next stage and evaluating after every stage.
 
 Example:
 
     python -m pip install -r training/requirements.txt
     python training/train_universal_ppo.py --timesteps 200000 --n-envs 4
-    python training/evaluate_universal_ppo.py --model training/runs/universal-quad-ppo/final_model.zip --episodes 30
+    python training/evaluate_universal_ppo.py --model training/runs/universal-quad-ppo/best/best_model.zip --episodes 30
     python training/run_universal_curriculum.py --timesteps-per-stage 200000 --n-envs 4
 
 These sample profiles are deliberately marked `provisional_estimate`: they are software-development starting points, not measured or validated flight models. The current smooth2 custom propeller's thrust and torque coefficients are not established by the A2212 catalog data. Do not use any resulting checkpoint to control a physical aircraft. A real aircraft profile needs complete takeoff mass, CG, inertia, exact rotor geometry/directions, motor/ESC/battery details, and thrust/torque/RPM/current/voltage and motor-step-response measurements for the exact propulsion combination. Bench validation and staged safety testing remain separate requirements.
