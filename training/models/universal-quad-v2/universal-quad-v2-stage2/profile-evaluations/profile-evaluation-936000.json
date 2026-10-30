@@ -1,0 +1,181 @@
+{
+  "timesteps": 936000,
+  "selection_score": [
+    0.0,
+    -1.0,
+    0.0,
+    166.37253872672846
+  ],
+  "selection_rule": [
+    "maximize minimum per-profile five-second sustained-hover success",
+    "minimize worst-profile crash rate",
+    "maximize minimum per-profile takeoff rate",
+    "maximize mean return as final tie-breaker"
+  ],
+  "profiles": [
+    {
+      "vehicle_id": "smooth2-a2212-custom-prop",
+      "success_rate": 0.0,
+      "takeoff_success_rate": 0.0,
+      "takeoff_failure_rate": 0.0,
+      "crash_rate": 1.0,
+      "mean_stable_hover_seconds": 0.0,
+      "mean_return": 157.58874891953246,
+      "episodes": [
+        {
+          "seed": 6350043,
+          "success": false,
+          "takeoff_success": false,
+          "takeoff_failed": false,
+          "crashed": true,
+          "steps": 363,
+          "stable_hover_seconds_max": 0.0,
+          "return": 180.99917583096104,
+          "altitude_error_m": 1.0,
+          "horizontal_error_m": 0.6539657309690879,
+          "crash_reasons": [
+            "attitude_limit_exceeded"
+          ]
+        },
+        {
+          "seed": 6350044,
+          "success": false,
+          "takeoff_success": false,
+          "takeoff_failed": false,
+          "crashed": true,
+          "steps": 262,
+          "stable_hover_seconds_max": 0.0,
+          "return": 134.17832200810386,
+          "altitude_error_m": 1.0,
+          "horizontal_error_m": 0.503236890827472,
+          "crash_reasons": [
+            "attitude_limit_exceeded"
+          ]
+        }
+      ]
+    },
+    {
+      "vehicle_id": "generic-5inch-quad",
+      "success_rate": 0.0,
+      "takeoff_success_rate": 0.0,
+      "takeoff_failure_rate": 0.0,
+      "crash_rate": 1.0,
+      "mean_stable_hover_seconds": 0.0,
+      "mean_return": 263.06138121070205,
+      "episodes": [
+        {
+          "seed": 6351043,
+          "success": false,
+          "takeoff_success": false,
+          "takeoff_failed": false,
+          "crashed": true,
+          "steps": 674,
+          "stable_hover_seconds_max": 0.0,
+          "return": 381.42461509022013,
+          "altitude_error_m": 1.0,
+          "horizontal_error_m": 0.579983239585603,
+          "crash_reasons": [
+            "attitude_limit_exceeded"
+          ]
+        },
+        {
+          "seed": 6351044,
+          "success": false,
+          "takeoff_success": false,
+          "takeoff_failed": false,
+          "crashed": true,
+          "steps": 315,
+          "stable_hover_seconds_max": 0.0,
+          "return": 144.69814733118403,
+          "altitude_error_m": 1.0,
+          "horizontal_error_m": 0.30978280639050976,
+          "crash_reasons": [
+            "attitude_limit_exceeded"
+          ]
+        }
+      ]
+    },
+    {
+      "vehicle_id": "generic-7inch-long-range",
+      "success_rate": 0.0,
+      "takeoff_success_rate": 0.0,
+      "takeoff_failure_rate": 0.0,
+      "crash_rate": 1.0,
+      "mean_stable_hover_seconds": 0.0,
+      "mean_return": 152.16883318257922,
+      "episodes": [
+        {
+          "seed": 6352043,
+          "success": false,
+          "takeoff_success": false,
+          "takeoff_failed": false,
+          "crashed": true,
+          "steps": 262,
+          "stable_hover_seconds_max": 0.0,
+          "return": 135.43073208470543,
+          "altitude_error_m": 1.0,
+          "horizontal_error_m": 0.4954874379571817,
+          "crash_reasons": [
+            "attitude_limit_exceeded"
+          ]
+        },
+        {
+          "seed": 6352044,
+          "success": false,
+          "takeoff_success": false,
+          "takeoff_failed": false,
+          "crashed": true,
+          "steps": 347,
+          "stable_hover_seconds_max": 0.0,
+          "return": 168.90693428045302,
+          "altitude_error_m": 1.0,
+          "horizontal_error_m": 0.5832941634972607,
+          "crash_reasons": [
+            "attitude_limit_exceeded"
+          ]
+        }
+      ]
+    },
+    {
+      "vehicle_id": "generic-3inch-cinewhoop",
+      "success_rate": 0.0,
+      "takeoff_success_rate": 0.0,
+      "takeoff_failure_rate": 0.0,
+      "crash_rate": 1.0,
+      "mean_stable_hover_seconds": 0.0,
+      "mean_return": 92.67119159410011,
+      "episodes": [
+        {
+          "seed": 6353043,
+          "success": false,
+          "takeoff_success": false,
+          "takeoff_failed": false,
+          "crashed": true,
+          "steps": 234,
+          "stable_hover_seconds_max": 0.0,
+          "return": 90.11362201520473,
+          "altitude_error_m": 1.0,
+          "horizontal_error_m": 0.5810999609729185,
+          "crash_reasons": [
+            "attitude_limit_exceeded"
+          ]
+        },
+        {
+          "seed": 6353044,
+          "success": false,
+          "takeoff_success": false,
+          "takeoff_failed": false,
+          "crashed": true,
+          "steps": 231,
+          "stable_hover_seconds_max": 0.0,
+          "return": 95.22876117299549,
+          "altitude_error_m": 1.0,
+          "horizontal_error_m": 0.5481000428792168,
+          "crash_reasons": [
+            "attitude_limit_exceeded"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "num_timesteps": 1000000,
+  "stage": 5,
+  "seed": 46,
+  "completed": true,
+  "latest_checkpoint": "latest_model.zip"
+}
