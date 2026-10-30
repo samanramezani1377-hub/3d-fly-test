@@ -96,8 +96,9 @@ async function loadTrainingEngine(){
   phase="دریافت پل Python";
   const bridge=await fetch("./engine.py");if(!bridge.ok)throw Error("فایل bridge موتور ناموفق: HTTP "+bridge.status);
   pyodide.FS.writeFile("/repo/browser_engine.py",await bridge.text());
-  phase="واردکردن موتور آموزشی";pyodide.runPython("import sys; sys.path.insert(0, '/repo'); import browser_engine");
+  phase="واردکردن موتور آموزشی";pyodide.runPython("import sys; sys.path.insert(0, '/repo'); import browser_engine; from browser_engine import engine_reset, engine_step, engine_diagnostics");
   engineReset=pyodide.globals.get("engine_reset");engineStep=pyodide.globals.get("engine_step");engineDiagnostics=pyodide.globals.get("engine_diagnostics");
+  if(typeof engineReset!=="function"||typeof engineStep!=="function"||typeof engineDiagnostics!=="function")throw Error("توابع موتور از ماژول browser_engine به فضای JavaScript منتقل نشدند؛ reset="+typeof engineReset+", step="+typeof engineStep+", diagnostics="+typeof engineDiagnostics);
   phase="ساخت محیط و بازنشانی اولیه";
   const seed=Number($("seedInput").value)||12345,stage=Number($("curriculumSelect").value),randomize=$("randomizeToggle").checked;
   snapshot=JSON.parse(engineReset(profile.vehicle_id,randomize,stage,seed));
