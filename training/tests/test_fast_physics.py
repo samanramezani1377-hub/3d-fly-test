@@ -163,3 +163,21 @@ def test_env_exposes_estimator_context_but_not_ground_truth_parameters():
         assert "mass_kg" not in info["online_estimator"]
     finally:
         env.close()
+
+
+def test_full_cg_offset_is_randomized_in_all_three_body_axes():
+    params = synthetic_params()
+    config = json.loads(RANDOMIZATION.read_text(encoding="utf-8"))
+    sampled, details = sample_scenario(params, np.random.default_rng(31), config)
+    assert len(details["center_of_mass_offset_m"]) == 3
+    assert sampled.center_of_mass_m[2] != params.center_of_mass_m[2]
+
+
+def test_sensor_noise_is_reproducible_with_same_seed():
+    env = AdaptiveDroneEnv(params=synthetic_params(), randomization_path=RANDOMIZATION)
+    try:
+        obs_a, _ = env.reset(seed=202)
+        obs_b, _ = env.reset(seed=202)
+        assert np.allclose(obs_a, obs_b)
+    finally:
+        env.close()
