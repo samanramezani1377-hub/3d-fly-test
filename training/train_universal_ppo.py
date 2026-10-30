@@ -17,7 +17,7 @@ def parse_args(argv=None):
     p.add_argument("--run-name", default="universal-quad-ppo")
     p.add_argument("--output-dir", type=Path, default=Path("training/runs"))
     p.add_argument("--learning-rate", type=float, default=3e-4)
-    p.add_argument("--eval-frequency", type=int, default=10000, help="Evaluation interval in aggregate environment transitions.")
+    p.add_argument("--eval-frequency", type=int, default=20000, help="Balanced profile evaluation interval in aggregate environment transitions.")
     p.add_argument("--eval-episodes", type=int, default=10)
     p.add_argument("--history-length", type=int, default=4)
     p.add_argument("--curriculum-stage", type=int, choices=(1,2,3,4,5), default=None)
@@ -27,6 +27,74 @@ def parse_args(argv=None):
     p.add_argument("--vehicle-id", action="append", default=None, help="Optional profile allow-list; repeat IDs.")
     p.add_argument("--no-randomization", action="store_true")
     return p.parse_args(argv)
+
+
+
+class BalancedProfileCallback(BaseCallback):
+    """Choose the checkpoint that best protects the weakest vehicle profile."""
+    def __init__(self, profiles, family_path, randomization_path, history_length,
+                 stage, episodes, frequency, best_dir, reports_dir, seed):
+        super().__init__(verbose=1)
+        self.profiles, self.family_path = profiles, family_path
+        self.randomization_path, self.history_length = randomization_path, history_length
+        self.stage, self.episodes = stage, max(1, min(int(episodes), 2))
+        self.frequency, self.best_dir, self.reports_dir = max(1, frequency), Path(best_dir), Path(reports_dir)
+        self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, float("-inf")), None
+
+    def _on_step(self):
+        if self.n_calls % self.frequency:
+            return True
+        profile_reports = []
+        for pi, profile in enumerate(self.profiles):
+            e = VehicleFamilyEnv(vehicle_family_path=self.family_path,
+                randomization_path=self.randomization_path, history_length=self.history_length,
+                randomize=True, curriculum_stage=self.stage, vehicle_id=profile["vehicle_id"])
+            episodes = []
+            try:
+                for ei in range(self.episodes):
+                    seed = self.seed + self.n_calls * 100 + pi * 1000 + ei
+                    obs, _ = e.reset(seed=seed)
+                    total, crashed = 0.0, False
+                    while True:
+                        action, _ = self.model.predict(obs, deterministic=True)
+                        obs, reward, terminated, truncated, info = e.step(action)
+                        total += float(reward)
+                        crashed = crashed or bool(info.get("crashed", False))
+                        if terminated or truncated:
+                            break
+                    success = bool(info.get("has_taken_off", False) and not crashed
+                        and info.get("altitude_error_m", 999) < 0.35
+                        and info.get("horizontal_error_m", 999) < 0.5)
+                    episodes.append({"seed":seed,"success":success,"crashed":crashed,
+                        "steps":e.inner._steps,"return":total,
+                        "altitude_error_m":info.get("altitude_error_m"),
+                        "horizontal_error_m":info.get("horizontal_error_m")})
+            finally:
+                e.close()
+            profile_reports.append({"vehicle_id":profile["vehicle_id"],
+                "success_rate":sum(x["success"] for x in episodes)/len(episodes),
+                "crash_rate":sum(x["crashed"] for x in episodes)/len(episodes),
+                "mean_return":sum(x["return"] for x in episodes)/len(episodes),
+                "episodes":episodes})
+        score=(min(x["success_rate"] for x in profile_reports),
+               -max(x["crash_rate"] for x in profile_reports),
+               sum(x["mean_return"] for x in profile_reports)/len(profile_reports))
+        report={"timesteps":int(self.num_timesteps),"selection_score":list(score),
+            "selection_rule":["maximize minimum per-profile takeoff-hover success",
+                              "minimize worst-profile crash rate","maximize mean return"],
+            "profiles":profile_reports}
+        self.reports_dir.mkdir(parents=True,exist_ok=True)
+        report_path=self.reports_dir/f"profile-evaluation-{self.num_timesteps}.json"
+        report_path.write_text(json.dumps(report,indent=2),encoding="utf-8")
+        if score > self.best_score:
+            self.best_score,self.best_report=score,report_path.name
+            self.best_dir.mkdir(parents=True,exist_ok=True)
+            self.model.save(str(self.best_dir/"best_model"))
+            (self.best_dir/"selection.json").write_text(json.dumps({
+                "score":list(score),"report":self.best_report,"timesteps":int(self.num_timesteps),
+                "selection_rule":report["selection_rule"]},indent=2),encoding="utf-8")
+            print(f"Balanced best checkpoint: steps={self.num_timesteps}, score={score}")
+        return True
 
 
 def main(argv=None):
@@ -45,9 +113,8 @@ def main(argv=None):
     try:
         import stable_baselines3
         from stable_baselines3 import PPO
-        from stable_baselines3.common.callbacks import EvalCallback
-        from stable_baselines3.common.monitor import Monitor
-        from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+        from stable_baselines3.common.callbacks import BaseCallback
+        from stable_baselines3.common.vec_env import SubprocVecEnv
     except ImportError as exc:
         raise SystemExit("Install training/requirements.txt to run PPO") from exc
 
@@ -69,26 +136,14 @@ def main(argv=None):
         return _init
 
     env = SubprocVecEnv([make_env(i) for i in range(args.n_envs)])
-    eval_env = DummyVecEnv([lambda: Monitor(VehicleFamilyEnv(
-        vehicle_family_path=family_path,
-        randomization_path=Path(__file__).resolve().parents[1] / "vehicle_models/smooth2_parametric/domain_randomization.json",
-        history_length=args.history_length, randomize=not args.no_randomization,
-        curriculum_stage=args.curriculum_stage,
-    ))])
     aggregate_eval_frequency = min(args.eval_frequency, max(args.timesteps // 2, 1))
-    eval_callback = EvalCallback(
-        eval_env,
-        best_model_save_path=str(run_dir / "best"),
-        log_path=str(run_dir / "evaluation"),
-        eval_freq=max(aggregate_eval_frequency // args.n_envs, 1),
-        n_eval_episodes=args.eval_episodes,
-        deterministic=True,
-        render=False,
-        warn=False,
-    )
+    eval_callback = BalancedProfileCallback(profiles, family_path, args.randomization_config,
+        args.history_length, args.curriculum_stage, args.eval_episodes,
+        max(aggregate_eval_frequency // args.n_envs, 1), run_dir / "best",
+        run_dir / "profile-evaluations", args.seed + 500000)
     try:
         if args.load_model:
-            model = PPO.load(str(args.load_model), env=env, device="auto")
+            model = PPO.load(str(args.load_model), env=env, device="cpu")
             model.tensorboard_log = str(run_dir / "tensorboard")
         else:
             model = PPO(
@@ -108,7 +163,9 @@ def main(argv=None):
             "evaluation_frequency_aggregate_steps": aggregate_eval_frequency,
             "evaluation_episodes": args.eval_episodes,
             "best_checkpoint": str(best_checkpoint),
-            "best_mean_reward": float(eval_callback.best_mean_reward),
+            "balanced_selection_score": list(eval_callback.best_score),
+            "balanced_selection_report": eval_callback.best_report,
+            "checkpoint_selection": "max_min_profile_success_then_min_worst_crash_then_mean_return",
             "history_length": args.history_length, "curriculum_stage": args.curriculum_stage,
             "initial_model": str(args.load_model) if args.load_model else None,
             "domain_randomization": not args.no_randomization,
@@ -126,7 +183,6 @@ def main(argv=None):
         (run_dir / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
         print(f"Saved universal PPO model and metadata to {run_dir}")
     finally:
-        eval_env.close()
         env.close()
 
 
