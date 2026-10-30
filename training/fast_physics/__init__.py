@@ -6,6 +6,7 @@ from .env import AdaptiveDroneEnv
 from .system_identification import OnlineThrustEstimator
 from .curriculum import randomization_for_stage
 from .vehicle_family import VehicleFamilyEnv, load_vehicle_profiles, vehicle_feature_vector
+from .vehicle_family import VehicleFamilyEnv, load_vehicle_profiles, vehicle_feature_vector
 
 __all__ = [
     "FastQuadrotor",
