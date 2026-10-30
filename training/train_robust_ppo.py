@@ -84,7 +84,7 @@ def main(argv=None):
             "initial_model": str(args.load_model) if args.load_model else None,
             "domain_randomization": not args.no_randomization,
             "software_only_synthetic_calibration": args.software_only_synthetic_calibration,
-            "policy_observation": "four-frame state/action history; no privileged mass/CG/inertia/motor parameters",
+            "policy_observation": "four-frame noisy state/action history plus online effective-lift estimate and confidence; no privileged mass/CG/inertia/motor parameters",
             "vehicle_model": "smooth2-parametric-v1",
             "physics_backend": "training.fast_physics.FastQuadrotor",
             "stable_baselines3_version": stable_baselines3.__version__,
