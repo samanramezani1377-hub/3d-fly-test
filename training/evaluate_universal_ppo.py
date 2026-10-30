@@ -87,6 +87,7 @@ def main(argv=None):
                 max_altitude_m = 0.08
                 max_stable_steps = stable_steps = 0
                 crash_reasons = set()
+                saturation_samples = []
                 terminated = truncated = False
                 info = {}
                 while True:
@@ -94,6 +95,7 @@ def main(argv=None):
                     obs, reward, terminated, truncated, info = env.step(policy_action)
                     rewards.append(float(reward))
                     crashed = crashed or bool(info.get("crashed", False))
+                    saturation_samples.append(float(info.get("motor_saturation_fraction", 0.0)))
                     takeoff_seen = takeoff_seen or bool(info.get("has_taken_off", False))
                     max_altitude_m = max(max_altitude_m, float(info.get("altitude_m", 0.08)))
                     crash_reasons.update(info.get("crash_reasons", []))
@@ -109,7 +111,7 @@ def main(argv=None):
                     "seed": episode_seed,
                     "vehicle_id": profile["vehicle_id"],
                     "hover_success": hover_success,
-                    "stable_hover_seconds_max": max_stable_steps * env.inner.dt,
+                    "stable_hover_seconds_max": max_stable_steps * plant_env.inner.dt,
                     "crashed": crashed,
                     "takeoff_success": takeoff_seen,
                     "takeoff_failed": bool(not takeoff_seen and truncated),
@@ -122,6 +124,7 @@ def main(argv=None):
                     "survived_to_time_limit": bool(truncated and not crashed),
                     "mission_completed": hover_success,
                     "mean_reward": sum(rewards) / max(len(rewards), 1),
+                    "mean_motor_saturation_fraction": sum(saturation_samples) / max(len(saturation_samples), 1),
                     "final_altitude_error_m": info.get("altitude_error_m"),
                     "final_horizontal_error_m": info.get("horizontal_error_m"),
                     "online_estimator": info.get("online_estimator"),
@@ -141,6 +144,7 @@ def main(argv=None):
             "takeoff_failure_rate": sum(e["takeoff_failed"] for e in episodes) / count,
             "mean_max_altitude_m": sum(e["max_altitude_m"] for e in episodes) / count,
             "mean_stable_hover_seconds": sum(e["stable_hover_seconds_max"] for e in episodes) / count,
+            "mean_motor_saturation_fraction": sum(e["mean_motor_saturation_fraction"] for e in episodes) / count,
             "mission_completion_rate": sum(e["mission_completed"] for e in episodes) / count,
             "survived_to_time_limit_rate": sum(e["survived_to_time_limit"] for e in episodes) / count,
             # Kept as an explicit compatibility alias; it now means mission completion,
