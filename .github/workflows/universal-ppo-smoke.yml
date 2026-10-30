@@ -28,7 +28,7 @@ jobs:
       - name: Install simulation and PPO dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest numpy gymnasium stable-baselines3
+          python -m pip install pytest numpy gymnasium stable-baselines3 tensorboard
       - name: Run universal vehicle physics tests
         run: python -m pytest training/tests/test_universal_vehicle.py -q
       - name: Run all four curriculum stages as a short PPO integration smoke test
