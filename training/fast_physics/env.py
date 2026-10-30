@@ -92,6 +92,9 @@ class AdaptiveDroneEnv(gym.Env):
         self._steps = 0
         self._taken_off = False
         self._scenario_details: dict = {}
+        self._last_finite_state = np.zeros(12, dtype=np.float32)
+        self._previous_altitude_potential = 0.0
+        self._ground_contact = False
 
     def _measure_state(self, state: np.ndarray) -> np.ndarray:
         """Return the sensor-visible state; never pass simulator truth to the policy estimator."""
@@ -152,6 +155,9 @@ class AdaptiveDroneEnv(gym.Env):
         self._history.extend([frame.copy() for _ in range(self.history_length)])
         self._steps = 0
         self._taken_off = False
+        self._last_finite_state = state.astype(np.float32).copy()
+        self._previous_altitude_potential = float(np.exp(-abs(float(state[2]) - float(self.target[2])) / 0.45))
+        self._ground_contact = False
         info = {
             "vehicle_id": self.model_metadata["vehicle_id"],
             "calibration_status": self.model_metadata["calibration_status"],
@@ -167,55 +173,134 @@ class AdaptiveDroneEnv(gym.Env):
         action = np.asarray(action, dtype=np.float32)
         if action.shape != (4,):
             raise ValueError("action must contain four motor commands")
+        if not np.all(np.isfinite(action)):
+            action = np.nan_to_num(action, nan=0.0, posinf=1.0, neginf=0.0)
         action = np.clip(action, 0.0, 1.0)
         state, telemetry = self.plant.step(action)
         self._steps += 1
-        self._taken_off = self._taken_off or bool(state[2] > 0.18)
-        measured = self._measure_state(state)
-        self.estimator.update(action, float(measured[5]), self.dt)
 
-        position_error = state[:3].astype(np.float64) - self.target
+        state_finite = bool(np.all(np.isfinite(state)))
+        crash_reasons = []
+        if not state_finite:
+            crash_reasons.append("non_finite_state")
+            # Never pass NaN/Inf into the reward, estimator, observation or PPO buffer.
+            safe_state = self._last_finite_state.copy()
+        else:
+            safe_state = state.astype(np.float32, copy=True)
+            self._last_finite_state = safe_state.copy()
+
+        z = float(safe_state[2])
+        was_taken_off = self._taken_off
+        self._taken_off = self._taken_off or bool(z > 0.18)
+        measured = self._measure_state(safe_state)
+        ground_contact = bool(state_finite and z <= 0.0)
+        if ground_contact:
+            self.plant.position[2] = 0.0
+            if self.plant.velocity[2] < 0.0:
+                self.plant.velocity[2] = 0.0
+            safe_state = self.plant.state()
+            self._last_finite_state = safe_state.copy()
+            z = 0.0
+            measured = self._measure_state(safe_state)
+        if state_finite:
+            self.estimator.update(action, float(measured[5]), self.dt)
+
+        position_error = safe_state[:3].astype(np.float64) - self.target
         horizontal_error = float(np.linalg.norm(position_error[:2]))
         altitude_error = abs(float(position_error[2]))
-        attitude = state[6:9].astype(np.float64)
-        rates = state[9:12].astype(np.float64)
-        speed = float(np.linalg.norm(state[3:6]))
-        reward = (
+        attitude = safe_state[6:9].astype(np.float64)
+        rates = safe_state[9:12].astype(np.float64)
+        speed = float(np.linalg.norm(safe_state[3:6]))
+        tilt = float(np.max(np.abs(attitude[:2])))
+
+        # Dense objective: position/altitude tracking, low translational and
+        # angular motion, level attitude, and smooth motor commands.
+        base_reward = (
             2.0 * np.exp(-altitude_error / 0.45)
             + 1.0 * np.exp(-horizontal_error / 0.65)
             - 0.10 * speed ** 2
-            - 0.22 * float(np.dot(attitude, attitude))
+            - 0.22 * float(np.dot(attitude[:2], attitude[:2]))
             - 0.025 * float(np.dot(rates, rates))
             - 0.015 * float(np.dot(action - self._last_action, action - self._last_action))
+            - 0.01 * float(np.dot(action, action))
         )
-        crashed = bool(
-            (self._taken_off and state[2] <= 0.025)
-            or state[2] > 10.0
-            or horizontal_error > 10.0
-            or np.max(np.abs(attitude[:2])) > 1.25
-            or not np.all(np.isfinite(state))
+        # Potential-based altitude progress shaping. It rewards progress toward
+        # target altitude, not merely remaining airborne or accumulating time.
+        altitude_potential = float(np.exp(-altitude_error / 0.45))
+        reward = base_reward + 0.5 * (
+            0.99 * altitude_potential - self._previous_altitude_potential
         )
+        self._previous_altitude_potential = altitude_potential
+        if self._taken_off and not was_taken_off:
+            reward += 1.0
+        stable_hover_now = bool(
+            self._taken_off
+            and altitude_error <= 0.15
+            and horizontal_error <= 0.20
+            and speed <= 0.35
+            and tilt <= 0.25
+            and float(np.linalg.norm(rates)) <= 0.5
+        )
+        if stable_hover_now:
+            reward += 0.5
+
+        # Unilateral ground contact prevents the simulated vehicle from passing
+        # through z=0. This is not a detailed landing or impact-damage model.
+        self._ground_contact = ground_contact
+
+        if ground_contact and self._taken_off:
+            crash_reasons.append("ground_impact_after_takeoff")
+        elif ground_contact and not self._taken_off:
+            # Contact before takeoff is not a crash; the episode may continue.
+            pass
+        if z > 10.0:
+            crash_reasons.append("altitude_limit_exceeded")
+        if horizontal_error > 10.0:
+            crash_reasons.append("horizontal_boundary_exceeded")
+        if tilt > 1.25:
+            crash_reasons.append("attitude_limit_exceeded")
+
+        crashed = bool(crash_reasons)
         if crashed:
-            reward -= 100.0
+            reward = -100.0 if "non_finite_state" in crash_reasons else float(reward - 100.0)
+
         terminated = crashed
         truncated = self._steps >= self.max_steps and not terminated
-
+        takeoff_failed = bool(truncated and not self._taken_off)
+        if takeoff_failed:
+            reward -= 20.0
         self._last_action = action.copy()
-        self._history.append(self._policy_frame(state, measured))
+        self._history.append(self._policy_frame(safe_state, measured))
         obs = self._observation()
+        if not np.all(np.isfinite(obs)):
+            # Last-resort observation sanitation; mark the transition as invalid.
+            obs = np.nan_to_num(obs, nan=0.0, posinf=1e6, neginf=-1e6).astype(np.float32)
+            if "non_finite_observation" not in crash_reasons:
+                crash_reasons.append("non_finite_observation")
+            crashed = terminated = True
+            truncated = False
+            reward = -100.0
+
         info = {
             **telemetry,
             "crashed": crashed,
-            "crash_reason": "state_or_boundary_limit" if crashed else None,
+            "crash_reason": crash_reasons[0] if crash_reasons else None,
+            "crash_reasons": crash_reasons,
             "has_taken_off": self._taken_off,
+            "takeoff_failed": takeoff_failed,
+            "ground_contact": ground_contact,
+            "altitude_m": float(z),
+            "position_xyz_m": safe_state[:3].astype(float).tolist(),
             "position_error_m": float(np.linalg.norm(position_error)),
             "altitude_error_m": altitude_error,
             "horizontal_error_m": horizontal_error,
             "scenario": dict(self._scenario_details),
             "online_estimator": self.estimator.diagnostics(),
-            "state_velocity_m_s": state[3:6].astype(float).tolist(),
-            "attitude_rad": state[6:9].astype(float).tolist(),
-            "angular_velocity_rad_s": state[9:12].astype(float).tolist(),
+            "state_velocity_m_s": safe_state[3:6].astype(float).tolist(),
+            "attitude_rad": safe_state[6:9].astype(float).tolist(),
+            "angular_velocity_rad_s": safe_state[9:12].astype(float).tolist(),
+            "state_finite": state_finite,
+            "control_effort_proxy": float(np.mean(np.square(action))),
         }
         return obs, float(reward), terminated, truncated, info
 

@@ -194,3 +194,19 @@ On manual runs, the existing workflow commits stage checkpoints, model weights, 
 - `training/models/universal-quad/release/release-manifest.json`
 
 These artifacts are simulation research outputs only. They are not flight-certified and must not be loaded onto a physical aircraft.
+
+
+## Current universal PPO reward and evaluation semantics
+
+The current universal fast-physics path (train_universal_ppo.py, evaluate_universal_ppo.py, and run_universal_curriculum.py) uses these aligned rules:
+
+- Reward combines altitude and horizontal target tracking with penalties for translational speed, roll/pitch tilt, angular rates, motor-command changes and a small normalized squared-command effort proxy. Yaw is not penalized without a defined yaw target.
+- Altitude progress is potential-shaped; takeoff gets a one-time transition bonus; stable-hover steps get a shaping bonus; ending the time limit without ever taking off receives a takeoff-failure penalty.
+- The command-effort term is not measured electrical energy. The current plant has no validated motor-current, ESC-loss or battery electrical model.
+- A stable-hover sample requires takeoff, altitude error ≤0.15 m, horizontal error ≤0.20 m, speed ≤0.35 m/s, absolute roll/pitch ≤0.25 rad, and angular-rate norm ≤0.5 rad/s. Success requires these conditions continuously for 5 seconds without a crash.
+- Ground contact is constrained at z=0. Contact before takeoff is permitted; contact after takeoff is a crash. Non-finite state is detected before reward and observation use; the last finite state is used to keep PPO observations finite and the episode receives a terminal penalty.
+- Reports distinguish takeoff success, takeoff failure, crash, sustained-hover success and survival to the time limit. Survival alone is not mission completion.
+- Checkpoint selection prioritizes weakest-profile sustained-hover success, worst-profile crash rate, weakest-profile takeoff rate, then mean return. Final held-out selection uses the same safety priorities and stable-hover duration as a tie-breaker.
+- The final release gate checks minimum sustained-hover success, maximum crash rate and minimum takeoff success on every profile. Passing this simulation gate never certifies physical flight.
+
+No additional workflow or test suite was introduced for these changes. The existing PR workflow remains the only automated validation path; no training or evaluation run is started by editing these files.

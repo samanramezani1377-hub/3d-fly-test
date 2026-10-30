@@ -48,7 +48,7 @@ The resulting observation has 78 values with the default four history frames: 66
 
 Example commands are in `training/README.md`.
 
-The test suite also checks nominal static-hover force balance for every example profile and verifies that the configured worst-case mass, voltage and motor-effectiveness bounds in each curriculum stage retain at least a 1.05 thrust-to-weight ratio. During training, periodic family evaluation selects `best/best_model.zip` by maximizing the weakest profile's takeoff/hover success, then minimizing the worst profile's crash rate, then maximizing mean return; the last policy snapshot is saved independently as `final_model.zip`. These are internal consistency checks on provisional coefficients, not proof that the real aircraft can hover.
+The test suite also checks nominal static-hover force balance for every example profile and verifies that the configured worst-case mass, voltage and motor-effectiveness bounds in each curriculum stage retain at least a 1.05 thrust-to-weight ratio. During training, periodic family evaluation selects `best/best_model.zip` lexicographically by: (1) maximum minimum per-profile five-second sustained-hover success, (2) minimum worst-profile crash rate, (3) maximum minimum per-profile takeoff rate, and (4) mean return as a final tie-breaker. The last policy snapshot is saved independently as `final_model.zip`. The sustained-hover definition requires takeoff, altitude error ≤0.15 m, horizontal error ≤0.20 m, speed ≤0.35 m/s, absolute roll/pitch ≤0.25 rad, angular-rate norm ≤0.5 rad/s, and five continuous seconds without a crash. These are simulation checks on provisional coefficients, not proof that the real aircraft can hover.
 
 ## Reference hover controller and plant feasibility gate
 
@@ -75,3 +75,14 @@ The test suite also checks nominal static-hover force balance for every example 
 ## Limitations and safety boundary
 
 This is a software training architecture, not a universal flight controller. The example profiles are synthetic engineering estimates. They are useful for exercising multi-domain training code, not for predicting real flight. The simplified fast-physics model does not yet include a validated aerodynamic model for the custom CAD propeller, full motor electrical dynamics, ESC behavior, battery equivalent-circuit behavior, sensor/estimator stack or flight-controller timing. Training success on these profiles is not evidence of sim-to-real transfer. No checkpoint produced by this path is eligible for physical flight without aircraft-specific calibration, independent validation and a separate safety review.
+
+
+## Reward, crash handling and release criteria (current)
+
+The universal fast-physics environment uses dense altitude and horizontal position tracking, penalties for translational speed, roll/pitch tilt, angular rates, abrupt motor-command changes, and a small squared normalized-command effort proxy. It intentionally does not penalize yaw angle without a defined yaw target. Altitude progress uses potential-based shaping; crossing the takeoff threshold receives a one-time bonus, stable-hover steps receive a shaping bonus, and an episode that reaches its time limit without takeoff receives a takeoff-failure penalty.
+
+The command-effort term is only a normalized control-effort proxy. The plant does not yet contain validated motor current, ESC losses, battery internal resistance or electrical power telemetry, so this term must not be described as measured energy consumption.
+
+Non-finite states are detected before reward/estimator/observation use. The environment substitutes the last finite state for the returned observation, emits a finite terminal penalty and records the failure reason. The ground plane is enforced as a unilateral contact constraint: the simulated vehicle cannot continue below z=0; contact before takeoff is allowed, while contact after takeoff is a crash.
+
+Evaluation reports separately track takeoff success/failure, sustained-hover success, crash rate, maximum altitude, stable-hover duration and merely surviving to the time limit. Surviving to the time limit is not mission completion. The release gate requires minimum per-profile sustained-hover success, maximum per-profile crash rate, and minimum per-profile takeoff success. Simulation acceptance is not physical-flight approval.
