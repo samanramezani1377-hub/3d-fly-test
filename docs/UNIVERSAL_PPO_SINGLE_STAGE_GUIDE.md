@@ -157,7 +157,7 @@ The adaptive profile sampler updates profile weights from observed weaknesses. T
 3. Select the `main` branch.
 4. Choose **Run workflow**.
 
-A pull request follows the existing validation path only. It does not launch PPO training. The 2-million-transition training run starts only through the manual `workflow_dispatch` event.
+A pull request follows the existing validation path only. A push to `main` that touches the workflow's relevant paths is acknowledged by a lightweight no-op job: it does not check out the repository, install dependencies, run tests, or launch PPO training. The 2-million-transition training run starts only through the manual `workflow_dispatch` event.
 
 Do not start duplicate manual runs concurrently. The workflow concurrency group prevents overlapping runs on the same ref from proceeding independently.
 
