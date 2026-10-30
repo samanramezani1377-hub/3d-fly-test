@@ -53,7 +53,7 @@ jobs:
           from pathlib import Path
 
           root = Path(os.environ["RUNNER_TEMP"])
-          for filename in ("hover-nominal.json", "hover-stage4-randomized.json"):
+          for filename in ("hover-nominal.json", "hover-stage4-no-wind.json", "hover-stage4-low-wind.json", "hover-stage4-randomized.json"):
               report = json.loads((root / filename).read_text())
               print(filename, "randomized=", report["randomized"])
               for profile in report["profiles"]:
