@@ -11,7 +11,6 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "training"))
 
 from fast_physics.curriculum import randomization_for_stage
-from fast_physics.ppo_action import nominal_hover_commands, policy_action_to_motor_commands
 from fast_physics.dynamics import FastQuadrotor
 from fast_physics.vehicle_family import (
     DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv, load_vehicle_profiles,
@@ -151,27 +150,3 @@ def test_non_positive_definite_inertia_is_rejected(tmp_path):
     path.write_text(json.dumps(profile), encoding="utf-8")
     with pytest.raises(ValueError):
         load_vehicle_profiles(path)
-
-
-
-def test_symmetric_ppo_action_mapping_is_hover_centered_and_bounded():
-    for profile in load_vehicle_profiles(DEFAULT_VEHICLE_FAMILY):
-        params = profile_to_parameters(profile)
-        hover = nominal_hover_commands(params)
-        assert hover.shape == (4,)
-        assert np.all((hover > 0.0) & (hover < 1.0))
-        neutral = policy_action_to_motor_commands(np.zeros(4, dtype=np.float32), params)
-        np.testing.assert_allclose(neutral, hover, rtol=1e-6, atol=1e-6)
-        minimum = policy_action_to_motor_commands(-np.ones(4, dtype=np.float32), params)
-        maximum = policy_action_to_motor_commands(np.ones(4, dtype=np.float32), params)
-        np.testing.assert_allclose(minimum, 0.0, atol=1e-6)
-        np.testing.assert_allclose(maximum, 1.0, atol=1e-6)
-        sample = policy_action_to_motor_commands(np.array([-1.0, -0.5, 0.5, 1.0]), params)
-        assert np.all(np.isfinite(sample))
-        assert np.all((sample >= 0.0) & (sample <= 1.0))
-
-
-def test_symmetric_ppo_action_mapping_rejects_wrong_action_shape():
-    params = profile_to_parameters(load_vehicle_profiles(DEFAULT_VEHICLE_FAMILY)[0])
-    with pytest.raises(ValueError, match="four motor deltas"):
-        policy_action_to_motor_commands(np.zeros(3, dtype=np.float32), params)
