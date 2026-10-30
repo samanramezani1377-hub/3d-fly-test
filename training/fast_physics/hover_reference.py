@@ -20,6 +20,7 @@ class HoverReferenceController:
         params: VehicleParameters,
         *,
         target_position=(0.0, 0.0, 1.0),
+        wind_m_s=(0.0, 0.0, 0.0),
         position_kp=(1.8, 1.8, 4.0),
         position_kd=(3.0, 3.0, 3.2),
         position_ki=(0.65, 0.65, 0.35),
@@ -33,6 +34,7 @@ class HoverReferenceController:
         params.validate()
         self.params = params
         self.target = np.asarray(target_position, dtype=np.float64)
+        self.wind = np.asarray(wind_m_s, dtype=np.float64)
         self.position_kp = np.asarray(position_kp, dtype=np.float64)
         self.position_kd = np.asarray(position_kd, dtype=np.float64)
         self.position_ki = np.asarray(position_ki, dtype=np.float64)
@@ -43,7 +45,7 @@ class HoverReferenceController:
         self.attitude_kd = np.asarray(attitude_kd, dtype=np.float64)
         self.max_tilt = float(max_tilt_rad)
         self.max_horizontal_accel = float(max_horizontal_accel_m_s2)
-        if self.target.shape != (3,) or self.max_tilt <= 0 or self.dt <= 0:
+        if self.target.shape != (3,) or self.wind.shape != (3,) or self.max_tilt <= 0 or self.dt <= 0:
             raise ValueError("target_position must be a 3-vector; tilt and dt must be positive")
         if any(v.shape != (3,) for v in (self.position_kp, self.position_kd, self.position_ki, self.integral_limit)):
             raise ValueError("position controller gains and integral limits must be 3-vectors")
@@ -83,6 +85,14 @@ class HoverReferenceController:
             - self.position_kd * velocity
             + self.position_ki * self.position_integral
         )
+        # Oracle feed-forward: cancel the plant drag implied by the known wind.
+        air_velocity = velocity - self.wind
+        air_speed = float(np.linalg.norm(air_velocity))
+        drag_compensation = (
+            p.linear_drag_kg_s * air_velocity
+            + p.quadratic_drag_kg_m * air_speed * air_velocity
+        ) / p.mass_kg
+        accel_world += drag_compensation
         accel_world[:2] = np.clip(accel_world[:2], -self.max_horizontal_accel, self.max_horizontal_accel)
 
         yaw = float(attitude[2])
