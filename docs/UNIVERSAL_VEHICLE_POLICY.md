@@ -114,3 +114,32 @@ checkpoints into v4. No training run or new test suite is triggered by these
 changes. The four included vehicle profiles are provisional estimates; static
 mixer rank and nominal thrust-envelope calculations do not validate the real
 aircraft or establish sim-to-real transfer.
+
+
+## PPO learning improvements pipeline v5
+
+Pipeline v5 adds staged teacher guidance to the body-wrench policy. The
+privileged hover-reference controller contributes requested body wrench with
+weights 0.80 / 0.60 / 0.40 / 0.20 / 0.00 across curriculum stages 1–5.
+Its true simulator state, randomized physical parameters and wind are used
+only inside the teacher controller; none are added to the PPO observation.
+Stage 5 and the final held-out evaluation run with teacher weight zero.
+
+The same action wrapper is used for PPO training, periodic balanced checkpoint
+evaluation and standalone evaluation. Mixer desaturation preserves collective
+thrust where feasible and scales requested torques down to respect per-rotor
+limits. The environment adds vertical-speed damping and reports motor
+saturation fraction.
+
+The existing family sampler now updates per-profile sampling weights from
+balanced evaluation results, increasing exposure to profiles with weak
+takeoff/hover performance or high crash rate. Updates are smoothed, bounded,
+and normalized. Checkpoint selection is consistent across in-training and
+final held-out selection: weakest-profile sustained-hover success, worst
+profile crash rate, weakest takeoff success, stable-hover duration, lower
+motor saturation, then episode return.
+
+No new workflow or test suite was created. The existing five-stage workflow
+stores v5 checkpoints separately at `training/models/universal-quad-v5/`.
+The oracle teacher is a simulation training aid, not a flight controller.
+Successful PPO simulation metrics do not establish real-flight safety.
