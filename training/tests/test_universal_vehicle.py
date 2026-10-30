@@ -92,8 +92,9 @@ def test_partial_user_profile_derives_secondary_physics_and_labels_it(tmp_path):
     path.write_text(json.dumps(profile), encoding="utf-8")
     loaded = load_vehicle_profiles(path)[0]
     assert loaded["physical"]["mass_kg"] == profile["physical"]["mass_kg"]
-    assert len(loaded["derived_estimates"]) == 5
+    assert len(loaded["derived_estimates"]) == 6
     assert "inertia_kg_m2:point-mass-arm-estimate" in loaded["derived_estimates"]
+    assert "center_of_mass_m:geometric-center-assumption" in loaded["derived_estimates"]
     assert profile_to_parameters(loaded).inertia_matrix.shape == (3, 3)
     features = vehicle_feature_vector(loaded)
     assert features.shape == (12,)
