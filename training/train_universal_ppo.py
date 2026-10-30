@@ -69,6 +69,10 @@ class BalancedProfileCallback(BaseCallback):
             "latest_checkpoint": "latest_model.zip"
         }, indent=2), encoding="utf-8")
 
+    def _on_step(self) -> bool:
+        # BaseCallback requires this method; returning True keeps PPO training running.
+        return True
+
     def _on_training_start(self):
         if self.last_checkpoint_timesteps is None:
             self.last_checkpoint_timesteps = int(self.num_timesteps)
