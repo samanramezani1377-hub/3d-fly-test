@@ -1,0 +1,60 @@
+name: Physics, vehicle-family, hover and CAD validation
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  OMP_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  OPENBLAS_NUM_THREADS: "1"
+  NUMEXPR_NUM_THREADS: "1"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  validate:
+    name: Existing physics, controls and CAD checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: training/requirements.txt
+
+      - name: Install CPU-only validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -r training/requirements.txt
+          python -m pip install pytest
+
+      - name: Compile Python training modules
+        run: python -m compileall -q training
+
+      - name: Run existing reward and checkpoint regression checks
+        run: python -m unittest training.test_reward_design
+
+      - name: Run existing physics, vehicle-family and hover-control tests
+        run: |
+          python -m pytest -q \
+            training/tests/test_fast_physics.py \
+            training/tests/test_universal_vehicle.py \
+            training/tests/test_hover_reference.py
+
+      - name: Validate committed CAD assets
+        run: python scripts/validate_preflight_assets.py
+
+      - name: Run existing CAD asset-validator tests
+        run: python -m pytest -q tests/test_preflight_asset_validator.py
