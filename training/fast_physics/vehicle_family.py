@@ -199,6 +199,7 @@ class VehicleFamilyEnv(gym.Env):
         vehicle_id: str | None = None, randomization_path: str | Path = DEFAULT_RANDOMIZATION,
         dt: float = 0.02, max_steps: int = 1500, history_length: int = 4,
         randomize: bool = True, curriculum_stage: int | None = None,
+        sampling_weights_path: str | Path | None = None,
     ):
         super().__init__()
         self.profiles = load_vehicle_profiles(vehicle_family_path)
@@ -209,6 +210,7 @@ class VehicleFamilyEnv(gym.Env):
         self.randomization_path = Path(randomization_path)
         self.dt, self.max_steps, self.history_length = float(dt), int(max_steps), int(history_length)
         self.randomize, self.curriculum_stage = bool(randomize), curriculum_stage
+        self.sampling_weights_path = Path(sampling_weights_path) if sampling_weights_path else None
         self.active_profile = None
         self.active_features = np.zeros(VEHICLE_FEATURE_SIZE, dtype=np.float32)
         self.inner: AdaptiveDroneEnv | None = None
@@ -222,7 +224,17 @@ class VehicleFamilyEnv(gym.Env):
         super().reset(seed=seed)
         requested = (options or {}).get("vehicle_id", self.pinned_vehicle_id)
         if requested is None:
-            self.active_profile = self.profiles[int(self.np_random.integers(0, len(self.profiles)))]
+            weights = np.ones(len(self.profiles), dtype=np.float64)
+            if self.sampling_weights_path is not None and self.sampling_weights_path.is_file():
+                raw_weights = json.loads(self.sampling_weights_path.read_text(encoding="utf-8"))
+                weights = np.asarray(
+                    [float(raw_weights.get(p["vehicle_id"], 1.0)) for p in self.profiles],
+                    dtype=np.float64,
+                )
+                if not np.all(np.isfinite(weights)) or np.any(weights <= 0):
+                    raise ValueError("profile sampling weights must be finite and positive")
+            probabilities = weights / weights.sum()
+            self.active_profile = self.profiles[int(self.np_random.choice(len(self.profiles), p=probabilities))]
         else:
             if requested not in self.profile_by_id:
                 raise ValueError(f"unknown vehicle_id {requested!r}")
