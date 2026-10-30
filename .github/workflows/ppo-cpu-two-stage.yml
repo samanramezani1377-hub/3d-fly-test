@@ -1,6 +1,26 @@
 name: Universal PPO - PR validation / manual single-stage training
 
 on:
+  # Repository pushes are acknowledged by this workflow but never start training.
+  push:
+    branches:
+      - main
+    paths:
+      - "training/fast_physics/**"
+      - "training/train_universal_ppo.py"
+      - "training/run_universal_curriculum.py"
+      - "training/evaluate_universal_ppo.py"
+      - "training/tests/test_fast_physics.py"
+      - "training/tests/test_universal_vehicle.py"
+      - "training/tests/test_hover_reference.py"
+      - "training/fast_physics/hover_reference.py"
+      - "training/evaluate_hover_reference.py"
+      - "vehicle_models/family/**"
+      - "vehicle_models/smooth2_parametric/domain_randomization.json"
+      - "docs/UNIVERSAL_VEHICLE_POLICY.md"
+      - "docs/UNIVERSAL_PPO_SINGLE_STAGE_GUIDE.md"
+      - "training/README.md"
+      - ".github/workflows/ppo-cpu-two-stage.yml"
   pull_request:
     paths:
       - "training/fast_physics/**"
@@ -35,14 +55,23 @@ env:
 
 jobs:
   single-stage-training:
-    name: ${{ github.event_name == 'pull_request' && 'PR validation only (no PPO training)' || 'Single-stage PPO training' }}
+    name: ${{ github.event_name == 'pull_request' && 'PR validation only (no PPO training)' || (github.event_name == 'push' && 'Push acknowledgement only (no PPO training)' || 'Single-stage PPO training') }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
+      - name: Acknowledge push without running tests or training
+        if: github.event_name == 'push'
+        run: |
+          echo "Push detected. This event is intentionally a no-op."
+          echo "No dependencies, tests, PPO training, or checkpoints are run."
+          echo "Use the workflow_dispatch button to start the single-stage PPO training."
+
       - name: Checkout
+        if: github.event_name != 'push'
         uses: actions/checkout@v4
 
       - name: Set up Python
+        if: github.event_name != 'push'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -50,6 +79,7 @@ jobs:
           cache-dependency-path: training/requirements.txt
 
       - name: Install CPU-only dependencies
+        if: github.event_name != 'push'
         run: |
           python -m pip install --upgrade pip
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
