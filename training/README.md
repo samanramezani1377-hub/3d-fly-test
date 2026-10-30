@@ -132,6 +132,17 @@ python training/run_universal_curriculum.py --timesteps-per-stage 200000 --n-env
 
 Each stage starts from the previous stage's best evaluated checkpoint (`best/best_model.zip`), not the last training snapshot. Both best and final checkpoints, metadata, held-out per-profile evaluation and a final curriculum manifest are retained. Stage ranges are inherited from `vehicle_models/smooth2_parametric/domain_randomization.json`; the actuator, voltage and mass bounds are constrained so the four provisional profiles retain a nominal worst-case thrust-to-weight ratio above 1.05 in the simplified model. These remain provisional software ranges, not structural or electrical operating limits.
 
+### Validate plant hover feasibility before PPO
+
+Run the privileged reference benchmark before spending compute on policy training:
+
+```bash
+python training/evaluate_hover_reference.py --episodes 10 --max-steps 1500 --settle-seconds 5
+# Add --randomize to evaluate the Stage 4 domain-randomized plant.
+```
+
+The reference controller uses the simulator's true episode parameters. It is an oracle upper-bound diagnostic, not an observation-only policy or a flight controller. It isolates whether the simplified plant and motor allocation can sustain hover. CI checks nominal sustained hover on all four profiles. If the oracle succeeds but PPO fails, debug reward design, action exploration, observation normalization and training curriculum before increasing training duration.
+
 ### Evaluate per airframe
 
 ```bash
