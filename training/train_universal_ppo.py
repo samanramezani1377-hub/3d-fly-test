@@ -56,8 +56,8 @@ def main(argv=None):
     def make_env(rank):
         def _init():
             return VehicleFamilyEnv(
-                vehicle_family_path=family_path, randomization_path=Path(__file__).resolve().parents[1]
-                    / "vehicle_models/smooth2_parametric/domain_randomization.json",
+                vehicle_family_path=family_path,
+                randomization_path=Path(__file__).resolve().parents[1] / "vehicle_models/smooth2_parametric/domain_randomization.json",
                 history_length=args.history_length, randomize=not args.no_randomization,
                 curriculum_stage=args.curriculum_stage,
             )
