@@ -38,8 +38,10 @@ def score(report):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--timesteps-per-stage", type=int, default=1_000_000)
-    p.add_argument("--n-envs", type=int, default=16)
+    p.add_argument("--active-stages", type=int, choices=(1, 2, 3, 4, 5), default=1,
+                   help="Number of curriculum stages to activate; later stages remain implemented but dormant by default.")
+    p.add_argument("--timesteps-per-stage", type=int, default=2_000_000)
+    p.add_argument("--n-envs", type=int, default=32)
     p.add_argument("--evaluation-episodes", type=int, default=20,
                    help="Final held-out episodes per vehicle profile; only run after stage 5.")
     p.add_argument("--checkpoint-eval-episodes", type=int, default=2,
@@ -77,6 +79,7 @@ def main(argv=None):
     manifest_path = out / f"{a.run_prefix}-curriculum-manifest.json"
     config = {
         "pipeline_version": PIPELINE_VERSION,
+        "active_stages": a.active_stages,
         "timesteps_per_stage": a.timesteps_per_stage,
         "n_envs": a.n_envs,
         "checkpoint_eval_episodes": a.checkpoint_eval_episodes,
@@ -139,7 +142,7 @@ def main(argv=None):
     write_json(heldout_path, heldout)
 
     previous_best = None
-    for stage in range(1, 6):
+    for stage in range(1, a.active_stages + 1):
         name = f"{a.run_prefix}-stage{stage}"
         stage_dir = out / name
         best = stage_dir / "best" / "best_model.zip"
@@ -240,7 +243,28 @@ def main(argv=None):
         write_json(manifest_path, manifest)
         previous_best = best
 
-    # Held-out evaluation is run once, after all five actual PPO training stages.
+    # Keep later curriculum stages and held-out release evaluation intact,
+    # but defer them during the initial takeoff/hover learning phase.
+    if a.active_stages < 5:
+        manifest["training_mode"] = "single_stage_takeoff_and_sustained_hover"
+        manifest["active_stages"] = list(range(1, a.active_stages + 1))
+        manifest["deferred_stages"] = list(range(a.active_stages + 1, 6))
+        manifest["final_held_out_evaluation"] = "deferred_until_all_five_stages_are_reactivated"
+        write_json(manifest_path, manifest)
+        print(json.dumps({
+            "pipeline_version": PIPELINE_VERSION,
+            "active_stages": manifest["active_stages"],
+            "deferred_stages": manifest["deferred_stages"],
+            "timesteps_per_active_stage": a.timesteps_per_stage,
+            "n_envs": a.n_envs,
+            "manifest": str(manifest_path),
+            "held_out_evaluation": "deferred",
+            "simulation_only": True,
+            "physical_flight_eligible": False,
+        }, indent=2))
+        return
+
+    # Held-out evaluation remains available when all five stages are explicitly reactivated.
     stage5 = out / f"{a.run_prefix}-stage5"
     release_dir = out / "release"
     release_dir.mkdir(parents=True, exist_ok=True)
