@@ -8,6 +8,7 @@ from pathlib import Path
 
 from stable_baselines3.common.callbacks import BaseCallback
 from fast_physics.vehicle_family import DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv, load_vehicle_profiles
+from fast_physics.ppo_action import SymmetricHoverActionWrapper, policy_action_to_motor_commands
 
 
 def parse_args(argv=None):
@@ -99,7 +100,8 @@ class BalancedProfileCallback(BaseCallback):
                     total, crashed, took_off = 0.0, False, False
                     stable_steps = max_stable_steps = 0
                     while True:
-                        action, _ = self.model.predict(obs, deterministic=True)
+                        policy_action, _ = self.model.predict(obs, deterministic=True)
+                        action = policy_action_to_motor_commands(policy_action, e.inner.base_params)
                         obs, reward, terminated, truncated, info = e.step(action)
                         total += float(reward)
                         crashed = crashed or bool(info.get("crashed", False))
@@ -209,12 +211,13 @@ def main(argv=None):
 
     def make_env(rank):
         def _init():
-            return VehicleFamilyEnv(
+            base_env = VehicleFamilyEnv(
                 vehicle_family_path=family_path,
                 randomization_path=args.randomization_config,
                 history_length=args.history_length, randomize=not args.no_randomization,
                 curriculum_stage=args.curriculum_stage,
             )
+            return SymmetricHoverActionWrapper(base_env)
         return _init
 
     env = SubprocVecEnv([make_env(i) for i in range(args.n_envs)])
