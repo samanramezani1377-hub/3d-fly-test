@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PIPELINE_VERSION = 4
+PIPELINE_VERSION = 5
 
 
 def load_profile_ids(path):
@@ -31,6 +31,8 @@ def score(report):
         -max(x["crash_rate"] for x in profiles),
         min(x["takeoff_success_rate"] for x in profiles),
         sum(x["mean_stable_hover_seconds"] for x in profiles) / len(profiles),
+        -sum(x.get("mean_motor_saturation_fraction", 1.0) for x in profiles) / len(profiles),
+        sum(x.get("mean_reward", 0.0) for x in profiles) / len(profiles),
     )
 
 
@@ -50,7 +52,7 @@ def main(argv=None):
     p.add_argument("--max-final-crash-rate", type=float, default=0.25)
     p.add_argument("--min-final-takeoff-rate", type=float, default=0.75)
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--run-prefix", default="universal-quad-v4")
+    p.add_argument("--run-prefix", default="universal-quad-v5")
     p.add_argument("--output-dir", type=Path, default=Path("training/runs"))
     p.add_argument("--vehicle-family", type=Path,
                    default=ROOT / "vehicle_models/family/vehicle_profiles.json")
@@ -103,7 +105,10 @@ def main(argv=None):
             "stages": [],
             "checkpoint_handoff": "previous_stage_best_evaluated_checkpoint",
             "resume_policy": "same-stage latest checkpoint only; full fresh budget for each new stage",
-            "action_semantics": "collective-thrust-plus-body-torque-allocation-v1",
+            "action_semantics": "collective-thrust-plus-body-torque-allocation-v2",
+            "reference_guidance": "privileged-teacher-weight-0.80-0.60-0.40-0.20-0.00",
+            "adaptive_profile_sampling": "smoothed-weak-profile-reweighting",
+            "checkpoint_selection": "min-hover-success,max-crash,min-takeoff,stable-duration,min-saturation,mean-reward",
             "observation_scaling": "dimensionless-state-history-v1",
             "progressive_initial_recovery": "ground-start-with-stage-scaled-position-and-attitude-perturbations",
             "simulation_only": True,
