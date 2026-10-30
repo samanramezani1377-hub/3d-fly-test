@@ -238,7 +238,7 @@ def main(argv=None):
                 batch_size=250, gamma=0.99, gae_lambda=0.95, clip_range=0.15,
                 ent_coef=0.008, vf_coef=0.5, max_grad_norm=0.5,
                 target_kl=0.03, normalize_advantage=True,
-                policy_kwargs={"net_arch": {"pi": [128, 128], "vf": [128, 128]}},
+                policy_kwargs={"net_arch": {"pi": [128, 128], "vf": [128, 128]}, "log_std_init": -1.0},
                 verbose=1, seed=args.seed, device="cpu",
                 tensorboard_log=str(run_dir / "tensorboard"),
             )
