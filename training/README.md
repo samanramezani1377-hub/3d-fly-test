@@ -214,3 +214,20 @@ The current universal fast-physics path (train_universal_ppo.py, evaluate_univer
 - The final release gate checks minimum sustained-hover success, maximum crash rate and minimum takeoff success on every profile. Passing this simulation gate never certifies physical flight.
 
 No additional workflow or test suite was introduced for these changes. The existing PR workflow remains the only automated validation path; no training or evaluation run is started by editing these files.
+
+
+### Universal PPO action normalization (pipeline v3)
+
+The universal family policy uses a symmetric four-dimensional action space
+[-1, 1]. Each component is a normalized motor delta around the nominal hover
+command computed from the declared vehicle profile. A zero action therefore
+requests nominal hover thrust; -1 maps to zero motor command and +1 maps to
+full command. The mapping uses nominal profile parameters only, not hidden
+episode-randomized mass, voltage, motor effectiveness, or other ground truth.
+The underlying physics environment and Flight Lab continue to use physical
+motor commands in [0, 1].
+
+Pipeline v3 uses a separate checkpoint directory/name. Checkpoints trained
+with the old [0, 1] PPO action space are intentionally not resumed because
+their policy distribution and action semantics are incompatible. No training
+run is started by this code change.
