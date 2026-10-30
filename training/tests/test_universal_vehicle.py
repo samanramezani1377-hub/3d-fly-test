@@ -35,7 +35,7 @@ def test_profiles_build_valid_four_rotor_models():
 
 def test_descriptor_is_fixed_size_finite_and_vehicle_specific():
     vectors = [vehicle_feature_vector(p) for p in load_vehicle_profiles(DEFAULT_VEHICLE_FAMILY)]
-    assert all(v.shape == (10,) and np.all(np.isfinite(v)) for v in vectors)
+    assert all(v.shape == (12,) and np.all(np.isfinite(v)) for v in vectors)
     assert not np.allclose(vectors[0], vectors[1])
 
 
