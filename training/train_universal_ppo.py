@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from stable_baselines3.common.callbacks import BaseCallback
 from fast_physics.vehicle_family import DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv, load_vehicle_profiles
 
 
@@ -113,7 +114,6 @@ def main(argv=None):
     try:
         import stable_baselines3
         from stable_baselines3 import PPO
-        from stable_baselines3.common.callbacks import BaseCallback
         from stable_baselines3.common.vec_env import SubprocVecEnv
     except ImportError as exc:
         raise SystemExit("Install training/requirements.txt to run PPO") from exc
@@ -149,7 +149,7 @@ def main(argv=None):
             model = PPO(
                 "MlpPolicy", env, learning_rate=args.learning_rate, n_steps=1024,
                 batch_size=256, gamma=0.99, gae_lambda=0.95, clip_range=0.2,
-                ent_coef=0.005, verbose=1, seed=args.seed, device="auto",
+                ent_coef=0.005, verbose=1, seed=args.seed, device="cpu",
                 tensorboard_log=str(run_dir / "tensorboard"),
             )
         model.learn(total_timesteps=args.timesteps, callback=eval_callback, progress_bar=False)
