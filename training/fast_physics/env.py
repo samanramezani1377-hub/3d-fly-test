@@ -93,7 +93,8 @@ class AdaptiveDroneEnv(gym.Env):
         self._taken_off = False
         self._scenario_details: dict = {}
 
-    def _policy_frame(self, state: np.ndarray) -> np.ndarray:
+    def _measure_state(self, state: np.ndarray) -> np.ndarray:
+        """Return the sensor-visible state; never pass simulator truth to the policy estimator."""
         measured = state.astype(np.float64).copy()
         noise = self.active_randomization.get("environment", {}).get("sensor_noise_std", {})
         if self.randomize and isinstance(noise, dict):
@@ -105,6 +106,11 @@ class AdaptiveDroneEnv(gym.Env):
                 dtype=np.float64,
             )
             measured += self.np_random.normal(0.0, std, size=12)
+        return measured
+
+    def _policy_frame(self, state: np.ndarray, measured: np.ndarray | None = None) -> np.ndarray:
+        if measured is None:
+            measured = self._measure_state(state)
         relative = measured[:3].astype(np.float32) - self.target.astype(np.float32)
         return np.concatenate((relative, measured[3:12], self._last_action)).astype(np.float32)
 
@@ -135,10 +141,11 @@ class AdaptiveDroneEnv(gym.Env):
         wind_bound = float(env_cfg.get("wind_component_m_s", [-2.0, 2.0])[1])
         wind = self.np_random.uniform(-wind_bound, wind_bound, size=3) if self.randomize else np.zeros(3)
         state = self.plant.reset(wind=wind)
-        self.estimator.reset(float(state[5]))
+        measured = self._measure_state(state)
+        self.estimator.reset(float(measured[5]))
         self._history.clear()
         self._last_action = np.zeros(4, dtype=np.float32)
-        frame = self._policy_frame(state)
+        frame = self._policy_frame(state, measured)
         self._history.extend([frame.copy() for _ in range(self.history_length)])
         self._steps = 0
         self._taken_off = False
@@ -161,7 +168,8 @@ class AdaptiveDroneEnv(gym.Env):
         state, telemetry = self.plant.step(action)
         self._steps += 1
         self._taken_off = self._taken_off or bool(state[2] > 0.18)
-        self.estimator.update(action, float(state[5]), self.dt)
+        measured = self._measure_state(state)
+        self.estimator.update(action, float(measured[5]), self.dt)
 
         position_error = state[:3].astype(np.float64) - self.target
         horizontal_error = float(np.linalg.norm(position_error[:2]))
@@ -190,7 +198,7 @@ class AdaptiveDroneEnv(gym.Env):
         truncated = self._steps >= self.max_steps and not terminated
 
         self._last_action = action.copy()
-        self._history.append(self._policy_frame(state))
+        self._history.append(self._policy_frame(state, measured))
         obs = self._observation()
         info = {
             **telemetry,

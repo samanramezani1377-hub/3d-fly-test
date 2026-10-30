@@ -203,3 +203,23 @@ def test_held_out_evaluator_requires_sustained_hover_and_no_crash():
     bad = summarize_episode(crashed_samples, 100.0)
     assert bad["hover_success"] is False
     assert bad["crashed"] is True
+
+
+def test_online_estimator_uses_sensor_measurement_not_simulator_truth():
+    env = AdaptiveDroneEnv(params=synthetic_params(), randomization_path=RANDOMIZATION, randomize=False)
+    try:
+        env.reset(seed=4)
+        original_measure = env._measure_state
+
+        def biased_sensor(state):
+            measured = original_measure(state)
+            measured[5] += 0.123
+            return measured
+
+        env._measure_state = biased_sensor
+        env.step(np.full(4, 0.4))
+        assert env.estimator.previous_vertical_velocity == pytest.approx(
+            env.plant.velocity[2] + 0.123
+        )
+    finally:
+        env.close()
