@@ -84,6 +84,7 @@ def test_partial_user_profile_derives_secondary_physics_and_labels_it(tmp_path):
     profile["vehicle_id"] = "user-config-with-known-mass"
     profile["calibration_status"] = "user_supplied"
     profile["physical"]["inertia_kg_m2"] = None
+    profile["physical"]["center_of_mass_m"] = None
     profile["propulsion"]["max_rotor_speed_rad_s"] = None
     profile["propulsion"]["thrust_coefficient_n_per_rad_s2"] = None
     profile["propulsion"]["torque_to_thrust_m"] = None
