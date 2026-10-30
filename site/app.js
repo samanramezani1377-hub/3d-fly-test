@@ -8,6 +8,19 @@ const keys={};
 function setStatus(text,ok=false){$("statusText").textContent=text;$("statusDot").style.background=ok?"#56d6a0":"#f0b66a"}
 function log(text){$("log").textContent=text}
 function diagLog(level,message,code=""){const item={time:new Date().toLocaleTimeString(),level,message,code};diagnosticHistory.push(item);if(diagnosticHistory.length>300)diagnosticHistory.shift();const host=$("diagnosticLog");if(host){host.textContent=diagnosticHistory.map(x=>`[${x.time}] [${x.level.toUpperCase()}] ${x.code?x.code+" · ":""}${x.message}`).join("\n");host.scrollTop=host.scrollHeight}}
+async function copyAllLogs(){
+ const diagnosticText=diagnosticHistory.map(x=>{const time=x.time||"";return "["+time+"] ["+(x.level||"INFO").toUpperCase()+"] "+(x.code?x.code+" · ":"")+(x.message||"")}).join("\n");
+ const sections=["=== Flight Lab diagnostics ===",diagnosticText,"=== Startup / runtime log ===",$("log")?.textContent||"","=== Engine metadata ===",$("engineMeta")?.textContent||"","=== Browser ===",navigator.userAgent,"Page: "+location.href].filter(Boolean);
+ const content=sections.join("\n\n");
+ try{
+  if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(content);
+  else{
+   const area=document.createElement("textarea");area.value=content;area.setAttribute("readonly","");area.style.position="fixed";area.style.opacity="0";document.body.appendChild(area);area.select();
+   const copied=document.execCommand("copy");area.remove();if(!copied)throw Error("مرورگر اجازهٔ کپی نداد");
+  }
+  const button=$("copyDiagnostics");if(button){button.textContent="کپی شد";setTimeout(()=>button.textContent="کپی همهٔ لاگ‌ها",1800)}
+ }catch(e){diagLog("error","کپی لاگ ناموفق بود: "+(e.message||String(e)),"diagnostics.copy")}
+}
 function renderEngineDiagnostics(){if(!engineDiagnostics)return;try{const rows=JSON.parse(engineDiagnostics());for(const x of rows)diagLog(x.level||"info",x.message||JSON.stringify(x),x.code||"")}catch(e){diagLog("error",e.stack||e.message,"diagnostics.read")}}
 function rotationMatrix(a){const [r,p,y]=a,[cr,sr,cp,sp,cy,sy]=[Math.cos(r),Math.sin(r),Math.cos(p),Math.sin(p),Math.cos(y),Math.sin(y)];return [[cy*cp,cy*sp*sr-sy*cr,cy*sp*cr+sy*sr],[sy*cp,sy*sp*sr+cy*cr,sy*sp*cr-cy*sr],[-sp,cp*sr,cp*cr]]}
 function threeRotation(a){const R=rotationMatrix(a);return [[R[0][0],-R[0][2],R[0][1]],[ -R[2][0],R[2][2],-R[2][1]],[R[1][0],-R[1][2],R[1][1]]]}
@@ -94,7 +107,7 @@ function resetEngine(){if(!engineReset)return;armed=false;paused=false;motors=[0
 function buildMotorSliders(){$("motorGrid").innerHTML=[0,1,2,3].map(i=>'<label>موتور '+(i+1)+'<b id="mval'+i+'">0%</b><input type="range" min="0" max="100" value="0" id="m'+i+'"></label>').join("");for(let i=0;i<4;i++)$("m"+i).addEventListener("input",e=>{motors[i]=Number(e.target.value)/100;directMotorMode=true;$("mval"+i).textContent=e.target.value+"%";if(armed)log("فرمان مستقیم روتورها؛ محیط همان VehicleFamilyEnv است.")})}
 async function init(){try{const response=await fetch("./vehicle_models/family/vehicle_profiles.json");if(!response.ok)throw Error("HTTP "+response.status);profiles=(await response.json()).profiles;profile=profiles[0];$("profileSelect").innerHTML=profiles.map((p,i)=>'<option value="'+i+'">'+p.display_name+'</option>').join("");$("profileSelect").addEventListener("change",()=>{profile=profiles[Number($("profileSelect").value)];buildDrone();resetEngine()});buildMotorSliders();init3D();await loadTrainingEngine();resetEngine();}catch(e){console.error("Flight Lab startup failure",e);diagLog("error",e.stack||e.message,"startup.failure");setStatus("خطا در بارگذاری موتور");log("خطای دقیق راه‌اندازی: "+(e.message||String(e)))}}
 $("armBtn").addEventListener("click",()=>{if(!snapshot||snapshot.terminated||snapshot.truncated)return;armed=!armed;$("armBtn").textContent=armed?"قطع موتورها":"مسلح‌سازی موتورها";if(!armed)motors=[0,0,0,0];setStatus(armed?"موتور در حال اجرا":"موتور متوقف شد",true)});
-$("resetBtn").addEventListener("click",resetEngine);$("pauseBtn").addEventListener("click",()=>{paused=!paused;$("pauseBtn").textContent=paused?"ادامه":"توقف"});
+$("copyDiagnostics").addEventListener("click",copyAllLogs);$("resetBtn").addEventListener("click",resetEngine);$("pauseBtn").addEventListener("click",()=>{paused=!paused;$("pauseBtn").textContent=paused?"ادامه":"توقف"});
 $("throttle").addEventListener("input",e=>{throttle=Number(e.target.value)/100;directMotorMode=false;$("throttleValue").textContent=e.target.value+"%"});
 $("profileSelect").addEventListener("change",()=>{});$("randomizeToggle").addEventListener("change",()=>resetEngine());$("curriculumSelect").addEventListener("change",()=>resetEngine());$("seedInput").addEventListener("change",()=>resetEngine());
 window.addEventListener("keydown",e=>{const k=e.key.toLowerCase();if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k))e.preventDefault();keys[k]=true;if(e.code==="Space"){armed=false;$("armBtn").textContent="مسلح‌سازی موتورها"}});window.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
