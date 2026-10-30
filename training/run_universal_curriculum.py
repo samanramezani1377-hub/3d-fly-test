@@ -62,6 +62,11 @@ def main(argv=None):
         raise SystemExit("Training, checkpoint and evaluation counts must be positive")
     if a.eval_frequency > a.timesteps_per_stage:
         raise SystemExit("--eval-frequency cannot exceed --timesteps-per-stage")
+    if a.timesteps_per_stage % (a.n_envs * 500):
+        raise SystemExit(
+            "Each stage budget must be divisible by n_envs * 500 so PPO stages "
+            "finish on complete rollouts."
+        )
     if not 0 <= a.min_final_success_rate <= 1 or not 0 <= a.max_final_crash_rate <= 1 or not 0 <= a.min_final_takeoff_rate <= 1:
         raise SystemExit("Acceptance thresholds must be between zero and one")
 
@@ -75,6 +80,12 @@ def main(argv=None):
         "checkpoint_eval_episodes": a.checkpoint_eval_episodes,
         "eval_frequency": a.eval_frequency,
         "checkpoint_frequency": a.checkpoint_frequency,
+        "ppo_n_steps": 500,
+        "ppo_batch_size": 250,
+        "final_evaluation_episodes": a.evaluation_episodes,
+        "min_final_success_rate": a.min_final_success_rate,
+        "max_final_crash_rate": a.max_final_crash_rate,
+        "min_final_takeoff_rate": a.min_final_takeoff_rate,
         "vehicle_family": str(a.vehicle_family),
         "seed": a.seed,
     }
@@ -193,10 +204,10 @@ def main(argv=None):
         state = json.loads(state_path.read_text(encoding="utf-8"))
         if state.get("completed") is not True or not best.is_file() or not final.is_file():
             raise RuntimeError(f"Stage {stage} did not complete its full training budget and save both checkpoints.")
-        if int(state.get("num_timesteps", -1)) < a.timesteps_per_stage:
+        if int(state.get("num_timesteps", -1)) != a.timesteps_per_stage:
             raise RuntimeError(
-                f"Stage {stage} recorded only {state.get('num_timesteps')} transitions; "
-                f"expected at least {a.timesteps_per_stage}."
+                f"Stage {stage} recorded {state.get('num_timesteps')} transitions; "
+                f"expected exactly {a.timesteps_per_stage}."
             )
 
         manifest["stages"] = [x for x in manifest["stages"] if x.get("stage") != stage]
