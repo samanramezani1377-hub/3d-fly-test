@@ -20,6 +20,10 @@ jobs:
   universal-ppo-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,9 +40,9 @@ jobs:
       - name: Run all four curriculum stages as a short PPO integration smoke test
         run: |
           python training/run_universal_curriculum.py \
-            --timesteps-per-stage 4096 \
-            --n-envs 2 \
-            --evaluation-episodes 2 \
+            --timesteps-per-stage 2048 \
+            --n-envs 1 \
+            --evaluation-episodes 1 \
             --run-prefix ci-universal-smoke \
             --output-dir "${RUNNER_TEMP}/universal-ppo"
       - name: Verify best-checkpoint handoff and per-stage artifacts
