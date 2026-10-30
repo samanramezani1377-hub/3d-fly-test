@@ -54,9 +54,8 @@ class BalancedProfileCallback(BaseCallback):
         if selection_path.is_file():
             saved = json.loads(selection_path.read_text(encoding="utf-8"))
             saved_score = tuple(saved.get("score", ()))
-            # Old checkpoints used a different three-field score and are not
-            # comparable to the new sustained-hover/takeoff score.
-            if len(saved_score) == 4:
+            # v4 four-field scores are not comparable to the v5 five-field rule.
+            if len(saved_score) == 5:
                 self.best_score = saved_score
                 self.best_report = saved.get("report")
 
@@ -89,9 +88,10 @@ class BalancedProfileCallback(BaseCallback):
         self.last_eval_timesteps = int(self.num_timesteps)
         profile_reports = []
         for pi, profile in enumerate(self.profiles):
-            e = VehicleFamilyEnv(vehicle_family_path=self.family_path,
+            e = BodyWrenchActionWrapper(VehicleFamilyEnv(vehicle_family_path=self.family_path,
                 randomization_path=self.randomization_path, history_length=self.history_length,
-                randomize=True, curriculum_stage=self.stage, vehicle_id=profile["vehicle_id"])
+                randomize=True, curriculum_stage=self.stage, vehicle_id=profile["vehicle_id"]))
+            plant_env = e.env
             episodes = []
             try:
                 for ei in range(self.episodes):
@@ -101,8 +101,7 @@ class BalancedProfileCallback(BaseCallback):
                     stable_steps = max_stable_steps = 0
                     while True:
                         policy_action, _ = self.model.predict(obs, deterministic=True)
-                        action = policy_action_to_motor_commands(policy_action, e.inner.base_params)
-                        obs, reward, terminated, truncated, info = e.step(action)
+                        obs, reward, terminated, truncated, info = e.step(policy_action)
                         total += float(reward)
                         crashed = crashed or bool(info.get("crashed", False))
                         took_off = took_off or bool(info.get("has_taken_off", False))
@@ -129,11 +128,11 @@ class BalancedProfileCallback(BaseCallback):
                             stable_steps = 0
                         if terminated or truncated:
                             break
-                    stable_seconds = max_stable_steps * e.inner.dt
+                    stable_seconds = max_stable_steps * plant_env.inner.dt
                     success = bool(not crashed and stable_seconds >= 5.0)
                     episodes.append({"seed": seed, "success": success,
                         "takeoff_success": took_off, "takeoff_failed": bool(not took_off and truncated),
-                        "crashed": crashed, "steps": e.inner._steps,
+                        "crashed": crashed, "steps": plant_env.inner._steps,
                         "stable_hover_seconds_max": stable_seconds, "return": total,
                         "altitude_error_m": info.get("altitude_error_m"),
                         "horizontal_error_m": info.get("horizontal_error_m"),
@@ -142,6 +141,7 @@ class BalancedProfileCallback(BaseCallback):
                 e.close()
             count = len(episodes)
             profile_reports.append({"vehicle_id": profile["vehicle_id"],
+                "reference_teacher_weight": e.reference_weight,
                 "success_rate": sum(x["success"] for x in episodes) / count,
                 "takeoff_success_rate": sum(x["takeoff_success"] for x in episodes) / count,
                 "takeoff_failure_rate": sum(x["takeoff_failed"] for x in episodes) / count,
@@ -152,11 +152,12 @@ class BalancedProfileCallback(BaseCallback):
         score = (min(x["success_rate"] for x in profile_reports),
             -max(x["crash_rate"] for x in profile_reports),
             min(x["takeoff_success_rate"] for x in profile_reports),
+            sum(x["mean_stable_hover_seconds"] for x in profile_reports) / len(profile_reports),
             sum(x["mean_return"] for x in profile_reports) / len(profile_reports))
         report = {"timesteps": int(self.num_timesteps), "selection_score": list(score),
             "selection_rule": ["maximize minimum per-profile five-second sustained-hover success",
                 "minimize worst-profile crash rate", "maximize minimum per-profile takeoff rate",
-                "maximize mean return as final tie-breaker"], "profiles": profile_reports}
+                "maximize mean stable-hover duration", "maximize mean return as final tie-breaker"], "profiles": profile_reports}
         self.reports_dir.mkdir(parents=True, exist_ok=True)
         report_path = self.reports_dir / f"profile-evaluation-{self.num_timesteps}.json"
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
