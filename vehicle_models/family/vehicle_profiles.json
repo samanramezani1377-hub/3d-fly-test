@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "description": "Provisional multi-airframe training family. All physical values are engineering starting estimates, not measured aircraft specifications.",
+  "units": "SI",
+  "profiles": [
+    {
+      "vehicle_id": "smooth2-a2212-custom-prop",
+      "display_name": "Current smooth2 CAD + A2212 reference",
+      "calibration_status": "provisional_estimate",
+      "parameter_source": "CAD-derived rotor geometry plus synthetic mass, inertia and propulsion coefficients for software training",
+      "geometry": {"arm_span_diagonal_m": 0.232, "propeller_diameter_m": 0.0748, "rotor_count": 4},
+      "physical": {"mass_kg": 0.60, "center_of_mass_m": [0,0,0], "inertia_kg_m2": [0.004,0.006,0.004], "linear_drag_kg_s": 0.08, "quadratic_drag_kg_m": 0.015, "angular_damping_nms": 0.002},
+      "rotors": [
+        {"position_m":[0.082013624,0.082013624,0],"spin_sign":1},
+        {"position_m":[0.082013624,-0.082013624,0],"spin_sign":-1},
+        {"position_m":[-0.082013624,-0.082013624,0],"spin_sign":1},
+        {"position_m":[-0.082013624,0.082013624,0],"spin_sign":-1}
+      ],
+      "propulsion": {"motor_name":"A2212/13T 1000KV reference","kv_rpm_per_volt":1000,"max_rotor_speed_rad_s":1100,"thrust_coefficient_n_per_rad_s2":0.000002,"torque_to_thrust_m":0.012,"motor_time_constant_s":0.045,"nominal_battery_voltage_v":11.1,"battery_cells":3,"battery_capacity_ah":2.2}
+    },
+    {
+      "vehicle_id": "generic-5inch-quad",
+      "display_name": "Generic 5-inch freestyle quad",
+      "calibration_status": "provisional_estimate",
+      "parameter_source": "Generic 5-inch class engineering estimate; not tied to a verified bill of materials",
+      "geometry": {"arm_span_diagonal_m":0.230,"propeller_diameter_m":0.127,"rotor_count":4},
+      "physical": {"mass_kg":0.78,"center_of_mass_m":[0,0,0],"inertia_kg_m2":[0.008,0.010,0.015],"linear_drag_kg_s":0.10,"quadratic_drag_kg_m":0.025,"angular_damping_nms":0.003},
+      "rotors": [
+        {"position_m":[0.0813,0.0813,0],"spin_sign":1},
+        {"position_m":[0.0813,-0.0813,0],"spin_sign":-1},
+        {"position_m":[-0.0813,-0.0813,0],"spin_sign":1},
+        {"position_m":[-0.0813,0.0813,0],"spin_sign":-1}
+      ],
+      "propulsion": {"motor_name":"Generic 22xx 5-inch motor class","kv_rpm_per_volt":1900,"max_rotor_speed_rad_s":1500,"thrust_coefficient_n_per_rad_s2":0.0000025,"torque_to_thrust_m":0.015,"motor_time_constant_s":0.035,"nominal_battery_voltage_v":14.8,"battery_cells":4,"battery_capacity_ah":1.5}
+    },
+    {
+      "vehicle_id": "generic-7inch-long-range",
+      "display_name": "Generic 7-inch long-range quad",
+      "calibration_status": "provisional_estimate",
+      "parameter_source": "Generic 7-inch class engineering estimate; not tied to a verified bill of materials",
+      "geometry": {"arm_span_diagonal_m":0.325,"propeller_diameter_m":0.178,"rotor_count":4},
+      "physical": {"mass_kg":1.20,"center_of_mass_m":[0,0,0],"inertia_kg_m2":[0.022,0.026,0.040],"linear_drag_kg_s":0.14,"quadratic_drag_kg_m":0.040,"angular_damping_nms":0.005},
+      "rotors": [
+        {"position_m":[0.115,0.115,0],"spin_sign":1},
+        {"position_m":[0.115,-0.115,0],"spin_sign":-1},
+        {"position_m":[-0.115,-0.115,0],"spin_sign":1},
+        {"position_m":[-0.115,0.115,0],"spin_sign":-1}
+      ],
+      "propulsion": {"motor_name":"Generic 28xx long-range motor class","kv_rpm_per_volt":1300,"max_rotor_speed_rad_s":1300,"thrust_coefficient_n_per_rad_s2":0.0000045,"torque_to_thrust_m":0.018,"motor_time_constant_s":0.060,"nominal_battery_voltage_v":22.2,"battery_cells":6,"battery_capacity_ah":3.0}
+    },
+    {
+      "vehicle_id": "generic-3inch-cinewhoop",
+      "display_name": "Generic 3-inch cinewhoop",
+      "calibration_status": "provisional_estimate",
+      "parameter_source": "Generic ducted 3-inch class engineering estimate; not tied to a verified bill of materials",
+      "geometry": {"arm_span_diagonal_m":0.185,"propeller_diameter_m":0.0762,"rotor_count":4},
+      "physical": {"mass_kg":0.52,"center_of_mass_m":[0,0,0],"inertia_kg_m2":[0.0035,0.0040,0.0060],"linear_drag_kg_s":0.11,"quadratic_drag_kg_m":0.035,"angular_damping_nms":0.0025},
+      "rotors": [
+        {"position_m":[0.0654,0.0654,0],"spin_sign":1},
+        {"position_m":[0.0654,-0.0654,0],"spin_sign":-1},
+        {"position_m":[-0.0654,-0.0654,0],"spin_sign":1},
+        {"position_m":[-0.0654,0.0654,0],"spin_sign":-1}
+      ],
+      "propulsion": {"motor_name":"Generic 14xx cinewhoop motor class","kv_rpm_per_volt":3800,"max_rotor_speed_rad_s":1700,"thrust_coefficient_n_per_rad_s2":0.0000015,"torque_to_thrust_m":0.014,"motor_time_constant_s":0.030,"nominal_battery_voltage_v":22.2,"battery_cells":6,"battery_capacity_ah":1.0}
+    }
+  ],
+  "policy_conditioning": {
+    "feature_schema": ["nominal_mass_kg_over_2","rotor_arm_radius_m_over_0_25","propeller_diameter_m_over_0_25","max_rotor_speed_rad_s_over_2000","thrust_coefficient_over_1e-5","torque_to_thrust_m_over_0_05","motor_time_constant_s_over_0_2","battery_voltage_v_over_25","battery_capacity_ah_over_10","motor_kv_over_3000"],
+    "note": "Features describe nominal declared hardware, not randomized episode ground truth."
+  },
+  "warning": "All profiles are provisional synthetic estimates for simulation research, not measured performance, certified limits, or real-flight parameters."
+}
