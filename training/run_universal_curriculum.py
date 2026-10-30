@@ -32,18 +32,24 @@ def main(argv=None):
         if previous:
             command.extend(["--load-model", str(previous)])
         subprocess.run(command, cwd=ROOT, check=True)
-        previous = output / name / "final_model.zip"
+        final_checkpoint = output / name / "final_model.zip"
+        previous = output / name / "best" / "best_model.zip"
+        if not final_checkpoint.is_file():
+            raise RuntimeError(f"stage {stage} final checkpoint missing: {final_checkpoint}")
         if not previous.is_file():
-            raise RuntimeError(f"stage {stage} checkpoint missing: {previous}")
+            raise RuntimeError(f"stage {stage} best evaluated checkpoint missing: {previous}")
         report = output / name / "held-out-evaluation.json"
         subprocess.run([sys.executable, str(ROOT / "training/evaluate_universal_ppo.py"),
             "--model", str(previous), "--vehicle-family", str(args.vehicle_family),
             "--episodes", "20", "--seed", str(90000 + stage * 1000), "--output", str(report)],
             cwd=ROOT, check=True)
         evaluation = json.loads(report.read_text(encoding="utf-8"))
-        stages.append({"stage":stage,"checkpoint":str(previous),"evaluation":str(report),
-                       "profiles":evaluation["profiles"]})
-    manifest = {"stages":stages,"timesteps_per_stage":args.timesteps_per_stage,
+        stages.append({"stage":stage,"final_checkpoint":str(final_checkpoint),
+                       "selected_best_checkpoint":str(previous),
+                       "checkpoint_selection":"best_mean_reward",
+                       "evaluation":str(report),"profiles":evaluation["profiles"]})
+    manifest = {"stages":stages,"checkpoint_handoff":"best_mean_reward",
+                "timesteps_per_stage":args.timesteps_per_stage,
                 "vehicle_family":str(args.vehicle_family),"simulation_only":True,
                 "physical_flight_eligible":False}
     path = output / f"{args.run_prefix}-curriculum-manifest.json"
