@@ -39,6 +39,16 @@ def resolve_profile(profile: dict[str, Any]) -> dict[str, Any]:
     if mass is None or not np.isfinite(float(mass)) or float(mass) <= 0:
         raise ValueError(f"{p.get('vehicle_id')}: a measured or explicitly chosen positive takeoff mass is required")
 
+    cg = physical.get("center_of_mass_m")
+    if cg is None:
+        physical["center_of_mass_m"] = [0.0, 0.0, 0.0]
+        derived.append("center_of_mass_m:geometric-center-assumption")
+    else:
+        cg_array = np.asarray(cg, dtype=np.float64)
+        if cg_array.shape != (3,) or not np.all(np.isfinite(cg_array)):
+            raise ValueError(f"{p.get('vehicle_id')}: center_of_mass_m must contain three finite values")
+        physical["center_of_mass_m"] = cg_array.tolist()
+
     positions = p.get("rotors")
     if not isinstance(positions, list) or len(positions) != 4:
         raise ValueError(f"{p.get('vehicle_id')}: exactly four rotor positions are required")
@@ -142,7 +152,7 @@ def load_vehicle_profiles(path: str | Path = DEFAULT_VEHICLE_FAMILY) -> list[dic
         if g.get("arm_span_diagonal_m") is None or g.get("propeller_diameter_m") is None:
             raise ValueError(f"{vid}: arm span and propeller diameter are required in metres")
         if min(float(g["arm_span_diagonal_m"]), float(g["propeller_diameter_m"]),
-               float(pr["nominal_battery_voltage_v"]), float(pr["battery_capacity_ah"] or 1.0)) <= 0:
+               float(pr["nominal_battery_voltage_v"]), float(pr.get("battery_capacity_ah") or 1.0)) <= 0:
             raise ValueError(f"{vid}: geometry and battery values must be positive")
         if p.get("calibration_status") not in {"provisional_estimate", "user_supplied", "measured"}:
             raise ValueError(f"{vid}: calibration_status must be provisional_estimate, user_supplied or measured")
@@ -157,7 +167,7 @@ def vehicle_feature_vector(profile: dict[str, Any]) -> np.ndarray:
     ph, g, pr = p["physical"], p["geometry"], p["propulsion"]
     positions = np.asarray([r["position_m"] for r in p["rotors"]], dtype=np.float64)
     arm_radius = float(np.mean(np.linalg.norm(positions[:, :2], axis=1)))
-    derived_fraction = len(p.get("derived_estimates", [])) / 5.0
+    derived_fraction = len(p.get("derived_estimates", [])) / 6.0
     status_confidence = {"provisional_estimate": 0.25, "user_supplied": 0.60, "measured": 1.0}[
         p["calibration_status"]
     ]
