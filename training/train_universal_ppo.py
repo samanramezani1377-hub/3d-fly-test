@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 import numpy as np
 from datetime import datetime, timezone
 from pathlib import Path
@@ -52,6 +53,10 @@ class BalancedProfileCallback(BaseCallback):
         self.latest_dir.mkdir(parents=True, exist_ok=True)
         self.last_eval_timesteps = 0
         self.last_checkpoint_timesteps = None
+        self._speed_started_at = None
+        self._speed_start_timesteps = 0
+        self._speed_last_at = None
+        self._speed_last_timesteps = 0
         selection_path = self.best_dir / "selection.json"
         if selection_path.is_file():
             saved = json.loads(selection_path.read_text(encoding="utf-8"))
@@ -78,8 +83,33 @@ class BalancedProfileCallback(BaseCallback):
     def _on_training_start(self):
         if self.last_checkpoint_timesteps is None:
             self.last_checkpoint_timesteps = int(self.num_timesteps)
+        now = time.perf_counter()
+        self._speed_started_at = now
+        self._speed_start_timesteps = int(self.num_timesteps)
+        self._speed_last_at = now
+        self._speed_last_timesteps = int(self.num_timesteps)
 
     def _on_rollout_end(self):
+        # Emit a machine-searchable throughput record on every PPO rollout.
+        # Rates are aggregate environment transitions/sec across all workers.
+        now = time.perf_counter()
+        steps_now = int(self.num_timesteps)
+        if self._speed_last_at is not None and self._speed_started_at is not None:
+            interval_seconds = max(now - self._speed_last_at, 1e-9)
+            interval_steps = max(steps_now - self._speed_last_timesteps, 0)
+            total_seconds = max(now - self._speed_started_at, 1e-9)
+            total_steps = max(steps_now - self._speed_start_timesteps, 0)
+            print(
+                "[PPO_SPEED] "
+                f"timesteps={steps_now} "
+                f"rollout_steps={interval_steps} "
+                f"rollout_seconds={interval_seconds:.2f} "
+                f"rollout_steps_per_sec={interval_steps / interval_seconds:.2f} "
+                f"average_steps_per_sec={total_steps / total_seconds:.2f}",
+                flush=True,
+            )
+        self._speed_last_at = now
+        self._speed_last_timesteps = steps_now
         # Save only at rollout boundaries so a resume never counts discarded,
         # partially collected PPO experience as completed training.
         if int(self.num_timesteps) - self.last_checkpoint_timesteps >= self.checkpoint_frequency:
