@@ -46,7 +46,10 @@ def policy_action_to_motor_commands(action, params: VehicleParameters) -> np.nda
     action = np.asarray(action, dtype=np.float64)
     if action.shape != (4,):
         raise ValueError("policy action must contain collective, roll, pitch and yaw")
-    action = np.clip(np.nan_to_num(action, nan=0.0, posinf=1.0, neginf=-1.0), -1.0, 1.0)
+    # Keep PPO's sampled Gaussian action unbounded so its log-probability
+    # matches the action actually passed to the environment; tanh provides
+    # smooth bounded physical controls without hard clipping at the boundary.
+    action = np.tanh(np.nan_to_num(action, nan=0.0, posinf=20.0, neginf=-20.0))
 
     weight = params.mass_kg * 9.80665
     rotor_xy = np.asarray(params.rotor_positions_m, dtype=np.float64)[:, :2]
@@ -80,7 +83,9 @@ class SymmetricHoverActionWrapper(gym.ActionWrapper):
     """Expose normalized body-wrench actions while preserving the plant API."""
     def __init__(self, env):
         super().__init__(env)
-        self.action_space = gym.spaces.Box(-1.0, 1.0, shape=(4,), dtype=np.float32)
+        self.action_space = gym.spaces.Box(
+            low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32
+        )
 
     def action(self, action):
         profile = self.env.active_profile
