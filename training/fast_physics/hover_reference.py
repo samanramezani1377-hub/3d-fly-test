@@ -21,7 +21,10 @@ class HoverReferenceController:
         *,
         target_position=(0.0, 0.0, 1.0),
         position_kp=(1.8, 1.8, 4.0),
-        position_kd=(2.2, 2.2, 3.2),
+        position_kd=(3.0, 3.0, 3.2),
+        position_ki=(0.65, 0.65, 0.35),
+        integral_limit=(2.5, 2.5, 1.5),
+        dt_s=0.02,
         attitude_kp=(8.0, 8.0, 3.0),
         attitude_kd=(2.5, 2.5, 1.2),
         max_tilt_rad=0.40,
@@ -32,12 +35,18 @@ class HoverReferenceController:
         self.target = np.asarray(target_position, dtype=np.float64)
         self.position_kp = np.asarray(position_kp, dtype=np.float64)
         self.position_kd = np.asarray(position_kd, dtype=np.float64)
+        self.position_ki = np.asarray(position_ki, dtype=np.float64)
+        self.integral_limit = np.asarray(integral_limit, dtype=np.float64)
+        self.dt = float(dt_s)
+        self.position_integral = np.zeros(3, dtype=np.float64)
         self.attitude_kp = np.asarray(attitude_kp, dtype=np.float64)
         self.attitude_kd = np.asarray(attitude_kd, dtype=np.float64)
         self.max_tilt = float(max_tilt_rad)
         self.max_horizontal_accel = float(max_horizontal_accel_m_s2)
-        if self.target.shape != (3,) or self.max_tilt <= 0:
-            raise ValueError("target_position must be a 3-vector and max_tilt_rad positive")
+        if self.target.shape != (3,) or self.max_tilt <= 0 or self.dt <= 0:
+            raise ValueError("target_position must be a 3-vector; tilt and dt must be positive")
+        if any(v.shape != (3,) for v in (self.position_kp, self.position_kd, self.position_ki, self.integral_limit)):
+            raise ValueError("position controller gains and integral limits must be 3-vectors")
         self.allocation = self._build_allocation_matrix()
 
     def _build_allocation_matrix(self) -> np.ndarray:
@@ -65,7 +74,15 @@ class HoverReferenceController:
         position, velocity = s[:3], s[3:6]
         attitude, rates = s[6:9], s[9:12]
         position_error = self.target - position
-        accel_world = self.position_kp * position_error - self.position_kd * velocity
+        self.position_integral = np.clip(
+            self.position_integral + position_error * self.dt,
+            -self.integral_limit, self.integral_limit,
+        )
+        accel_world = (
+            self.position_kp * position_error
+            - self.position_kd * velocity
+            + self.position_ki * self.position_integral
+        )
         accel_world[:2] = np.clip(accel_world[:2], -self.max_horizontal_accel, self.max_horizontal_accel)
 
         yaw = float(attitude[2])
