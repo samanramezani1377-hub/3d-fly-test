@@ -149,7 +149,10 @@ def test_curriculum_stage_one_is_nominal_and_stage_four_uses_wider_bounds():
     stage4 = randomization_for_stage(config, 4)
     assert stage1["mass"]["scale"] == [1.0, 1.0]
     assert stage1["environment"]["wind_component_m_s"] == [0.0, 0.0]
-    assert stage4["mass"]["scale"] == [0.80, 1.25]
+    assert stage4["mass"]["scale"] == [0.80, 1.10]
+    assert stage4["inertia"]["scale"] == [0.70, 1.40]
+    assert stage4["battery"]["voltage_factor"] == [0.90, 1.0]
+    assert stage4["motor"]["effectiveness"] == [0.95, 1.10]
     assert stage4["environment"]["wind_component_m_s"] == [-2.0, 2.0]
 
 
