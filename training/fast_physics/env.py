@@ -10,6 +10,8 @@ import numpy as np
 from gymnasium import spaces
 
 from .dynamics import FastQuadrotor
+from .curriculum import randomization_for_stage
+from .system_identification import OnlineThrustEstimator
 from .parameters import (
     DEFAULT_AIRFRAME,
     DEFAULT_CALIBRATION,
@@ -45,6 +47,7 @@ class AdaptiveDroneEnv(gym.Env):
         target_position=(0.0, 0.0, 1.0),
         history_length: int = 4,
         randomize: bool = True,
+        curriculum_stage: int | None = None,
     ):
         super().__init__()
         if params is None:
@@ -62,6 +65,11 @@ class AdaptiveDroneEnv(gym.Env):
             }
         self.base_params = params
         self.randomization = json.loads(Path(randomization_path).read_text(encoding="utf-8"))
+        self.curriculum_stage = curriculum_stage
+        self.active_randomization = (
+            randomization_for_stage(self.randomization, curriculum_stage)
+            if curriculum_stage is not None else self.randomization
+        )
         self.dt = float(dt)
         self.max_steps = int(max_steps)
         self.target = np.asarray(target_position, dtype=np.float64)
@@ -75,9 +83,10 @@ class AdaptiveDroneEnv(gym.Env):
         # Each history frame contains 12 state values and 4 previous motor commands.
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf,
-            shape=(self.history_length * 16,), dtype=np.float32,
+            shape=(self.history_length * 16 + 2,), dtype=np.float32,
         )
         self.plant = FastQuadrotor(self.base_params, dt=self.dt)
+        self.estimator = OnlineThrustEstimator()
         self._history: deque[np.ndarray] = deque(maxlen=self.history_length)
         self._last_action = np.zeros(4, dtype=np.float32)
         self._steps = 0
@@ -92,13 +101,13 @@ class AdaptiveDroneEnv(gym.Env):
         if not self._history:
             state = self.plant.state()
             self._history.extend([self._policy_frame(state)] * self.history_length)
-        return np.concatenate(tuple(self._history)).astype(np.float32)
+        return np.concatenate((*tuple(self._history), self.estimator.context())).astype(np.float32)
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
         if self.randomize:
             episode_params, self._scenario_details = sample_scenario(
-                self.base_params, self.np_random, self.randomization
+                self.base_params, self.np_random, self.active_randomization
             )
         else:
             episode_params = self.base_params
@@ -111,10 +120,11 @@ class AdaptiveDroneEnv(gym.Env):
                 "drag_scale": 1.0,
             }
         self.plant = FastQuadrotor(episode_params, dt=self.dt)
-        env_cfg = self.randomization.get("environment", {})
+        env_cfg = self.active_randomization.get("environment", {})
         wind_bound = float(env_cfg.get("wind_component_m_s", [-2.0, 2.0])[1])
         wind = self.np_random.uniform(-wind_bound, wind_bound, size=3) if self.randomize else np.zeros(3)
         state = self.plant.reset(wind=wind)
+        self.estimator.reset(float(state[5]))
         self._history.clear()
         self._last_action = np.zeros(4, dtype=np.float32)
         frame = self._policy_frame(state)
@@ -128,6 +138,7 @@ class AdaptiveDroneEnv(gym.Env):
             "scenario": dict(self._scenario_details),
             "wind_m_s": wind.tolist(),
             "policy_observation_excludes_privileged_parameters": True,
+            "curriculum_stage": self.active_randomization.get("active_curriculum_stage"),
         }
         return self._observation(), info
 
@@ -139,6 +150,7 @@ class AdaptiveDroneEnv(gym.Env):
         state, telemetry = self.plant.step(action)
         self._steps += 1
         self._taken_off = self._taken_off or bool(state[2] > 0.18)
+        self.estimator.update(action, float(state[5]), self.dt)
 
         position_error = state[:3].astype(np.float64) - self.target
         horizontal_error = float(np.linalg.norm(position_error[:2]))
@@ -178,6 +190,7 @@ class AdaptiveDroneEnv(gym.Env):
             "altitude_error_m": altitude_error,
             "horizontal_error_m": horizontal_error,
             "scenario": dict(self._scenario_details),
+            "online_estimator": self.estimator.diagnostics(),
         }
         return obs, float(reward), terminated, truncated, info
 
