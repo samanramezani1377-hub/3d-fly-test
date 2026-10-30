@@ -8,7 +8,7 @@ from pathlib import Path
 
 from stable_baselines3.common.callbacks import BaseCallback
 from fast_physics.vehicle_family import DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv, load_vehicle_profiles
-from fast_physics.ppo_action import SymmetricHoverActionWrapper, policy_action_to_motor_commands
+from fast_physics.ppo_action import BodyWrenchActionWrapper, policy_action_to_motor_commands
 
 
 def parse_args(argv=None):
@@ -217,7 +217,7 @@ def main(argv=None):
                 history_length=args.history_length, randomize=not args.no_randomization,
                 curriculum_stage=args.curriculum_stage,
             )
-            return SymmetricHoverActionWrapper(base_env)
+            return BodyWrenchActionWrapper(base_env)
         return _init
 
     env = SubprocVecEnv([make_env(i) for i in range(args.n_envs)])
