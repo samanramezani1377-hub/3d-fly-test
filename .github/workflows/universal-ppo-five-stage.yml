@@ -62,10 +62,19 @@ jobs:
             --evaluation-episodes 20 \
             2>&1 | tee single-stage-training.log
 
-      - name: Commit resumable checkpoints and evaluated models
-        if: always()
+      - name: Commit completed and evaluated PPO models
+        if: success()
         run: |
           set -euo pipefail
+          manifest="training/runs/universal-quad-v5-foundation-curriculum-manifest.json"
+          stage_dir="training/runs/universal-quad-v5-foundation-stage1"
+          # Never label partial output as a trained model. The training job
+          # must finish and produce its curriculum manifest plus both the
+          # final policy and an evaluation-selected checkpoint.
+          test -s "$manifest" || { echo "Curriculum manifest missing; refusing model publication."; exit 1; }
+          test -s "$stage_dir/final_model.zip" || { echo "Final PPO model missing; refusing model publication."; exit 1; }
+          test -s "$stage_dir/best/best_model.zip" || { echo "Evaluated best checkpoint missing; refusing model publication."; exit 1; }
+          test -s "$stage_dir/metadata.json" || { echo "Training metadata missing; refusing model publication."; exit 1; }
           mkdir -p training/models/universal-quad-v5-foundation
           for stage_dir in training/runs/universal-quad-v5-foundation-stage*; do
             if [ -d "$stage_dir" ]; then
@@ -90,7 +99,7 @@ jobs:
               echo "A checkpoint exceeds the safe 90 MB per-file repository limit."
               exit 1
             } || true
-            git commit -m "Store final-tested PPO models and resumable checkpoints"
+            git commit -m "Publish completed and evaluated PPO models"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
