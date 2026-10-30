@@ -86,7 +86,7 @@ def main(argv=None):
             "vehicle_family_file": str(args.vehicle_family),
             "vehicle_profiles": [{"vehicle_id":p["vehicle_id"],"calibration_status":p["calibration_status"],
                                   "parameter_source":p.get("parameter_source","unspecified")} for p in profiles],
-            "policy_observation": "state/action history + online lift estimate/confidence + 10 normalized nominal hardware features",
+            "policy_observation": "state/action history + online lift estimate/confidence + 12 normalized nominal hardware features",
             "policy_is_hardware_conditioned": True,
             "episode_randomization_ground_truth_is_hidden": True,
             "physics_backend": "training.fast_physics.FastQuadrotor",
