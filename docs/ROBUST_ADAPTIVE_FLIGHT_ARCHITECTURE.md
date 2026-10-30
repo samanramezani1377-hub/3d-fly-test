@@ -177,7 +177,7 @@ The configuration also describes a four-stage curriculum:
 3. actuator and battery variation;
 4. combined robustness.
 
-The current environment uses the full configured randomization bounds; curriculum stage scheduling is documented as the next training orchestration enhancement. Do not assume the curriculum array is already being automatically scheduled by the PPO script.
+The environment can select an individual curriculum stage. `training/run_robust_curriculum.py` chains stages 1–4 and warm-starts each stage from the previous model. It is a simple sequential curriculum runner; it does not yet implement automatic performance-based range expansion.
 
 ## 6. What the policy can and cannot see
 
@@ -189,7 +189,7 @@ The environment returns a 4-frame history. Each frame contains:
 - body angular rates;
 - the preceding four rotor commands.
 
-The observation length is 64 values for a history length of four.
+The observation contains 64 history values plus two online-estimator context values (effective lift-response estimate and confidence), for 66 values at a history length of four.
 
 The policy does **not** receive mass, centre of mass, inertia, motor effectiveness, voltage factor or wind as observation features. Those values are retained in the environment info/telemetry for experiment analysis only.
 
@@ -294,7 +294,7 @@ Never select a checkpoint on mean reward alone. A policy that improves reward wh
 
 ## 10. Online adaptation roadmap
 
-The current version provides hidden parameter randomization and observation history. It does not yet implement a dedicated online parameter estimator or automatic policy weight updates during flight.
+The current version includes a bounded recursive-least-squares estimator of effective collective lift response. It uses recent motor commands and observed vertical velocity only; its two context outputs are included in the policy observation. It does not uniquely identify mass, motor degradation, battery sag or wind. It does not update PPO weights online during flight.
 
 Recommended staged additions:
 
@@ -328,12 +328,14 @@ If the model is outside the validated parameter envelope, the correct response i
 | Episode randomization of mass/CG/inertia/actuators/battery/drag | Implemented |
 | Wind disturbance randomization | Implemented |
 | Hidden privileged parameters | Implemented |
-| Four-frame state/action history | Implemented |
+| Four-frame state/action history + sensor noise | Implemented |
+| Online effective-lift response estimator | Implemented (approximate; not unique physical identification) |
+| Four-stage chained PPO curriculum | Implemented (fixed stage sequence) |
 | New PPO training entry point | Implemented; calibration-gated by default |
 | Synthetic software-only mode | Implemented; explicit opt-in |
 | Automated unit tests | Added; CI result must be checked after push |
-| Automatic curriculum scheduler | Not yet implemented |
-| Online physical parameter estimator | Not yet implemented |
+| Performance-driven automatic curriculum expansion | Not yet implemented |
+| Full multi-parameter physical estimator with uncertainty bounds | Not yet implemented |
 | Recurrent policy/context encoder | Not yet implemented |
 | Native SkySim adapter/parity validation | Not yet implemented |
 | Motor/propeller calibration from measurements | Blocked on exact components and test data |
