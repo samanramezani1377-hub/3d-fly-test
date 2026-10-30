@@ -26,8 +26,8 @@ class HoverReferenceController:
         position_ki=(0.65, 0.65, 0.35),
         integral_limit=(2.5, 2.5, 1.5),
         dt_s=0.02,
-        attitude_kp=(8.0, 8.0, 3.0),
-        attitude_kd=(2.5, 2.5, 1.2),
+        attitude_kp=(12.0, 12.0, 4.0),
+        attitude_kd=(6.0, 6.0, 3.0),
         max_tilt_rad=0.40,
         max_horizontal_accel_m_s2=3.0,
     ):
