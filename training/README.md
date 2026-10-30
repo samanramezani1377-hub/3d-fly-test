@@ -35,11 +35,11 @@ The existing workflow is .github/workflows/ppo-cpu-two-stage.yml. Its event mode
 - Pull requests run only the existing physics/family/hover regression tests. They do not start PPO training.
 - A manual workflow_dispatch run executes one sequential five-stage universal PPO curriculum.
 
-The manual run uses one shared policy, 16 parallel simulator environments, and 1,000,000 aggregate PPO transitions in each of five stages (5,000,000 stage transitions total). Each stage warm-starts from the previous stage's best evaluated checkpoint. A previous-stage PPO timestep counter is reset for the new stage budget; restarting an interrupted stage resumes from that same stage's latest checkpoint and consumes only its remaining budget.
+The manual run uses one shared policy, 16 parallel simulator environments, and exactly 1,000,000 aggregate PPO transitions in each of five stages (5,000,000 stage transitions total). The PPO rollout is 500 steps × 16 environments = 8,000 transitions, so the stage budget and resumable checkpoints align to complete rollouts. Each stage warm-starts from the previous stage's best evaluated checkpoint. A previous-stage PPO timestep counter is reset for the new stage budget; restarting an interrupted stage resumes from that same stage's latest checkpoint and consumes only its remaining budget.
 
 To keep evaluation from becoming the main workload:
 
-- The latest resumable training checkpoint is saved every 20,000 aggregate transitions.
+- The latest resumable training checkpoint is saved at the first complete PPO rollout after each 20,000-transition interval (24,000 transitions with the current 16-environment, 500-step rollout).
 - Checkpoint-selection evaluation runs every 100,000 transitions, with 2 episodes per vehicle profile.
 - Independent held-out evaluation runs only once, after all five training stages, comparing the final and best stage-5 checkpoints (20 episodes per vehicle profile per candidate).
 - No separate training workflow, benchmark workflow, or extra test suite is launched by this pipeline.
