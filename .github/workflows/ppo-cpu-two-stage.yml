@@ -1,4 +1,4 @@
-name: Universal PPO - PR validation / manual five-stage training
+name: Universal PPO - PR validation / manual single-stage training
 
 on:
   pull_request:
@@ -23,7 +23,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: universal-ppo-five-stage-${{ github.ref }}
+  group: universal-ppo-single-stage-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -35,7 +35,7 @@ env:
 
 jobs:
   five-stage-training:
-    name: ${{ github.event_name == 'pull_request' && 'PR validation only (no PPO training)' || 'Five-stage PPO training' }}
+    name: ${{ github.event_name == 'pull_request' && 'PR validation only (no PPO training)' || 'Single-stage PPO training' }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -64,7 +64,7 @@ jobs:
             training/tests/test_universal_vehicle.py \
             training/tests/test_hover_reference.py
 
-      - name: Restore resumable v5 checkpoints
+      - name: Restore resumable v5 single-stage checkpoints
         if: github.event_name == 'workflow_dispatch'
         run: |
           mkdir -p training/runs
@@ -72,19 +72,19 @@ jobs:
             cp -a training/models/universal-quad-v5/. training/runs/
           fi
 
-      - name: Run exactly five sequential PPO training stages
+      - name: Run only stage 1: takeoff and sustained-hover foundation
         if: github.event_name == 'workflow_dispatch'
         run: |
           set -o pipefail
           python training/run_universal_curriculum.py \
-            --timesteps-per-stage 1000000 \
-            --n-envs 16 \
+            --active-stages 1 --timesteps-per-stage 2000000 \
+            --n-envs 32 \
             --run-prefix universal-quad-v5 \
             --checkpoint-eval-episodes 2 \
             --eval-frequency 100000 \
             --checkpoint-frequency 20000 \
             --evaluation-episodes 20 \
-            2>&1 | tee five-stage-training.log
+            2>&1 | tee single-stage-training.log
 
       - name: Commit resumable checkpoints and final-tested models to this repository
         if: always() && github.event_name == 'workflow_dispatch'
@@ -121,7 +121,7 @@ jobs:
       - name: Print training manifest and log tail
         if: always() && github.event_name == 'workflow_dispatch'
         run: |
-          echo '===== FIVE-STAGE MANIFEST ====='
+          echo '===== SINGLE-STAGE MANIFEST ====='
           if [ -f training/runs/universal-quad-v5-curriculum-manifest.json ]; then cat training/runs/universal-quad-v5-curriculum-manifest.json; else echo 'Manifest not produced'; fi
           echo '===== TRAINING LOG TAIL ====='
           if [ -f five-stage-training.log ]; then tail -c 50000 five-stage-training.log; else echo 'Training log not produced'; fi
@@ -130,7 +130,7 @@ jobs:
         if: always() && github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: universal-ppo-five-stage-backup
+          name: universal-ppo-single-stage-backup
           path: |
             training/runs/
             training/models/universal-quad-v5/
