@@ -159,7 +159,6 @@ def sample_scenario(
     mass_scale = uniform("mass", "scale", (0.80, 1.25))
     cg_bounds = randomization.get("center_of_mass", {}).get("offset_m", [-0.015, 0.015])
     cg_offset = rng.uniform(float(cg_bounds[0]), float(cg_bounds[1]), size=3)
-    cg_offset[2] = 0.0  # keep the initial CG perturbation in the rotor plane
     inertia_bounds = randomization.get("inertia", {}).get("scale", [0.70, 1.40])
     inertia_scale = rng.uniform(float(inertia_bounds[0]), float(inertia_bounds[1]), size=3)
     motor_bounds = randomization.get("motor", {}).get("effectiveness", [0.90, 1.10])
