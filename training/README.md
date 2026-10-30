@@ -98,3 +98,6 @@ python training/run_robust_curriculum.py \
 The policy input contains a four-frame state/action history, observation noise, and two context values from an online recursive-least-squares estimator of effective collective lift response. The estimator is not a unique mass/motor/battery diagnosis; it provides an approximate adaptation cue and confidence value. Privileged simulator parameters remain outside the policy observation.
 
 The curriculum runner and PPO script refuse to use unknown physical calibration unless the explicit software-only synthetic flag is supplied. The existing native SkySim five-stage workflow is unchanged.
+
+
+Each curriculum stage is followed by a held-out evaluation (20 episodes by default) using a separate seed range. Reports are written to `held-out-evaluation.json` in the stage run directory. The evaluator reports hover/takeoff success, crash rate, stable-hover fraction and position errors. These are held-out random seeds from the configured distribution, not out-of-range generalization proof.
