@@ -43,12 +43,12 @@ The resulting observation has 78 values with the default four history frames: 66
 
 - `training/train_universal_ppo.py`: one shared PPO model; random vehicle selection each episode; periodic evaluation writes `best/best_model.zip` and the terminal policy separately as `final_model.zip`.
 - `training/evaluate_universal_ppo.py`: deterministic checkpoint evaluation, separately grouped by vehicle profile.
-- `training/run_universal_curriculum.py`: four sequential stages, loading the preceding stage's best evaluated checkpoint before continuing. The final checkpoint is retained separately for reproducibility.
+- `training/run_universal_curriculum.py`: five sequential stages, loading the preceding stage's balanced best evaluated checkpoint before continuing. The final checkpoint is retained separately for reproducibility.
 - `training/tests/test_universal_vehicle.py`: profile validation, observation dimensions, deterministic selection, pinning and fail-closed tests.
 
 Example commands are in `training/README.md`.
 
-The test suite also checks nominal static-hover force balance for every example profile and verifies that the configured worst-case mass, voltage and motor-effectiveness bounds in each curriculum stage retain at least a 1.05 thrust-to-weight ratio. During training, periodic family evaluation writes the best mean-reward policy to `best/best_model.zip`; the last policy snapshot is saved independently as `final_model.zip`. These are internal consistency checks on provisional coefficients, not proof that the real aircraft can hover.
+The test suite also checks nominal static-hover force balance for every example profile and verifies that the configured worst-case mass, voltage and motor-effectiveness bounds in each curriculum stage retain at least a 1.05 thrust-to-weight ratio. During training, periodic family evaluation selects `best/best_model.zip` by maximizing the weakest profile's takeoff/hover success, then minimizing the worst profile's crash rate, then maximizing mean return; the last policy snapshot is saved independently as `final_model.zip`. These are internal consistency checks on provisional coefficients, not proof that the real aircraft can hover.
 
 ## Reference hover controller and plant feasibility gate
 
