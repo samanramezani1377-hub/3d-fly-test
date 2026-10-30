@@ -143,3 +143,26 @@ To evaluate only one profile, repeat `--vehicle-id <id>`. To add a new airframe,
 For a real vehicle, enter complete takeoff mass including battery and payload, CG, rotor coordinates and verified spin directions, inertia, motor/ESC/battery details, and a measured or manufacturer-backed thrust/torque response. A KV value or propeller diameter alone is not enough to infer loaded RPM or thrust. If some values remain estimates, keep the profile labelled provisional and include uncertainty in the randomization ranges.
 
 **Important boundary:** this is still a four-rotor research simulator with simplified quadratic rotor thrust, first-order motor lag and rigid-body 6-DoF dynamics. The universal policy is simulation-only. It is not cleared for hardware operation. Before any real flight, independently validate the exact airframe, motor/ESC/propeller/battery combination, actuator allocation, sensor conventions, failsafes and a safe test procedure.
+
+
+## Universal hardware-conditioned quadrotor policy (simulation research)
+
+The experimental multi-airframe path is separate from the existing smooth2-only trainer:
+
+- `vehicle_models/family/vehicle_profiles.json` contains provisional example profiles for the current smooth2 CAD/A2212 reference, generic 5-inch freestyle, generic 7-inch long-range, and generic 3-inch cinewhoop classes.
+- `vehicle_models/family/vehicle_config_template.json` is the starting template for adding a measured aircraft. Replace every required null with traceable data; the loader intentionally rejects incomplete profiles.
+- `training/fast_physics/vehicle_family.py` selects a vehicle at reset and appends ten normalized nominal hardware descriptors to the observation. Episode-randomized mass, CG, inertia, motor effectiveness and voltage remain hidden from the policy.
+- `training/train_universal_ppo.py` trains one shared PPO model over the selected family.
+- `training/evaluate_universal_ppo.py` reports results separately for each vehicle.
+- `training/run_universal_curriculum.py` runs four sequential curriculum stages, handing each stage's best available final checkpoint to the next stage and evaluating after every stage.
+
+Example:
+
+    python -m pip install -r training/requirements.txt
+    python training/train_universal_ppo.py --timesteps 200000 --n-envs 4
+    python training/evaluate_universal_ppo.py --model training/runs/universal-quad-ppo/final_model.zip --episodes 30
+    python training/run_universal_curriculum.py --timesteps-per-stage 200000 --n-envs 4
+
+These sample profiles are deliberately marked `provisional_estimate`: they are software-development starting points, not measured or validated flight models. The current smooth2 custom propeller's thrust and torque coefficients are not established by the A2212 catalog data. Do not use any resulting checkpoint to control a physical aircraft. A real aircraft profile needs complete takeoff mass, CG, inertia, exact rotor geometry/directions, motor/ESC/battery details, and thrust/torque/RPM/current/voltage and motor-step-response measurements for the exact propulsion combination. Bench validation and staged safety testing remain separate requirements.
+
+This first implementation conditions the policy on declared nominal hardware specifications. It does not yet infer every unknown parameter online, guarantee zero-shot transfer to unseen aircraft, or provide an automatic physical calibration procedure. New aircraft must be represented in the profile library and independently evaluated before being considered supported.
