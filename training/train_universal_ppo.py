@@ -43,6 +43,11 @@ class BalancedProfileCallback(BaseCallback):
         self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, float("-inf")), None
         self.latest_dir = self.best_dir.parent
         self.latest_dir.mkdir(parents=True, exist_ok=True)
+        selection_path = self.best_dir / "selection.json"
+        if selection_path.is_file():
+            saved = json.loads(selection_path.read_text(encoding="utf-8"))
+            self.best_score = tuple(saved.get("score", self.best_score))
+            self.best_report = saved.get("report")
 
     def _on_step(self):
         if self.n_calls % self.frequency:
