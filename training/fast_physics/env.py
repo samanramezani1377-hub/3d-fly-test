@@ -193,6 +193,15 @@ class AdaptiveDroneEnv(gym.Env):
         was_taken_off = self._taken_off
         self._taken_off = self._taken_off or bool(z > 0.18)
         measured = self._measure_state(safe_state)
+        ground_contact = bool(state_finite and z <= 0.0)
+        if ground_contact:
+            self.plant.position[2] = 0.0
+            if self.plant.velocity[2] < 0.0:
+                self.plant.velocity[2] = 0.0
+            safe_state = self.plant.state()
+            self._last_finite_state = safe_state.copy()
+            z = 0.0
+            measured = self._measure_state(safe_state)
         if state_finite:
             self.estimator.update(action, float(measured[5]), self.dt)
 
@@ -234,17 +243,8 @@ class AdaptiveDroneEnv(gym.Env):
         if stable_hover_now:
             reward += 0.5
 
-        # A simple unilateral ground-contact constraint prevents the simulated
-        # vehicle from passing through the floor. It is not a detailed landing model.
-        ground_contact = False
-        if state_finite and z <= 0.0:
-            ground_contact = True
-            self.plant.position[2] = 0.0
-            if self.plant.velocity[2] < 0.0:
-                self.plant.velocity[2] = 0.0
-            safe_state = self.plant.state()
-            self._last_finite_state = safe_state.copy()
-            z = 0.0
+        # Unilateral ground contact prevents the simulated vehicle from passing
+        # through z=0. This is not a detailed landing or impact-damage model.
         self._ground_contact = ground_contact
 
         if ground_contact and self._taken_off:
