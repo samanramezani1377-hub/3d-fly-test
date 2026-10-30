@@ -94,8 +94,19 @@ class AdaptiveDroneEnv(gym.Env):
         self._scenario_details: dict = {}
 
     def _policy_frame(self, state: np.ndarray) -> np.ndarray:
-        relative = state[:3].astype(np.float32) - self.target.astype(np.float32)
-        return np.concatenate((relative, state[3:12], self._last_action)).astype(np.float32)
+        measured = state.astype(np.float64).copy()
+        noise = self.active_randomization.get("environment", {}).get("sensor_noise_std", {})
+        if self.randomize and isinstance(noise, dict):
+            std = np.array(
+                [noise.get("position_m", 0.0)] * 3
+                + [noise.get("velocity_m_s", 0.0)] * 3
+                + [noise.get("attitude_rad", 0.0)] * 3
+                + [noise.get("angular_rate_rad_s", 0.0)] * 3,
+                dtype=np.float64,
+            )
+            measured += self.np_random.normal(0.0, std, size=12)
+        relative = measured[:3].astype(np.float32) - self.target.astype(np.float32)
+        return np.concatenate((relative, measured[3:12], self._last_action)).astype(np.float32)
 
     def _observation(self) -> np.ndarray:
         if not self._history:
