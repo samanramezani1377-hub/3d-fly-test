@@ -17,6 +17,8 @@ def parse_args(argv=None):
     p.add_argument("--run-name", default="universal-quad-ppo")
     p.add_argument("--output-dir", type=Path, default=Path("training/runs"))
     p.add_argument("--learning-rate", type=float, default=3e-4)
+    p.add_argument("--eval-frequency", type=int, default=10000, help="Evaluation interval in aggregate environment transitions.")
+    p.add_argument("--eval-episodes", type=int, default=10)
     p.add_argument("--history-length", type=int, default=4)
     p.add_argument("--curriculum-stage", type=int, choices=(1,2,3,4), default=None)
     p.add_argument("--load-model", type=Path, default=None)
@@ -28,8 +30,8 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
-    if args.timesteps <= 0 or args.n_envs <= 0:
-        raise SystemExit("--timesteps and --n-envs must be positive")
+    if args.timesteps <= 0 or args.n_envs <= 0 or args.eval_frequency <= 0 or args.eval_episodes <= 0:
+        raise SystemExit("--timesteps, --n-envs, --eval-frequency and --eval-episodes must be positive")
     profiles = load_vehicle_profiles(args.vehicle_family)
     if args.vehicle_id:
         selected = set(args.vehicle_id)
@@ -42,7 +44,9 @@ def main(argv=None):
     try:
         import stable_baselines3
         from stable_baselines3 import PPO
-        from stable_baselines3.common.vec_env import SubprocVecEnv
+        from stable_baselines3.common.callbacks import EvalCallback
+        from stable_baselines3.common.monitor import Monitor
+        from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
     except ImportError as exc:
         raise SystemExit("Install training/requirements.txt to run PPO") from exc
 
@@ -64,6 +68,23 @@ def main(argv=None):
         return _init
 
     env = SubprocVecEnv([make_env(i) for i in range(args.n_envs)])
+    eval_env = DummyVecEnv([lambda: Monitor(VehicleFamilyEnv(
+        vehicle_family_path=family_path,
+        randomization_path=Path(__file__).resolve().parents[1] / "vehicle_models/smooth2_parametric/domain_randomization.json",
+        history_length=args.history_length, randomize=not args.no_randomization,
+        curriculum_stage=args.curriculum_stage,
+    ))])
+    aggregate_eval_frequency = min(args.eval_frequency, max(args.timesteps // 2, 1))
+    eval_callback = EvalCallback(
+        eval_env,
+        best_model_save_path=str(run_dir / "best"),
+        log_path=str(run_dir / "evaluation"),
+        eval_freq=max(aggregate_eval_frequency // args.n_envs, 1),
+        n_eval_episodes=args.eval_episodes,
+        deterministic=True,
+        render=False,
+        warn=False,
+    )
     try:
         if args.load_model:
             model = PPO.load(str(args.load_model), env=env, device="auto")
@@ -75,11 +96,18 @@ def main(argv=None):
                 ent_coef=0.005, verbose=1, seed=args.seed, device="auto",
                 tensorboard_log=str(run_dir / "tensorboard"),
             )
-        model.learn(total_timesteps=args.timesteps, progress_bar=False)
+        model.learn(total_timesteps=args.timesteps, callback=eval_callback, progress_bar=False)
         model.save(str(run_dir / "final_model"))
+        best_checkpoint = run_dir / "best" / "best_model.zip"
+        if not best_checkpoint.is_file():
+            raise RuntimeError("evaluation did not produce best/best_model.zip; refusing to continue curriculum without an evaluated checkpoint")
         metadata = {
             "run_name": args.run_name, "created_at": datetime.now(timezone.utc).isoformat(),
             "timesteps": args.timesteps, "n_envs": args.n_envs, "seed": args.seed,
+            "evaluation_frequency_aggregate_steps": aggregate_eval_frequency,
+            "evaluation_episodes": args.eval_episodes,
+            "best_checkpoint": str(best_checkpoint),
+            "best_mean_reward": float(eval_callback.best_mean_reward),
             "history_length": args.history_length, "curriculum_stage": args.curriculum_stage,
             "initial_model": str(args.load_model) if args.load_model else None,
             "domain_randomization": not args.no_randomization,
@@ -97,6 +125,7 @@ def main(argv=None):
         (run_dir / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
         print(f"Saved universal PPO model and metadata to {run_dir}")
     finally:
+        eval_env.close()
         env.close()
 
 
