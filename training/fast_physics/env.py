@@ -239,6 +239,7 @@ class AdaptiveDroneEnv(gym.Env):
             and horizontal_error <= 0.20
             and speed <= 0.35
             and tilt <= 0.25
+            and float(np.linalg.norm(rates)) <= 0.5
         )
         if stable_hover_now:
             reward += 0.5
