@@ -166,8 +166,8 @@ class AdaptiveDroneEnv(gym.Env):
         terminated = crashed
         truncated = self._steps >= self.max_steps and not terminated
 
-        self._history.append(self._policy_frame(state))
         self._last_action = action.copy()
+        self._history.append(self._policy_frame(state))
         obs = self._observation()
         info = {
             **telemetry,
