@@ -1,0 +1,63 @@
+name: Hover reference feasibility
+
+on:
+  pull_request:
+    paths:
+      - "training/fast_physics/hover_reference.py"
+      - "training/evaluate_hover_reference.py"
+      - "training/tests/test_hover_reference.py"
+      - "vehicle_models/family/vehicle_profiles.json"
+      - "vehicle_models/smooth2_parametric/domain_randomization.json"
+      - ".github/workflows/hover-reference-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hover-reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install simulation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy gymnasium
+      - name: Run nominal and Stage 4 randomized oracle hover evaluations
+        run: |
+          python training/evaluate_hover_reference.py \
+            --episodes 5 --max-steps 1500 --settle-seconds 5 \
+            --output "${RUNNER_TEMP}/hover-nominal.json"
+          python training/evaluate_hover_reference.py \
+            --episodes 5 --max-steps 1500 --settle-seconds 5 --randomize \
+            --output "${RUNNER_TEMP}/hover-stage4-randomized.json"
+      - name: Print compact feasibility summary
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          for filename in ("hover-nominal.json", "hover-stage4-randomized.json"):
+              report = json.loads((root / filename).read_text())
+              print(filename, "randomized=", report["randomized"])
+              for profile in report["profiles"]:
+                  print(profile["vehicle_id"],
+                        "success_rate=", profile["success_rate"],
+                        "crash_rate=", profile["crash_rate"])
+          PY
+      - name: Upload hover reference reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: hover-reference-reports
+          path: ${{ runner.temp }}/hover-*.json
+          if-no-files-found: error
