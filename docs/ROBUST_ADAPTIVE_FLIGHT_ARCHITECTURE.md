@@ -161,7 +161,7 @@ Randomized values:
 | Parameter | Initial range | Reason |
 |---|---:|---|
 | Total mass multiplier | 0.80–1.25 | added/removed payload and battery variation |
-| CG offset, horizontal axes | ±15 mm | payload placement and assembly variation |
+| CG offset, all body axes | ±15 mm | payload placement and assembly variation |
 | Inertia multiplier per axis | 0.70–1.40 | distribution of mass changes |
 | Per-motor effectiveness | 0.90–1.10 | motor/propeller mismatch |
 | Voltage factor | 0.82–1.00 | loaded battery / sag proxy |
