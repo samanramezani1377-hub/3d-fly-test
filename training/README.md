@@ -253,3 +253,45 @@ checkpoints must not be resumed under v4. The existing five-stage workflow is
 the only training workflow; no training or additional tests are launched by
 these code changes. All example vehicle parameters remain provisional
 simulation estimates and are not evidence of real-flight capability.
+
+
+### Universal PPO teacher-guided residual control (pipeline v5)
+
+Pipeline v5 integrates the privileged hover reference controller as a temporary
+training teacher. The teacher's requested body wrench is blended with the PPO
+body-wrench request using stage weights 0.80, 0.60, 0.40, 0.20 and 0.00.
+Stage five is fully PPO-controlled; the teacher is absent during the final
+held-out evaluation. The teacher's simulator-truth state and randomized
+parameters are never appended to policy observations. Because the teacher is
+privileged, stages 1–4 are guided simulation training only and do not represent
+a deployable policy by themselves.
+
+Training, checkpoint selection and standalone evaluation now all pass PPO
+actions through the same `BodyWrenchActionWrapper`. The previous mismatch
+where checkpoint evaluation manually converted actions outside the wrapper
+has been removed. The mixer first preserves collective thrust and reduces
+requested body torques when rotor limits are reached, rather than independently
+clipping four rotor thrusts and silently changing the requested collective.
+
+The vehicle-family sampler reads a small JSON weight file at episode reset.
+After each existing balanced checkpoint evaluation, profiles with weaker
+takeoff/hover/crash results receive a smoothed increase in sampling probability.
+Weights are bounded and normalized; evaluation remains pinned and balanced
+across every configured profile.
+
+The reward adds vertical-speed damping. Evaluation records per-profile motor
+saturation fraction, stable-hover duration, takeoff/hover success, crash rate,
+and episode return. Checkpoint selection prioritizes weakest-profile hover
+success, worst-profile crash rate, weakest-profile takeoff, stable-hover
+duration, lower motor saturation, then episode return. Standard Stable-Baselines3
+PPO diagnostics (approximate KL, explained variance, entropy, value loss and
+policy-gradient loss) remain available in the existing TensorBoard logs.
+
+Pipeline v5 writes to `training/models/universal-quad-v5/` through the same
+existing five-stage workflow. Its action guidance schedule and checkpoint
+selection semantics are incompatible with v4; do not resume v4 checkpoints
+under v5. No new workflow or tests were added, and no training run is started
+by these code changes. The reference controller is an oracle teacher that
+uses privileged simulation state; the final stage removes it, but this does
+not establish real-aircraft capability. All included aircraft profiles remain
+provisional estimates until measured and independently calibrated.
