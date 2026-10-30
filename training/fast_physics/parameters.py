@@ -22,7 +22,7 @@ DEFAULT_CALIBRATION = ROOT / "vehicle_models" / "smooth2_parametric" / "physics_
 class VehicleParameters:
     mass_kg: float
     center_of_mass_m: tuple[float, float, float]
-    inertia_kg_m2: tuple[float, float, float]
+    inertia_kg_m2: tuple[float, ...]
     rotor_positions_m: tuple[tuple[float, float, float], ...]
     spin_signs: tuple[float, ...]
     max_rotor_speed_rad_s: float
@@ -40,8 +40,13 @@ class VehicleParameters:
             raise ValueError("mass_kg must be finite and positive")
         if len(self.center_of_mass_m) != 3 or not np.all(np.isfinite(self.center_of_mass_m)):
             raise ValueError("center_of_mass_m must contain three finite values")
-        if len(self.inertia_kg_m2) != 3 or any(not np.isfinite(v) or v <= 0 for v in self.inertia_kg_m2):
-            raise ValueError("diagonal inertia must contain three finite positive values")
+        if len(self.inertia_kg_m2) not in (3, 9) or not np.all(np.isfinite(self.inertia_kg_m2)):
+            raise ValueError("inertia must be a finite diagonal 3-vector or full 3x3 tensor")
+        matrix = self.inertia_matrix
+        if not np.allclose(matrix, matrix.T, atol=1e-9):
+            raise ValueError("inertia tensor must be symmetric")
+        if np.min(np.linalg.eigvalsh(matrix)) <= 0:
+            raise ValueError("inertia tensor must be positive definite")
         if len(self.rotor_positions_m) != 4 or len(self.spin_signs) != 4:
             raise ValueError("the v1 smooth2 airframe requires exactly four rotor definitions")
         if self.max_rotor_speed_rad_s <= 0 or self.thrust_coefficient_n_per_rad_s2 <= 0:
@@ -55,7 +60,8 @@ class VehicleParameters:
 
     @property
     def inertia_matrix(self) -> np.ndarray:
-        return np.diag(np.asarray(self.inertia_kg_m2, dtype=np.float64))
+        values = np.asarray(self.inertia_kg_m2, dtype=np.float64)
+        return np.diag(values) if values.size == 3 else values.reshape(3, 3)
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -104,7 +110,12 @@ def load_vehicle_parameters(
     cg = physical.get("center_of_mass_m")
     inertia = physical.get("inertia_tensor_kg_m2")
     if isinstance(inertia, dict):
-        inertia = [inertia["xx"], inertia["yy"], inertia["zz"]]
+        if "matrix" in inertia:
+            inertia = np.asarray(inertia["matrix"], dtype=np.float64).reshape(-1).tolist()
+        else:
+            inertia = [inertia["xx"], inertia["yy"], inertia["zz"]]
+    if inertia is not None and np.asarray(inertia).shape == (3, 3):
+        inertia = np.asarray(inertia, dtype=np.float64).reshape(-1).tolist()
     rotor_data = airframe["rotors"]
     scale = float(airframe["geometry"]["model_scale"])
     positions = tuple(tuple(float(x) for x in r["position_m"]) for r in rotor_data)
@@ -160,7 +171,15 @@ def sample_scenario(
         base,
         mass_kg=base.mass_kg * mass_scale,
         center_of_mass_m=tuple(np.asarray(base.center_of_mass_m) + cg_offset),
-        inertia_kg_m2=tuple(np.asarray(base.inertia_kg_m2) * inertia_scale),
+        inertia_kg_m2=tuple(
+            (np.asarray(base.inertia_kg_m2) * inertia_scale).tolist()
+            if len(base.inertia_kg_m2) == 3
+            else (
+                np.diag(np.sqrt(inertia_scale))
+                @ np.asarray(base.inertia_kg_m2, dtype=np.float64).reshape(3, 3)
+                @ np.diag(np.sqrt(inertia_scale))
+            ).reshape(-1).tolist()
+        ),
         motor_effectiveness=tuple(float(v) for v in motor_effectiveness),
         voltage_factor=voltage_factor,
         linear_drag_kg_s=base.linear_drag_kg_s * drag_scale,
