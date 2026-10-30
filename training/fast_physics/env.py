@@ -334,7 +334,8 @@ class AdaptiveDroneEnv(gym.Env):
             "angular_velocity_rad_s": safe_state[9:12].astype(float).tolist(),
             "state_finite": state_finite,
             "control_effort_proxy": float(np.mean(np.square(action))),
-            "motor_saturation_fraction": float(np.mean((action <= 1e-4) | (action >= 1.0 - 1e-4))),
+            "motor_saturation_fraction": float(np.mean(action >= 1.0 - 1e-4)),
+            "motor_zero_command_fraction": float(np.mean(action <= 1e-4)),
         }
         return obs, float(reward), terminated, truncated, info
 
