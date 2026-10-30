@@ -8,6 +8,9 @@ on:
       - "training/run_universal_curriculum.py"
       - "training/evaluate_universal_ppo.py"
       - "training/tests/test_universal_vehicle.py"
+      - "training/tests/test_hover_reference.py"
+      - "training/fast_physics/hover_reference.py"
+      - "training/evaluate_hover_reference.py"
       - "vehicle_models/family/**"
       - "vehicle_models/smooth2_parametric/domain_randomization.json"
       - ".github/workflows/universal-ppo-smoke.yml"
@@ -35,8 +38,31 @@ jobs:
           python -m pip install pytest numpy gymnasium tensorboard
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install stable-baselines3
-      - name: Run universal vehicle physics tests
-        run: python -m pytest training/tests/test_universal_vehicle.py -q
+      - name: Run universal vehicle physics and reference-control tests
+        run: python -m pytest training/tests/test_universal_vehicle.py training/tests/test_hover_reference.py -q
+      - name: Run per-profile nominal oracle hover benchmark
+        run: |
+          python training/evaluate_hover_reference.py \
+            --episodes 2 \
+            --max-steps 1200 \
+            --settle-seconds 3 \
+            --output "${RUNNER_TEMP}/hover-reference-nominal.json"
+      - name: Verify nominal reference hover on every profile
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads((Path(os.environ["RUNNER_TEMP"]) / "hover-reference-nominal.json").read_text())
+          assert len(report["profiles"]) == 4
+          for profile in report["profiles"]:
+              assert profile["success_rate"] == 1.0, (
+                  f"{profile['vehicle_id']} nominal oracle hover success "
+                  f"was {profile['success_rate']}"
+              )
+          print("All four provisional profiles achieved sustained nominal oracle hover.")
+          PY
       - name: Run all four curriculum stages as a short PPO integration smoke test
         run: |
           python training/run_universal_curriculum.py \
