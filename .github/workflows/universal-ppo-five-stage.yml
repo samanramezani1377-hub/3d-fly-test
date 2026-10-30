@@ -7,7 +7,7 @@ on:
       - "site/**"
       - "training/**"
       - "vehicle_models/family/**"
-      - "vehicle_models/smooth2-parametric/domain_randomization.json"
+      - "vehicle_models/smooth2_parametric/domain_randomization.json"
       - "assets/preflight/**"
       - "output/smooth2-parametric/**"
       - "cad/parametric/**"
@@ -18,7 +18,7 @@ on:
     paths:
       - "training/**"
       - "vehicle_models/family/**"
-      - "vehicle_models/smooth2-parametric/domain_randomization.json"
+      - "vehicle_models/smooth2_parametric/domain_randomization.json"
       - "assets/preflight/**"
       - "output/smooth2-parametric/**"
       - "cad/parametric/**"
@@ -78,8 +78,10 @@ jobs:
         id: pages
         if: github.event_name == 'push'
         shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
-          before="${GITHUB_EVENT_BEFORE:-}"
+          before="${BEFORE_SHA:-}"
           if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
             changed=true
           elif git diff --name-only "$before" "$GITHUB_SHA" | grep -Eq '^(site/|training/fast_physics/|vehicle_models/family/|\\.github/workflows/universal-ppo-five-stage\\.yml$)'; then
