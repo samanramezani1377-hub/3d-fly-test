@@ -102,6 +102,7 @@ class BalancedProfileCallback(BaseCallback):
                     total, crashed, took_off = 0.0, False, False
                     stable_steps = max_stable_steps = 0
                     saturation_samples = []
+                    zero_command_samples = []
                     while True:
                         policy_action, _ = self.model.predict(obs, deterministic=True)
                         obs, reward, terminated, truncated, info = e.step(policy_action)
@@ -109,6 +110,7 @@ class BalancedProfileCallback(BaseCallback):
                         crashed = crashed or bool(info.get("crashed", False))
                         took_off = took_off or bool(info.get("has_taken_off", False))
                         saturation_samples.append(float(info.get("motor_saturation_fraction", 0.0)))
+                        zero_command_samples.append(float(info.get("motor_zero_command_fraction", 0.0)))
                         velocity = info.get("state_velocity_m_s", [float("inf")] * 3)
                         attitude = info.get("attitude_rad", [float("inf")] * 3)
                         angular_rate = info.get("angular_velocity_rad_s", [float("inf")] * 3)
@@ -139,6 +141,7 @@ class BalancedProfileCallback(BaseCallback):
                         "crashed": crashed, "steps": plant_env.inner._steps,
                         "stable_hover_seconds_max": stable_seconds, "return": total,
                         "mean_motor_saturation_fraction": sum(saturation_samples) / max(len(saturation_samples), 1),
+                        "mean_motor_zero_command_fraction": sum(zero_command_samples) / max(len(zero_command_samples), 1),
                         "altitude_error_m": info.get("altitude_error_m"),
                         "horizontal_error_m": info.get("horizontal_error_m"),
                         "crash_reasons": info.get("crash_reasons", [])})
@@ -153,6 +156,7 @@ class BalancedProfileCallback(BaseCallback):
                 "crash_rate": sum(x["crashed"] for x in episodes) / count,
                 "mean_stable_hover_seconds": sum(x["stable_hover_seconds_max"] for x in episodes) / count,
                 "mean_motor_saturation_fraction": sum(x["mean_motor_saturation_fraction"] for x in episodes) / count,
+                "mean_motor_zero_command_fraction": sum(x["mean_motor_zero_command_fraction"] for x in episodes) / count,
                 "mean_return": sum(x["return"] for x in episodes) / count,
                 "episodes": episodes})
         score = (min(x["success_rate"] for x in profile_reports),
