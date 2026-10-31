@@ -16,6 +16,7 @@ from fast_physics.ppo_action import wrench_to_motor_commands
 from fast_physics.vehicle_family import load_vehicle_profiles, profile_to_parameters
 from fast_physics.velocity_reference import VelocityYawReferenceController
 from fast_physics.dynamics import rotation_matrix, _quaternion_from_euler, _rotation_matrix_from_quaternion
+from fast_physics.propeller import BladeElementPropeller
 from fast_physics.system_identification import estimate_first_order_time_constant, estimate_body_axis_drag_coefficients
 from fast_physics.mass_properties import aggregate_mass_properties
 from evaluate_robust_ppo import summarize_episode
@@ -530,3 +531,21 @@ def test_body_axis_drag_identification_recovers_linear_and_quadratic_coefficient
     assert result["linear_drag_body_kg_s"] == pytest.approx(expected_linear, rel=1e-8)
     assert result["quadratic_drag_body_kg_m"] == pytest.approx(expected_quadratic, rel=1e-8)
     assert result["fit_r_squared_by_axis"] == pytest.approx([1.0, 1.0, 1.0], abs=1e-10)
+
+
+def test_smooth2_runtime_bemt_uses_cad_blade_stations_and_reports_model_status():
+    params, metadata = load_vehicle_parameters(AIRFRAME, CALIBRATION)
+    assert params.propeller_bemt is not None
+    assert metadata["synthetic_calibration_used"] is False
+    propeller = BladeElementPropeller(params.propeller_bemt)
+    thrust, torque = propeller.evaluate(params.max_rotor_speed_rad_s)
+    assert thrust == pytest.approx(6.125, rel=0.12)
+    assert torque == pytest.approx(0.07927, rel=0.15)
+    assert propeller.evaluate(0.0) == (0.0, 0.0)
+
+    plant = FastQuadrotor(params)
+    plant.motor_omega[:] = params.max_rotor_speed_rad_s
+    _, telemetry = plant.step(np.ones(4, dtype=np.float64))
+    assert telemetry["thrust_model_status"].startswith("runtime_CAD_station_BEMT")
+    assert telemetry["total_thrust_n"] == pytest.approx(4.0 * thrust, rel=0.03)
+    assert len(telemetry["rotor_shaft_torque_nm"]) == 4
