@@ -16,7 +16,7 @@ from fast_physics.ppo_action import wrench_to_motor_commands
 from fast_physics.vehicle_family import load_vehicle_profiles, profile_to_parameters
 from fast_physics.velocity_reference import VelocityYawReferenceController
 from fast_physics.dynamics import rotation_matrix, _quaternion_from_euler, _rotation_matrix_from_quaternion
-from fast_physics.system_identification import estimate_first_order_time_constant
+from fast_physics.system_identification import estimate_first_order_time_constant, estimate_body_axis_drag_coefficients
 from fast_physics.mass_properties import aggregate_mass_properties
 from evaluate_robust_ppo import summarize_episode
 AIRFRAME = ROOT / "vehicle_models/smooth2_parametric/base_airframe.json"
@@ -499,3 +499,18 @@ def test_component_mass_properties_use_parallel_axis_theorem():
     assert result["center_of_mass_m"] == pytest.approx([0.0, 0.0, 0.0])
     assert np.asarray(result["inertia_tensor_kg_m2"]) == pytest.approx(np.diag([0.0, 0.5, 0.5]))
     assert result["coordinate_frame"] == "CAD_EXPORT_Z_UP"
+
+
+def test_body_axis_drag_identification_recovers_linear_and_quadratic_coefficients():
+    rng = np.random.default_rng(19)
+    velocity = rng.uniform(-8.0, 8.0, size=(300, 3))
+    expected_linear = np.array([0.12, 0.20, 0.31])
+    expected_quadratic = np.array([0.018, 0.027, 0.041])
+    force = (
+        -velocity * expected_linear[None, :]
+        -np.abs(velocity) * velocity * expected_quadratic[None, :]
+    )
+    result = estimate_body_axis_drag_coefficients(velocity, force)
+    assert result["linear_drag_body_kg_s"] == pytest.approx(expected_linear, rel=1e-8)
+    assert result["quadratic_drag_body_kg_m"] == pytest.approx(expected_quadratic, rel=1e-8)
+    assert result["fit_r_squared_by_axis"] == pytest.approx([1.0, 1.0, 1.0], abs=1e-10)
