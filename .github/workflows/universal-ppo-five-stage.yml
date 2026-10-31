@@ -153,6 +153,7 @@ jobs:
             "evaluation_objective": "teacher-free 3D velocity tracking, altitude/path tracking, crash and motor-saturation rates",
             "evaluation_direction_coverage": "all 6 cardinal + 12 two-axis + 8 three-axis combinations per episode, with immediate reversals and a neutral braking tail",
             "evaluation_command_hold_steps": 45,
+            "evaluation_target_altitude_m": [2.0, 2.4],
             "evaluation_neutral_stop_acceptance_seconds": 3.5,
             "evaluation_mean_tracking_error_acceptance_m_s": 0.50,
             "evaluation_worst_direction_error_acceptance_m_s": 0.85,
