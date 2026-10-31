@@ -65,6 +65,9 @@ class VehicleParameters:
             raise ValueError("mass_kg must be finite and positive")
         if len(self.center_of_mass_m) != 3 or not np.all(np.isfinite(self.center_of_mass_m)):
             raise ValueError("center_of_mass_m must contain three finite values")
+        rotor_positions = np.asarray(self.rotor_positions_m, dtype=np.float64)
+        if rotor_positions.shape != (4, 3) or not np.all(np.isfinite(rotor_positions)):
+            raise ValueError("rotor_positions_m must be a finite 4x3 array")
         if len(self.inertia_kg_m2) not in (3, 9) or not np.all(np.isfinite(self.inertia_kg_m2)):
             raise ValueError("inertia must be a finite diagonal 3-vector or full 3x3 tensor")
         matrix = self.inertia_matrix
@@ -74,14 +77,25 @@ class VehicleParameters:
             raise ValueError("inertia tensor must be positive definite")
         if len(self.rotor_positions_m) != 4 or len(self.spin_signs) != 4:
             raise ValueError("the v1 smooth2 airframe requires exactly four rotor definitions")
+        if not np.all(np.isfinite([
+            self.max_rotor_speed_rad_s, self.thrust_coefficient_n_per_rad_s2,
+            self.torque_to_thrust_m, self.motor_time_constant_s,
+            self.linear_drag_kg_s, self.quadratic_drag_kg_m,
+            self.angular_damping_nms, self.voltage_factor,
+        ])):
+            raise ValueError("motor, drag, damping and voltage parameters must be finite")
         if self.max_rotor_speed_rad_s <= 0 or self.thrust_coefficient_n_per_rad_s2 <= 0:
             raise ValueError("motor calibration must be positive")
         if self.torque_to_thrust_m <= 0 or self.motor_time_constant_s <= 0:
             raise ValueError("torque ratio and motor time constant must be positive")
-        if len(self.motor_effectiveness) != 4 or any(v <= 0 for v in self.motor_effectiveness):
-            raise ValueError("motor_effectiveness must contain four positive values")
+        if min(self.linear_drag_kg_s, self.quadratic_drag_kg_m, self.angular_damping_nms) < 0:
+            raise ValueError("drag and angular damping coefficients must be non-negative")
+        if len(self.motor_effectiveness) != 4 or not np.all(np.isfinite(self.motor_effectiveness)) or any(v <= 0 for v in self.motor_effectiveness):
+            raise ValueError("motor_effectiveness must contain four finite positive values")
         if not 0 < self.voltage_factor <= 1.2:
             raise ValueError("voltage_factor must be in (0, 1.2]")
+        if any(sign not in (-1, 1, -1.0, 1.0) for sign in self.spin_signs):
+            raise ValueError("spin_signs must contain exactly four +1/-1 directions")
         for name in ("linear_drag_body_kg_s", "quadratic_drag_body_kg_m"):
             values = getattr(self, name)
             if values is not None and (len(values) != 3 or not np.all(np.isfinite(values)) or np.any(np.asarray(values) < 0)):
@@ -175,7 +189,7 @@ def load_vehicle_parameters(
         angular_damping_nms=float(physical.get("angular_damping_nms", 0.002)),
         linear_drag_body_kg_s=tuple(physical["linear_drag_body_kg_s"]) if physical.get("linear_drag_body_kg_s") is not None else None,
         quadratic_drag_body_kg_m=tuple(physical["quadratic_drag_body_kg_m"]) if physical.get("quadratic_drag_body_kg_m") is not None else None,
-        rotor_inertia_kg_m2=float(motor.get("rotor_inertia_kg_m2", 0.0)),
+        rotor_inertia_kg_m2=float(motor.get("rotor_inertia_kg_m2") or 0.0),
     )
     params.validate()
     metadata = {
