@@ -47,6 +47,20 @@ A timestep is an aggregate environment transition. With 100 parallel environment
 
 The workflow installs CPU-only PyTorch and constrains common numerical libraries to one thread per process. It does not request a GPU.
 
+### Mandatory teacher-only capability gate (runs before checkpoint restore and PPO)
+
+Before the bootstrap checkpoint is downloaded and before any PPO optimization starts, the same workflow runs `training/preflight_velocity_teacher.py`. This is a closed-loop simulator test, not merely a Python import or finite-output check.
+
+- It runs the privileged velocity/yaw teacher at **100% weight**; PPO contributes exactly zero action.
+- It tests all four vehicle profiles, with three deterministic Stage-5 randomized episodes per profile (12 episodes total).
+- Each episode exercises the same 26 translation-command cases, 30 signed yaw-command cases (including pure in-place left/right turns), and neutral braking tail used by the PPO evaluator.
+- It checks takeoff, no crash, full command coverage, mean velocity error ≤ 0.50 m/s, worst per-direction mean error ≤ 0.85 m/s, mean yaw-rate error ≤ 0.30 rad/s, worst per-yaw-command mean error ≤ 0.50 rad/s, and neutral braking within 3.5 seconds.
+- **All 12 episodes must pass.** A failed profile/scenario fails the step and stops the job before checkpoint restoration or any training compute.
+- The JSON report is uploaded as the `universal-teacher-capability-preflight` Actions artifact even when the gate fails, and is also copied into the final published model directory on a successful run.
+
+This is a finite, seeded sample across the configured Stage-5 randomization bounds; it cannot prove success in every mathematically possible or physically real condition. It is intended to catch an incapable or broken oracle teacher before spending the much larger PPO training budget.
+
+
 ## 3. Initial checkpoint and stage chaining
 
 The workflow downloads the selected teacher-assisted 1,000,000-step checkpoint from Actions run [41158518207](https://github.com/samanramezani1377-hub/3d-fly-test/actions/runs/41158518207), artifact:
