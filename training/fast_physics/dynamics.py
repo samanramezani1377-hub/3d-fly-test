@@ -126,6 +126,10 @@ class FastQuadrotor:
 
         # Reconstruct attitude before rotor aerodynamics so each blade model
         # sees local axial inflow, including body rotation at the rotor station.
+        quaternion = _quaternion_from_euler(self.attitude)
+        rot = _rotation_matrix_from_quaternion(quaternion)
+        air_velocity_world = self.velocity - self.wind
+        air_velocity_body = rot.T @ air_velocity_world
         rotor_positions = np.asarray(p.rotor_positions_m, dtype=np.float64) - np.asarray(
             p.center_of_mass_m, dtype=np.float64
         )
