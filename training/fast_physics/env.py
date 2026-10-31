@@ -230,6 +230,10 @@ class AdaptiveDroneEnv(gym.Env):
                 -attitude_bound_rad, attitude_bound_rad, size=2
             )
             state = self.plant.state()
+        if self.velocity_control and self.randomize:
+            yaw_bound = {1: 0.20, 2: 0.70, 3: np.pi, 4: np.pi, 5: np.pi}.get(stage_number, np.pi)
+            self.plant.attitude[2] = self.np_random.uniform(-yaw_bound, yaw_bound)
+            state = self.plant.state()
         measured = self._measure_state(state)
         self.estimator.reset(float(measured[5]))
         self._history.clear()
