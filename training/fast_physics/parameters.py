@@ -164,15 +164,19 @@ def load_vehicle_parameters(
     rotor_data = airframe["rotors"]
     scale = float(airframe["geometry"]["model_scale"])
     source_frame = airframe.get("coordinate_frame", {}).get("frame", "BODY_FORWARD_LEFT_UP")
+    physical_frame = physical.get("coordinate_frame", source_frame)
     positions_array = np.asarray([r["position_m"] for r in rotor_data], dtype=np.float64)
     cg_array = np.asarray(cg if cg is not None else synthetic["center_of_mass_m"], dtype=np.float64)
     inertia_array = np.asarray(inertia if inertia is not None else synthetic["inertia_kg_m2"], dtype=np.float64)
     if source_frame == "CAD_EXPORT_Z_UP":
         positions_array = (CAD_EXPORT_TO_BODY_FLU @ positions_array.T).T
-        cg_array = cad_export_vector_to_body_flu(cg_array)
-        inertia_array = cad_export_inertia_to_body_flu(inertia_array)
     elif source_frame != "BODY_FORWARD_LEFT_UP":
         raise ValueError(f"unsupported airframe coordinate frame: {source_frame}")
+    if physical_frame == "CAD_EXPORT_Z_UP":
+        cg_array = cad_export_vector_to_body_flu(cg_array)
+        inertia_array = cad_export_inertia_to_body_flu(inertia_array)
+    elif physical_frame != "BODY_FORWARD_LEFT_UP":
+        raise ValueError(f"unsupported physical calibration coordinate frame: {physical_frame}")
     positions = tuple(tuple(float(x) for x in row) for row in positions_array)
     params = VehicleParameters(
         mass_kg=float(mass if mass is not None else synthetic["mass_kg"]),
@@ -201,6 +205,7 @@ def load_vehicle_parameters(
         "missing_fields": missing,
         "units": "SI",
         "source_coordinate_frame": source_frame,
+        "physical_coordinate_frame": physical_frame,
         "body_coordinate_frame": "BODY_FORWARD_LEFT_UP",
     }
     return params, metadata
