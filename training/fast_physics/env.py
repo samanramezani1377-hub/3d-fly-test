@@ -244,6 +244,8 @@ class AdaptiveDroneEnv(gym.Env):
         self._history.extend([frame.copy() for _ in range(self.history_length)])
         self._steps = 0
         self._taken_off = False
+        self.desired_velocity_body[:] = 0.0
+        self._command_steps_remaining = 100
         self._last_finite_state = state.astype(np.float32).copy()
         self._previous_altitude_potential = float(np.exp(-abs(float(state[2]) - float(self.target[2])) / 0.45))
         self._ground_contact = False
