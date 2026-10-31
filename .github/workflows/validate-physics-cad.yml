@@ -53,6 +53,7 @@ jobs:
             training/tests/test_fast_physics.py \
             training/tests/test_universal_vehicle.py \
             training/tests/test_hover_reference.py
+            training/tests/test_smooth2_bemt_contract.py
 
       - name: Validate committed CAD assets
         run: python scripts/validate_preflight_assets.py
