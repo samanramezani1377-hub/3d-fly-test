@@ -160,10 +160,21 @@ def main() -> int:
     for profile_index, profile in enumerate(sorted(profiles, key=lambda p: p["vehicle_id"])):
         for episode_index in range(EPISODES_PER_PROFILE):
             seed = 810000 + profile_index * 100 + episode_index
-            result = run_episode(
-                profile["vehicle_id"], episode_index, seed,
-                args.vehicle_family, args.randomization_config,
-            )
+            try:
+                result = run_episode(
+                    profile["vehicle_id"], episode_index, seed,
+                    args.vehicle_family, args.randomization_config,
+                )
+            except Exception as exc:
+                result = {
+                    "vehicle_id": profile["vehicle_id"],
+                    "episode_index": episode_index,
+                    "seed": seed,
+                    "teacher_weight": 1.0,
+                    "passed": False,
+                    "checks": {"episode_completed_without_exception": False},
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
             episodes.append(result)
             print(json.dumps(result, sort_keys=True), flush=True)
 
