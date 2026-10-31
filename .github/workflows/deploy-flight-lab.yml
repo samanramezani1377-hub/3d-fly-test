@@ -47,6 +47,7 @@ jobs:
           test -s _site/engine.py
           test -s _site/training/fast_physics/vehicle_family.py
           test -s _site/training/fast_physics/dynamics.py
+          test -s _site/training/fast_physics/propeller.py
           test -s _site/training/fast_physics/env.py
           test -s _site/vehicle_models/family/vehicle_profiles.json
           test -s _site/vehicle_models/family/domain_randomization.json
