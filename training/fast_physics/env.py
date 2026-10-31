@@ -27,9 +27,10 @@ DEFAULT_RANDOMIZATION = ROOT / "vehicle_models" / "smooth2_parametric" / "domain
 class AdaptiveDroneEnv(gym.Env):
     """Direct four-rotor control with hidden episode parameters and observation history.
 
-    The policy sees only state estimates and recent control history. Randomized
-    mass, CG, inertia, motor effectiveness and voltage are kept in info for
-    diagnostics, not appended to the policy observation.
+    In velocity-control mode, the policy also receives a three-axis velocity
+    command in the yaw-aligned nose-forward/nose-left and world-up frame.
+    Randomized mass, CG, inertia, motor effectiveness and voltage remain hidden
+    from the policy and are retained only for diagnostics.
     """
 
     metadata = {"render_modes": []}
