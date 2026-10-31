@@ -109,6 +109,69 @@ class FastQuadrotor:
     def state(self) -> np.ndarray:
         return np.concatenate((self.position, self.velocity, self.attitude, self.angular_velocity)).astype(np.float32)
 
+    def _resolve_ground_contact(self) -> tuple[int, float, float]:
+        """Resolve CAD support-point contacts with rigid-body normal/friction impulses."""
+        points = np.asarray(self.params.ground_contact_points_m, dtype=np.float64)
+        if points.ndim != 2 or points.shape[1] != 3 or not len(points):
+            return 0, 0.0, 0.0
+        rotation = _rotation_matrix_from_quaternion(_quaternion_from_euler(self.attitude))
+        offsets = (rotation @ points.T).T
+        penetration = float(max(0.0, -np.min(self.position[2] + offsets[:, 2])))
+        if penetration <= 0.0:
+            return 0, 0.0, 0.0
+
+        # Correct the geometric overlap once, then resolve impact velocities.
+        self.position[2] += penetration
+        inverse_inertia = np.linalg.inv(self.params.inertia_matrix)
+        active = 0
+        normal_impulse_sum = 0.0
+        for _ in range(4):
+            rotation = _rotation_matrix_from_quaternion(_quaternion_from_euler(self.attitude))
+            offsets = (rotation @ points.T).T
+            for index in np.argsort(self.position[2] + offsets[:, 2]):
+                arm = offsets[index]
+                if self.position[2] + arm[2] > 1e-8:
+                    continue
+                active += 1
+                point_velocity = self.velocity + np.cross(self.angular_velocity, arm)
+                normal_speed = float(point_velocity[2])
+                cross_n = np.cross(arm, (0.0, 0.0, 1.0))
+                inverse_mass = 1.0 / self.params.mass_kg + float(
+                    np.cross(inverse_inertia @ cross_n, arm)[2]
+                )
+                if normal_speed < 0.0 and inverse_mass > 1e-12:
+                    normal_impulse = -normal_speed / inverse_mass
+                    impulse = np.array([0.0, 0.0, normal_impulse])
+                    self.velocity += impulse / self.params.mass_kg
+                    self.angular_velocity += inverse_inertia @ np.cross(arm, impulse)
+                    normal_impulse_sum += normal_impulse
+
+                    # Coulomb friction opposes tangential slip, capped at mu*N.
+                    point_velocity = self.velocity + np.cross(self.angular_velocity, arm)
+                    tangent = point_velocity.copy()
+                    tangent[2] = 0.0
+                    tangent_speed = float(np.linalg.norm(tangent))
+                    if tangent_speed > 1e-10:
+                        direction = tangent / tangent_speed
+                        cross_t = np.cross(arm, direction)
+                        tangent_inverse_mass = 1.0 / self.params.mass_kg + float(
+                            np.dot(direction, np.cross(inverse_inertia @ cross_t, arm))
+                        )
+                        if tangent_inverse_mass > 1e-12:
+                            friction_magnitude = min(
+                                tangent_speed / tangent_inverse_mass, 0.55 * normal_impulse
+                            )
+                            friction = -friction_magnitude * direction
+                            self.velocity += friction / self.params.mass_kg
+                            self.angular_velocity += inverse_inertia @ np.cross(arm, friction)
+
+        rotation = _rotation_matrix_from_quaternion(_quaternion_from_euler(self.attitude))
+        final_offsets = (rotation @ points.T).T
+        residual = float(np.min(self.position[2] + final_offsets[:, 2]))
+        if residual < 0.0:
+            self.position[2] -= residual
+        return active, penetration, normal_impulse_sum
+
     def step(self, motor_commands: np.ndarray) -> tuple[np.ndarray, dict]:
         command = np.asarray(motor_commands, dtype=np.float64)
         if command.shape != (4,):
