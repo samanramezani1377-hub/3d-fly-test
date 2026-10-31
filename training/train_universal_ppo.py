@@ -270,6 +270,73 @@ class BalancedProfileCallback(BaseCallback):
         return True
 
 
+def build_ppo(PPO, env, args, run_dir):
+    return PPO(
+        "MlpPolicy", env, learning_rate=args.learning_rate, n_steps=500,
+        batch_size=250, gamma=0.99, gae_lambda=0.95, clip_range=0.15,
+        ent_coef=0.008, vf_coef=0.5, max_grad_norm=0.5,
+        target_kl=0.03, normalize_advantage=True,
+        policy_kwargs={"net_arch": {"pi": [128, 128], "vf": [128, 128]}, "log_std_init": -1.0},
+        verbose=1, seed=args.seed, device="cpu",
+        tensorboard_log=str(run_dir / "tensorboard"),
+    )
+
+
+def load_ppo_checkpoint(PPO, checkpoint, env, args, run_dir):
+    # Load without env first so an older hover checkpoint can be inspected safely.
+    source = PPO.load(str(checkpoint), device="cpu")
+    source_shape = tuple(source.observation_space.shape)
+    target_shape = tuple(env.observation_space.shape)
+    if source_shape == target_shape:
+        model = PPO.load(str(checkpoint), env=env, device="cpu")
+        model.tensorboard_log = str(run_dir / "tensorboard")
+        return model
+    if args.resume:
+        raise RuntimeError("A same-stage resume checkpoint must already use the current observation shape.")
+    if not args.velocity_control or len(source_shape) != 1 or len(target_shape) != 1:
+        raise RuntimeError(f"Checkpoint observation shape {source_shape} is incompatible with environment {target_shape}.")
+    if target_shape[0] != source_shape[0] + 3:
+        raise RuntimeError(
+            f"Only the expected three velocity-command inputs may be added; "
+            f"checkpoint={source_shape}, environment={target_shape}."
+        )
+
+    # Warm-start the old hover policy. The three new command columns start at
+    # zero, preserving the old policy response until PPO learns command tracking.
+    model = build_ppo(PPO, env, args, run_dir)
+    old_state = source.policy.state_dict()
+    new_state = model.policy.state_dict()
+    expanded = []
+    for key, old_tensor in old_state.items():
+        if key not in new_state:
+            raise RuntimeError(f"Cannot migrate checkpoint: missing policy tensor {key}.")
+        new_tensor = new_state[key]
+        if tuple(old_tensor.shape) == tuple(new_tensor.shape):
+            new_state[key] = old_tensor
+        elif (key.endswith(".weight") and old_tensor.ndim == 2 and new_tensor.ndim == 2
+              and old_tensor.shape[0] == new_tensor.shape[0]
+              and new_tensor.shape[1] == old_tensor.shape[1] + 3):
+            expanded_tensor = new_tensor.clone()
+            expanded_tensor.zero_()
+            expanded_tensor[:, :old_tensor.shape[1]] = old_tensor
+            new_state[key] = expanded_tensor
+            expanded.append(key)
+        else:
+            raise RuntimeError(
+                f"Cannot safely migrate policy tensor {key}: "
+                f"{tuple(old_tensor.shape)} -> {tuple(new_tensor.shape)}."
+            )
+    if len(expanded) != 2:
+        raise RuntimeError(f"Expected to expand actor and critic input layers, expanded: {expanded}")
+    model.policy.load_state_dict(new_state)
+    print(
+        "[CHECKPOINT_MIGRATION] preserved all compatible hover-policy weights; "
+        f"zero-initialized command inputs in {expanded}; optimizer state reinitialized.",
+        flush=True,
+    )
+    return model
+
+
 def main(argv=None):
     args = parse_args(argv)
     if args.teacher_weight is not None and not 0.0 <= args.teacher_weight <= 1.0:
