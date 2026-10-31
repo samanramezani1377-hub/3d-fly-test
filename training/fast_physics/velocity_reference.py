@@ -77,13 +77,26 @@ class VelocityYawReferenceController:
         desired_velocity_world = commanded_velocity_world + self.position_kp * position_error
         accel_world = self.velocity_kp * (desired_velocity_world - velocity)
 
-        # Privileged feed-forward compensation for known drag and episode wind.
-        air_velocity = velocity - self.wind
-        air_speed = float(np.linalg.norm(air_velocity))
-        accel_world += (
-            p.linear_drag_kg_s * air_velocity
-            + p.quadratic_drag_kg_m * air_speed * air_velocity
-        ) / p.mass_kg
+        # Privileged feed-forward compensation for the plant's body-axis drag.
+        rot = rotation_matrix(attitude)
+        air_velocity_body = rot.T @ (velocity - self.wind)
+        linear_drag = np.asarray(
+            p.linear_drag_body_kg_s
+            if p.linear_drag_body_kg_s is not None
+            else (p.linear_drag_kg_s,) * 3,
+            dtype=np.float64,
+        )
+        quadratic_drag = np.asarray(
+            p.quadratic_drag_body_kg_m
+            if p.quadratic_drag_body_kg_m is not None
+            else (p.quadratic_drag_kg_m,) * 3,
+            dtype=np.float64,
+        )
+        drag_body = (
+            -linear_drag * air_velocity_body
+            -quadratic_drag * np.abs(air_velocity_body) * air_velocity_body
+        )
+        accel_world -= (rot @ drag_body) / p.mass_kg
         accel_world[:2] = np.clip(
             accel_world[:2], -self.max_horizontal_accel, self.max_horizontal_accel
         )
@@ -107,13 +120,24 @@ class VelocityYawReferenceController:
             self.attitude_kp * (desired_attitude - attitude) - self.attitude_kd * rates
         )
         cos_pitch = max(abs(float(np.cos(attitude[1]))), 1e-3)
+        cos_roll = max(abs(float(np.cos(attitude[0]))), 1e-3)
         measured_yaw_rate = (
             np.sin(attitude[0]) / cos_pitch * rates[1]
             + np.cos(attitude[0]) / cos_pitch * rates[2]
         )
-        yaw_error = float(desired_yaw_rate_rad_s) - measured_yaw_rate
+        # Convert the requested world-vertical Euler yaw rate into the body-r
+        # rate required at the current roll/pitch. Controlling r directly as
+        # though it were yaw-dot is only correct when the vehicle is level.
+        desired_body_r = (
+            cos_pitch / cos_roll
+            * (
+                float(desired_yaw_rate_rad_s)
+                - np.sin(attitude[0]) / cos_pitch * rates[1]
+            )
+        )
+        body_r_error = desired_body_r - rates[2]
         desired_angular_accel[2] = np.clip(
-            self.yaw_rate_kp * yaw_error - self.yaw_rate_kd * rates[2],
+            self.yaw_rate_kp * body_r_error - self.yaw_rate_kd * rates[2],
             -self.max_yaw_accel, self.max_yaw_accel,
         )
 
