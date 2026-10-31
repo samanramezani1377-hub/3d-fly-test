@@ -343,8 +343,8 @@ def main(argv=None):
         raise SystemExit("--teacher-weight must be between 0.0 and 1.0")
     if args.no_teacher and args.teacher_weight not in (None, 0.0):
         raise SystemExit("--no-teacher cannot be combined with a nonzero --teacher-weight")
-    if args.velocity_control and not args.no_teacher and args.teacher_weight not in (None, 0.0):
-        raise SystemExit("velocity-control training requires the hover reference teacher to be disabled")
+    if args.velocity_control and not args.no_teacher:
+        raise SystemExit("--velocity-control requires --no-teacher; hover guidance cannot track movement commands")
     if args.timesteps <= 0 or args.n_envs <= 0 or args.eval_frequency <= 0 or args.checkpoint_frequency <= 0 or args.eval_episodes <= 0:
         raise SystemExit("--timesteps, --n-envs, --eval-frequency, --checkpoint-frequency and --eval-episodes must be positive")
     if args.resume and not args.load_model:
