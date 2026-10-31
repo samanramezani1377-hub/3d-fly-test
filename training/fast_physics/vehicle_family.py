@@ -95,7 +95,7 @@ def resolve_profile(profile: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"{p.get('vehicle_id')}: inertia must be a diagonal 3-vector or finite 3x3 matrix")
         physical["inertia_kg_m2"] = arr.reshape(-1).tolist()
 
-    if p.get("source_coordinate_frame") == "CAD_EXPORT_Z_UP":
+    if source_frame == "CAD_EXPORT_Z_UP":
         physical["inertia_kg_m2"] = cad_export_inertia_to_body_flu(
             physical["inertia_kg_m2"]
         ).reshape(-1).tolist()
