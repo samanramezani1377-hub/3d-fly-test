@@ -81,3 +81,41 @@ class OnlineThrustEstimator:
             "residual_ema_m_s2": float(self.residual_ema),
             "samples": int(self.samples),
         }
+
+
+def estimate_first_order_time_constant(time_s, target_speed_rad_s, measured_speed_rad_s) -> dict:
+    """Fit a first-order motor speed lag from command-target and RPM logs.
+
+    Inputs must be synchronized samples in seconds and rad/s. The fit uses
+    d(omega)/dt = (omega_target - omega)/tau. It estimates actuator lag only;
+    it does not infer thrust, torque, current, or propeller performance.
+    """
+    time = np.asarray(time_s, dtype=np.float64)
+    target = np.asarray(target_speed_rad_s, dtype=np.float64)
+    measured = np.asarray(measured_speed_rad_s, dtype=np.float64)
+    if time.ndim != 1 or target.shape != time.shape or measured.shape != time.shape or time.size < 5:
+        raise ValueError("time, target speed and measured speed must be equal-length 1D arrays with at least five samples")
+    if not np.all(np.isfinite(time)) or not np.all(np.isfinite(target)) or not np.all(np.isfinite(measured)):
+        raise ValueError("motor response samples must be finite")
+    if np.any(np.diff(time) <= 0):
+        raise ValueError("time samples must be strictly increasing")
+    drive = target - measured
+    derivative = np.gradient(measured, time)
+    mask = np.abs(drive) > max(float(np.max(np.abs(drive))) * 1e-3, 1e-6)
+    if int(mask.sum()) < 3:
+        raise ValueError("motor response log does not contain enough excitation")
+    denominator = float(np.dot(drive[mask], drive[mask]))
+    rate = float(np.dot(drive[mask], derivative[mask]) / denominator)
+    if not np.isfinite(rate) or rate <= 0:
+        raise ValueError("first-order motor response fit is not physically positive")
+    predicted = rate * drive[mask]
+    residual = derivative[mask] - predicted
+    total = derivative[mask] - float(np.mean(derivative[mask]))
+    r_squared = 1.0 - float(np.dot(residual, residual)) / max(float(np.dot(total, total)), 1e-12)
+    return {
+        "motor_time_constant_s": float(1.0 / rate),
+        "fit_r_squared": float(r_squared),
+        "sample_count": int(mask.sum()),
+        "model": "d_omega_dt=(omega_target-omega)/tau",
+        "scope": "motor_speed_response_only_no_thrust_or_propeller_inference",
+    }
