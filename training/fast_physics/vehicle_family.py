@@ -154,6 +154,7 @@ def profile_to_parameters(profile: dict[str, Any]) -> VehicleParameters:
         battery_nominal_voltage_v=float(propulsion["nominal_battery_voltage_v"]) if propulsion.get("nominal_battery_voltage_v") is not None else None,
         battery_capacity_ah=float(propulsion["battery_capacity_ah"]) if propulsion.get("battery_capacity_ah") is not None else None,
         motor_efficiency_upper_bound=float(propulsion.get("motor_efficiency_upper_bound", 0.8)),
+        propeller_bemt=propulsion.get("propeller_bemt"),
     )
 
 
