@@ -1,10 +1,11 @@
-name: Universal PPO - Five-stage curriculum
+name: Universal PPO - Stage 2 teacher-to-teacher-free
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: universal-ppo-five-stage-${{ github.ref }}
@@ -18,12 +19,13 @@ env:
   PYTHONUNBUFFERED: "1"
 
 jobs:
-  train-five-stage-ppo:
-    name: Five-stage PPO training (stage 1 currently active)
+  train-stage2-ppo:
+    name: Stage 2 (1M teacher + 1M teacher-free)
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
       contents: write
+      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,144 +44,125 @@ jobs:
           python -m pip install -r training/requirements.txt
           python -c "import torch; assert torch.version.cuda is None; print('CPU-only PyTorch:', torch.__version__)"
 
-      - name: Restore the previously trained stage-1 model
+      - name: Restore the latest checkpoint from the previous run of this workflow
+        uses: actions/download-artifact@v4
+        with:
+          name: universal-ppo-five-stage-backup
+          run-id: 41149494807
+          github-token: ${{ github.token }}
+          path: bootstrap
+
+      - name: Verify and preserve the previous run's latest model
         run: |
           set -euo pipefail
-          source_model="training/models/universal-quad-v5-foundation/universal-quad-v5-foundation-stage1/best/best_model.zip"
-          test -s "$source_model" || { echo "Previous stage-1 best checkpoint is missing: $source_model"; exit 1; }
-          mkdir -p training/runs/universal-quad-v5-foundation-stage1-independent
-          cp "$source_model" training/runs/initial-stage1-best_model.zip
-          sha256sum "$source_model" | tee training/runs/initial-stage1-checkpoint.sha256
+          source_model="bootstrap/training/runs/universal-quad-v5-foundation-stage1-independent/latest_model.zip"
+          source_state="bootstrap/training/runs/universal-quad-v5-foundation-stage1-independent/training_state.json"
+          test -s "$source_model" || { echo "Latest checkpoint from run 41149494807 is missing."; exit 1; }
+          test -s "$source_state" || { echo "Previous training state is missing."; exit 1; }
+          python - "$source_state" <<'PY'
+          import json, sys
+          from pathlib import Path
+          state = json.loads(Path(sys.argv[1]).read_text())
+          assert state.get("completed") is True, f"Previous stage-1 run is not complete: {state}"
+          assert state.get("stage") == 1, f"Expected previous stage 1: {state}"
+          assert state.get("num_timesteps") == 2_000_000, f"Unexpected previous step count: {state}"
+          print("Verified source checkpoint:", state)
+          PY
+          mkdir -p training/runs
+          cp "$source_model" training/runs/stage2-initial-from-previous-latest_model.zip
+          sha256sum "$source_model" | tee training/runs/stage2-initial-checkpoint.sha256
 
-      - name: Train stage 1 for 2M steps with teacher fully disabled
+      - name: Stage 2 - train 1M steps with the stage-2 reference teacher
         run: |
-          set -o pipefail
+          set -euo pipefail
           python training/train_universal_ppo.py \
-            --timesteps 2000000 --n-envs 32 --seed 1042 \
-            --run-name universal-quad-v5-foundation-stage1-independent \
-            --output-dir training/runs --curriculum-stage 1 --no-teacher \
-            --load-model training/runs/initial-stage1-best_model.zip \
+            --timesteps 1000000 --n-envs 40 --seed 2042 \
+            --run-name universal-quad-v5-foundation-stage2-teacher \
+            --output-dir training/runs --curriculum-stage 2 \
+            --load-model training/runs/stage2-initial-from-previous-latest_model.zip \
             --eval-episodes 10 --eval-frequency 100000 \
             --checkpoint-frequency 20000 \
-            2>&1 | tee teacher-free-training.log
+            2>&1 | tee stage2-teacher-training.log
 
-      - name: Build independent wider held-out physics distribution
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          source = Path("vehicle_models/family/domain_randomization.json")
-          data = json.loads(source.read_text())
-          data["description"] = "Independent wider held-out distribution; not used for training or checkpoint selection."
-          data["mass"]["scale"] = [0.76, 1.12]
-          data["center_of_mass"]["offset_arm_fraction"] = 0.12
-          data["inertia"]["scale"] = [0.65, 1.45]
-          data["motor"]["effectiveness"] = [0.86, 1.10]
-          data["battery"]["voltage_factor"] = [0.92, 1.0]
-          data["aerodynamics"]["drag_scale"] = [0.65, 1.45]
-          data["environment"]["wind_component_m_s"] = [-2.5, 2.5]
-          data.pop("curriculum", None)
-          data["active_curriculum_stage"] = {"stage": 5, "name": "held-out-independent-no-teacher"}
-          out = Path("training/runs/independent-held-out-domain-randomization.json")
-          out.write_text(json.dumps(data, indent=2))
-          PY
-
-      - name: Strong held-out final exam - 100 episodes per profile and candidate
+      - name: Stage 2 - continue for 1M steps with the teacher disabled
         run: |
           set -euo pipefail
-          model_dir="training/runs/universal-quad-v5-foundation-stage1-independent"
-          for candidate in final best; do
-            if [ "$candidate" = final ]; then model="$model_dir/final_model.zip"; else model="$model_dir/best/best_model.zip"; fi
-            test -s "$model"
-            python training/evaluate_universal_ppo.py \
-              --model "$model" --episodes 100 --seed 990001 \
-              --randomization-config training/runs/independent-held-out-domain-randomization.json \
-              --held-out --no-teacher --stable-hover-seconds 20 \
-              --output "$model_dir/final-test-$candidate.json" \
-              2>&1 | tee "$model_dir/final-test-$candidate.log"
-          done
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          d = Path("training/runs/universal-quad-v5-foundation-stage1-independent")
-          reports = {name: json.loads((d / f"final-test-{name}.json").read_text()) for name in ("final", "best")}
-          def score(r):
-              p = r["profiles"]
-              return (min(x["hover_success_rate"] for x in p),
-                      -max(x["crash_rate"] for x in p),
-                      min(x["takeoff_success_rate"] for x in p),
-                      sum(x["mean_stable_hover_seconds"] for x in p)/len(p),
-                      -sum(x["mean_motor_saturation_fraction"] for x in p)/len(p))
-          winner = max(reports, key=lambda k: score(reports[k]))
-          selected = reports[winner]
-          minimum_hover = min(x["hover_success_rate"] for x in selected["profiles"])
-          maximum_crash = max(x["crash_rate"] for x in selected["profiles"])
-          minimum_takeoff = min(x["takeoff_success_rate"] for x in selected["profiles"])
-          accepted = minimum_hover >= 0.75 and maximum_crash <= 0.10 and minimum_takeoff >= 0.90
-          summary = {
-              "training_initial_checkpoint": "previous stage-1 best_model.zip",
-              "training_timesteps": 2000000,
-              "teacher_guidance_during_training": 0.0,
-              "active_physics_curriculum_stage": 1,
-              "final_exam_episodes_per_profile_per_candidate": 100,
-              "candidates": {k: {"score": score(v), "profiles": v["profiles"]} for k,v in reports.items()},
-              "selected_candidate": winner,
-              "minimum_profile_hover_success_rate": minimum_hover,
-              "maximum_profile_crash_rate": maximum_crash,
-              "minimum_profile_takeoff_success_rate": minimum_takeoff,
-              "acceptance_thresholds": {"min_hover_success": 0.75, "max_crash_rate": 0.10, "min_takeoff_success": 0.90},
-              "accepted": accepted,
-              "simulation_only": True,
-              "physical_flight_eligible": False
-          }
-          (d / "independent-evaluation-summary.json").write_text(json.dumps(summary, indent=2))
-          print(json.dumps(summary, indent=2))
-          if not accepted:
-              raise SystemExit("Teacher-free held-out evaluation did not meet the acceptance gate.")
-          PY
+          teacher_final="training/runs/universal-quad-v5-foundation-stage2-teacher/final_model.zip"
+          test -s "$teacher_final" || { echo "Stage-2 teacher-trained final checkpoint is missing."; exit 1; }
+          python training/train_universal_ppo.py \
+            --timesteps 1000000 --n-envs 40 --seed 2043 \
+            --run-name universal-quad-v5-foundation-stage2-teacher-free \
+            --output-dir training/runs --curriculum-stage 2 --no-teacher \
+            --load-model "$teacher_final" \
+            --eval-episodes 10 --eval-frequency 100000 \
+            --checkpoint-frequency 20000 \
+            2>&1 | tee stage2-teacher-free-training.log
 
-      - name: Publish teacher-free model and full evaluation
+      - name: Publish stage-2 training outputs
         if: success()
         run: |
           set -euo pipefail
-          source="training/runs/universal-quad-v5-foundation-stage1-independent"
-          test -s "$source/final_model.zip"
-          test -s "$source/best/best_model.zip"
-          test -s "$source/metadata.json"
-          test -s "$source/final-test-final.json"
-          test -s "$source/final-test-best.json"
-          test -s "$source/independent-evaluation-summary.json"
-          target="training/models/universal-quad-v5-foundation/universal-quad-v5-foundation-stage1-independent"
+          source="training/runs"
+          teacher="universal-quad-v5-foundation-stage2-teacher"
+          teacher_free="universal-quad-v5-foundation-stage2-teacher-free"
+          test -s "$source/$teacher/final_model.zip"
+          test -s "$source/$teacher/best/best_model.zip"
+          test -s "$source/$teacher-free/final_model.zip"
+          test -s "$source/$teacher-free/best/best_model.zip"
+          target="training/models/universal-quad-v5-foundation/universal-quad-v5-foundation-stage2-teacher-to-teacher-free"
           mkdir -p "$target"
-          rsync -a --exclude 'tensorboard/' --exclude '*.csv' "$source/" "$target/"
-          cp training/runs/initial-stage1-checkpoint.sha256 "$target/"
-          cp training/runs/independent-held-out-domain-randomization.json "$target/"
+          cp -a "$source/$teacher" "$target/"
+          cp -a "$source/$teacher_free" "$target/"
+          cp "$source/stage2-initial-from-previous-latest_model.zip" "$target/"
+          cp "$source/stage2-initial-checkpoint.sha256" "$target/"
+          cat > "$target/training-plan.json" <<'JSON'
+          {
+            "active_curriculum_stage": 2,
+            "stage_1_training": false,
+            "initial_checkpoint_source": "latest_model.zip from workflow run 41149494807, completed stage 1",
+            "stage_2_teacher_segment_timesteps": 1000000,
+            "stage_2_teacher_weight": 0.6,
+            "stage_2_teacher_free_segment_timesteps": 1000000,
+            "stage_2_teacher_free_weight": 0.0,
+            "second_segment_initial_checkpoint": "stage-2 teacher segment final_model.zip",
+            "parallel_environments": 40,
+            "total_stage_2_timesteps": 2000000,
+            "simulation_only": true,
+            "physical_flight_eligible": false
+          }
+          JSON
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$target"
           if ! git diff --cached --quiet; then
             find "$target" -type f -size +90M -print -quit | grep -q . && { echo "Checkpoint exceeds 90 MB."; exit 1; } || true
-            git commit -m "Add teacher-free stage-1 PPO refinement and held-out evaluation"
+            git commit -m "Train universal PPO stage 2 with teacher then teacher-free"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
-      - name: Print teacher-free training summary and log tail
+      - name: Print stage-2 training summaries
         if: always()
         run: |
-          echo '===== TEACHER-FREE EVALUATION SUMMARY ====='
-          if [ -f training/runs/universal-quad-v5-foundation-stage1-independent/independent-evaluation-summary.json ]; then cat training/runs/universal-quad-v5-foundation-stage1-independent/independent-evaluation-summary.json; else echo 'Final evaluation summary not produced'; fi
-          echo '===== TEACHER-FREE TRAINING LOG TAIL ====='
-          if [ -f teacher-free-training.log ]; then tail -c 50000 teacher-free-training.log; else echo 'Training log not produced'; fi
+          for log in stage2-teacher-training.log stage2-teacher-free-training.log; do
+            echo "===== $log ====="
+            if [ -f "$log" ]; then tail -c 30000 "$log"; else echo "Log not produced"; fi
+          done
+          for state in \
+            training/runs/universal-quad-v5-foundation-stage2-teacher/training_state.json \
+            training/runs/universal-quad-v5-foundation-stage2-teacher-free/training_state.json; do
+            echo "===== $state ====="
+            if [ -f "$state" ]; then cat "$state"; else echo "State not produced"; fi
+          done
 
-      - name: Upload training backup
+      - name: Upload stage-2 training backup
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: universal-ppo-five-stage-backup
+          name: universal-ppo-stage2-teacher-to-teacher-free-backup
           path: |
             training/runs/
             training/models/universal-quad-v5-foundation/
-            single-stage-training.log
-            teacher-free-training.log
+            stage2-teacher-training.log
+            stage2-teacher-free-training.log
           if-no-files-found: warn
           retention-days: 90
