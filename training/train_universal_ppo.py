@@ -440,8 +440,6 @@ def main(argv=None):
         raise SystemExit("--teacher-weight must be between 0.0 and 1.0")
     if args.no_teacher and args.teacher_weight not in (None, 0.0):
         raise SystemExit("--no-teacher cannot be combined with a nonzero --teacher-weight")
-    if args.velocity_control and not args.no_teacher:
-        raise SystemExit("--velocity-control requires --no-teacher; hover guidance cannot track movement commands")
     if args.timesteps <= 0 or args.n_envs <= 0 or args.eval_frequency <= 0 or args.checkpoint_frequency <= 0 or args.eval_episodes <= 0:
         raise SystemExit("--timesteps, --n-envs, --eval-frequency, --checkpoint-frequency and --eval-episodes must be positive")
     if args.resume and not args.load_model:
@@ -563,7 +561,7 @@ def main(argv=None):
             "motor_allocator": "geometry-derived nominal-profile wrench allocation; randomized episode parameters hidden",
             "policy_is_hardware_conditioned": True,
             "profile_sampling": "adaptive weakness-weighted sampling; smoothed updates from balanced profile evaluation",
-            "reference_teacher_schedule": ({"stage_1": 0.0, "stage_2": 0.0, "stage_3": 0.0, "stage_4": 0.0, "stage_5": 0.0} if args.velocity_control else {"stage_1": 0.80, "stage_2": 0.60, "stage_3": 0.40, "stage_4": 0.20, "stage_5": 0.0}),
+            "reference_teacher_schedule": ({"stage_1": 0.80 if not args.no_teacher else 0.0, "stage_2": 0.80 if not args.no_teacher else 0.0, "stage_3": 0.80 if not args.no_teacher else 0.0, "stage_4": 0.80 if not args.no_teacher else 0.0, "stage_5": 0.80 if not args.no_teacher else 0.0} if args.velocity_control else {"stage_1": 0.80, "stage_2": 0.60, "stage_3": 0.40, "stage_4": 0.20, "stage_5": 0.0}),
             "reference_teacher_disabled_for_this_run": args.no_teacher,
             "reference_teacher_disabled_for_all_periodic_evaluations": True,
             "reference_teacher_weight_override": args.teacher_weight,
