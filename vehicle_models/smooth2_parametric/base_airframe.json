@@ -20,6 +20,10 @@
     "design_to_export": "(x, y, z) -> (x, -z, y)",
     "simulator_frame": "right-handed ENU; X lateral, Y longitudinal, Z up",
     "export_to_simulator": "(X, Y, Z) -> (X, Y, Z)",
+    "body_frame": "BODY_FORWARD_LEFT_UP",
+    "cad_to_body_flu": "(x_body, y_body, z_body) = (-Y_cad, X_cad, Z_cad)",
+    "body_forward": "positive body X; CAD nose is negative Y",
+    "body_left": "positive body Y; CAD positive X",
     "units": "metres internally; source CAD parameters are millimetres"
   },
   "geometry": {
