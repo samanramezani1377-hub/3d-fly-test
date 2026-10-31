@@ -200,6 +200,7 @@ class VehicleFamilyEnv(gym.Env):
         dt: float = 0.02, max_steps: int = 1500, history_length: int = 4,
         randomize: bool = True, curriculum_stage: int | None = None,
         sampling_weights_path: str | Path | None = None,
+        velocity_control: bool = False,
     ):
         super().__init__()
         self.profiles = load_vehicle_profiles(vehicle_family_path)
@@ -210,6 +211,7 @@ class VehicleFamilyEnv(gym.Env):
         self.randomization_path = Path(randomization_path)
         self.dt, self.max_steps, self.history_length = float(dt), int(max_steps), int(history_length)
         self.randomize, self.curriculum_stage = bool(randomize), curriculum_stage
+        self.velocity_control = bool(velocity_control)
         self.sampling_weights_path = Path(sampling_weights_path) if sampling_weights_path else None
         self.active_profile = None
         self.active_features = np.zeros(VEHICLE_FEATURE_SIZE, dtype=np.float32)
@@ -217,8 +219,18 @@ class VehicleFamilyEnv(gym.Env):
         self.action_space = spaces.Box(0.0, 1.0, shape=(4,), dtype=np.float32)
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf,
-            shape=(self.history_length * 16 + 2 + VEHICLE_FEATURE_SIZE,), dtype=np.float32,
+            shape=(self.history_length * 16 + 2 + (4 if self.velocity_control else 0) + VEHICLE_FEATURE_SIZE,), dtype=np.float32,
         )
+
+    def _combine_observation(self, observation: np.ndarray) -> np.ndarray:
+        # Keep the complete legacy observation byte-for-byte at the front.
+        # This lets checkpoint migration append four zero-initialized command
+        # inputs without shifting the twelve hardware-conditioning features.
+        if self.velocity_control:
+            legacy_state = observation[:-4]
+            command = observation[-4:]
+            return np.concatenate((legacy_state, self.active_features, command)).astype(np.float32)
+        return np.concatenate((observation, self.active_features)).astype(np.float32)
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
@@ -255,6 +267,7 @@ class VehicleFamilyEnv(gym.Env):
                 params=params, randomization_path=self.randomization_path, dt=self.dt,
                 max_steps=self.max_steps, history_length=self.history_length,
                 randomize=self.randomize, curriculum_stage=self.curriculum_stage,
+                velocity_control=self.velocity_control,
             )
         else:
             self.inner.base_params = params
@@ -267,7 +280,7 @@ class VehicleFamilyEnv(gym.Env):
             "vehicle_profile": self.active_profile["display_name"],
             "policy_observation_excludes_episode_randomization_ground_truth": True,
         }
-        return np.concatenate((obs, self.active_features)).astype(np.float32), info
+        return self._combine_observation(obs), info
 
     def step(self, action):
         if self.inner is None:
@@ -275,7 +288,7 @@ class VehicleFamilyEnv(gym.Env):
         obs, reward, terminated, truncated, info = self.inner.step(action)
         info = {**info, "vehicle_id": self.active_profile["vehicle_id"],
                 "calibration_status": self.active_profile["calibration_status"]}
-        return np.concatenate((obs, self.active_features)).astype(np.float32), reward, terminated, truncated, info
+        return self._combine_observation(obs), reward, terminated, truncated, info
 
     def close(self):
         if self.inner is not None:
