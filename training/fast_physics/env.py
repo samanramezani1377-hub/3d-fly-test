@@ -175,7 +175,6 @@ class AdaptiveDroneEnv(gym.Env):
             return velocity, yaw_rate
         selected = self.np_random.choice(4, size=axes, replace=False)
         command = np.zeros(4, dtype=np.float64)
-        command[:3][selected[selected < 3]] = 0.0
         for axis in selected:
             axis_limit = yaw_limit if axis == 3 else limits[axis]
             command[axis] = float(self.np_random.choice([-1.0, 1.0])) * magnitude * axis_limit
@@ -386,7 +385,9 @@ class AdaptiveDroneEnv(gym.Env):
         if self.velocity_control:
             velocity_tracking_error = measured_velocity_body - self.desired_velocity_body
             tracking_error_norm = float(np.linalg.norm(velocity_tracking_error))
-            yaw_rate_tracking_error = float(rates[2] - self.desired_yaw_rate_rad_s)
+            cos_pitch = max(abs(float(np.cos(attitude[1]))), 1e-3)
+            measured_yaw_rate = float(np.sin(attitude[0]) / cos_pitch * rates[1] + np.cos(attitude[0]) / cos_pitch * rates[2])
+            yaw_rate_tracking_error = measured_yaw_rate - self.desired_yaw_rate_rad_s
             base_reward = (
                 2.0 * np.exp(-altitude_error / 0.45)
                 + 1.0 * np.exp(-horizontal_error / 0.65)
@@ -491,6 +492,7 @@ class AdaptiveDroneEnv(gym.Env):
             "velocity_tracking_error_m_s": tracking_error_norm,
             "desired_yaw_rate_rad_s": float(self.desired_yaw_rate_rad_s),
             "yaw_rate_tracking_error_rad_s": float(yaw_rate_tracking_error),
+            "measured_yaw_rate_rad_s": float(measured_yaw_rate) if self.velocity_control else 0.0,
             "velocity_command_index": self._active_velocity_command_index,
             "velocity_command_sequence_length": len(self._velocity_command_sequence) if self._velocity_command_sequence is not None else 0,
             "velocity_command_sequence_complete": bool(self._velocity_command_sequence is not None and self._velocity_sequence_index >= len(self._velocity_command_sequence) and np.linalg.norm(self.desired_velocity_body) <= 1e-6 and abs(self.desired_yaw_rate_rad_s) <= 1e-6),
