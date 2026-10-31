@@ -111,7 +111,7 @@ jobs:
           assert abs(smooth2["propulsion"]["thrust_coefficient_n_per_rad_s2"] - 3.9133e-6) < 1e-10
           assert abs(smooth2["propulsion"]["max_rotor_speed_rad_s"] - 1088.3) < 0.2
           print("Smooth2 CAD/BEMT estimate is active in the PPO family profile; other generic profiles remain provisional:", status_by_id)
-          print("All four profiles enabled with explicit provisional-estimate status:", sorted(actual))
+          print("All four profiles enabled; Smooth2 uses CAD/BEMT screening estimates and the other three remain provisional:", sorted(actual))
           PY
           mkdir -p training/runs
           cp "$source_model" training/runs/universal-initial-from-1m-teacher-best.zip
