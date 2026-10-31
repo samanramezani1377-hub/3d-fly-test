@@ -67,9 +67,9 @@
       "propulsion": {
         "motor_name": "A2212/13T 1000KV reference",
         "kv_rpm_per_volt": 1000,
-        "max_rotor_speed_rad_s": 1088.3,
-        "thrust_coefficient_n_per_rad_s2": 0.0000039133,
-        "torque_to_thrust_m": 0.01112,
+        "max_rotor_speed_rad_s": 1051.8,
+        "thrust_coefficient_n_per_rad_s2": 0.00000553666,
+        "torque_to_thrust_m": 0.01294,
         "motor_time_constant_s": 0.045,
         "nominal_battery_voltage_v": 11.1,
         "battery_cells": 3,
