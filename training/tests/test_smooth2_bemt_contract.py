@@ -175,3 +175,28 @@ def test_smooth2_equal_motor_command_has_equal_static_thrust_and_zero_body_torqu
     assert np.allclose(torques, np.zeros(3), atol=1e-9)
     assert np.allclose(info["rotor_reaction_torque_sign"], params.spin_signs)
     assert np.allclose(info["motor_effectiveness"], np.ones(4))
+
+def test_smooth2_yaw_allocator_tracks_the_static_bemt_reaction_torque_curve():
+    profile = smooth2_profile()
+    params = profile_to_parameters(profile)
+    model = BladeElementPropeller(params.propeller_bemt)
+    requested_yaw_torque = 0.0005
+    requested_collective = params.mass_kg * 9.80665
+    commands = wrench_to_motor_commands(
+        np.array([requested_collective, 0.0, 0.0, requested_yaw_torque]),
+        params,
+    )
+    omega = commands.astype(np.float64) * params.max_rotor_speed_rad_s * params.voltage_factor
+    reference_ratio = float(params.propeller_bemt["reference_torque_to_thrust_m"])
+    torque_scale = params.torque_to_thrust_m / reference_ratio
+    shaft_torque = np.asarray(
+        [model.evaluate(float(speed), 0.0)[1] for speed in omega],
+        dtype=np.float64,
+    ) * torque_scale * np.asarray(params.motor_effectiveness)
+    realized_yaw_torque = float(np.dot(np.asarray(params.spin_signs), shaft_torque))
+    assert np.all(np.isfinite(commands))
+    assert np.all((commands >= 0.0) & (commands <= 1.0))
+    assert np.isclose(realized_yaw_torque, requested_yaw_torque, rtol=0.03, atol=2e-5), (
+        requested_yaw_torque, realized_yaw_torque, commands.tolist()
+    )
+
