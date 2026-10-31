@@ -1,4 +1,4 @@
-name: Smooth2 PPO - Five-stage body-relative velocity curriculum
+name: Smooth2 PPO - Five-stage 3D velocity and yaw-rate curriculum
 
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ env:
 
 jobs:
   train-smooth2:
-    name: Smooth2 only - 5 x 400K 3D velocity stages
+    name: Smooth2 only - 5 x 400K 3D velocity plus yaw-rate stages
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
@@ -87,7 +87,7 @@ jobs:
           cp "$source_selection" training/runs/smooth2-initial-from-1m-teacher-best-selection.json
           sha256sum "$source_model" | tee training/runs/smooth2-initial-from-1m-teacher-best.sha256
 
-      - name: Train five chained teacher-free 3D velocity stages
+      - name: Train five chained teacher-free 3D velocity and yaw-rate stages
         run: |
           set -euo pipefail
           checkpoint="training/runs/smooth2-initial-from-1m-teacher-best.zip"
@@ -95,7 +95,7 @@ jobs:
           for stage in 1 2 3 4 5; do
             teacher="$teacher_weight"
             run_name="smooth2-velocity-ppo-stage-${stage}"
-            echo "===== Smooth2 velocity stage $stage: 400K steps, teacher disabled ====="
+            echo "===== Smooth2 velocity+yaw stage $stage: 400K steps, teacher disabled ====="
             python training/train_universal_ppo.py \
               --timesteps "$STAGE_STEPS" --n-envs "$N_ENVS" \
               --seed "$((2042 + stage))" \
@@ -136,25 +136,30 @@ jobs:
             "stages": 5,
             "timesteps_per_stage": 400000,
             "total_additional_timesteps": 2000000,
-            "training_mode": "nose-relative 3D velocity tracking with hover warm-start",
-            "velocity_command_frame": "yaw-aligned nose-forward/nose-left plus world-up",
+            "training_mode": "nose-relative 3D velocity tracking plus independent yaw-rate control with hover warm-start",
+            "velocity_command_frame": "yaw-aligned nose-forward/nose-left plus world-up; positive yaw rate turns nose left (counter-clockwise viewed from above)",
+            "yaw_rate_command_limits_deg_s_by_stage": {"stage_1": 20, "stage_2": 35, "stage_3": 50, "stage_4": 70, "stage_5": 90},
+            "yaw_rate_command_units": "radians_per_second internally; degrees_per_second in this plan for readability",
             "velocity_command_limits_m_s": [1.5, 1.5, 0.75],
             "velocity_command_curriculum": {
-              "stage_1": "single-axis low speed",
-              "stage_2": "single-axis medium speed",
-              "stage_3": "two-axis combinations",
-              "stage_4": "two/three-axis combinations",
-              "stage_5": "continuous random 3D commands"
+              "stage_1": "single-axis low speed including yaw-only turns",
+              "stage_2": "single-axis medium speed including yaw",
+              "stage_3": "two-axis translation/yaw combinations",
+              "stage_4": "two/three-axis translation/yaw combinations",
+              "stage_5": "continuous random 3D velocity and yaw-rate commands"
             },
             "teacher_training_weights": [0.0, 0.0, 0.0, 0.0, 0.0],
             "periodic_evaluation_teacher_weight": 0.0,
             "evaluation_frequency": 200000,
             "evaluation_episodes": 10,
-            "evaluation_objective": "teacher-free 3D velocity tracking, altitude/path tracking, crash and motor-saturation rates",
-            "evaluation_direction_coverage": "all 6 cardinal + 12 two-axis + 8 three-axis combinations per episode, with immediate reversals and a neutral braking tail",
-            "evaluation_command_hold_steps": 45,
+            "evaluation_objective": "teacher-free 3D velocity and yaw-rate tracking, in-place rotation, combined translation/rotation, altitude/path tracking, crash and motor-saturation rates",
+            "evaluation_direction_coverage": "26 translational commands with combined yaw, four pure in-place yaw commands, and a neutral linear/angular braking tail per episode",
+            "evaluation_command_hold_steps": 35,
             "evaluation_target_altitude_m": [2.0, 2.4],
             "evaluation_neutral_stop_acceptance_seconds": 3.5,
+            "evaluation_mean_yaw_rate_error_acceptance_rad_s": 0.30,
+            "evaluation_worst_yaw_command_error_acceptance_rad_s": 0.50,
+            "evaluation_neutral_yaw_rate_acceptance_rad_s": 0.15,
             "evaluation_mean_tracking_error_acceptance_m_s": 0.50,
             "evaluation_worst_direction_error_acceptance_m_s": 0.85,
             "evaluation_neutral_speed_acceptance_m_s": 0.25,
@@ -164,7 +169,7 @@ jobs:
             "geometry_and_rotor_positions": "fixed Smooth2 CAD geometry",
             "randomized_parameters": ["mass", "center_of_mass", "inertia_tensor", "motor_effectiveness", "motor_response_time", "maximum_rotor_speed", "thrust_coefficient", "torque_to_thrust_ratio", "battery_voltage_factor", "aerodynamic_drag", "wind", "sensor_noise"],
             "episode_randomization_ground_truth_hidden": true,
-            "checkpoint_migration": "copy compatible hover policy weights; zero-initialize the three new velocity-command input columns; initialize a fresh optimizer",
+            "checkpoint_migration": "copy compatible hover policy weights; zero-initialize four new command input columns (forward, left, up, yaw rate); initialize a fresh optimizer",
             "simulation_only": true,
             "physical_flight_eligible": false
           }
