@@ -28,7 +28,7 @@ def main() -> None:
     config = read_json("config/drone.json")
     calibration = read_json("vehicle_models/smooth2_parametric/physics_calibration.json")
     revision_text = (ROOT / "assets/preflight/MODEL_SOURCE_REVISION.md").read_text(encoding="utf-8")
-    revision_match = re.search(r"Source commit:\s*([0-9a-f]{40})", revision_text)
+    revision_match = re.search(r"Source commit:.*?([0-9a-f]{40})", revision_text)
     if not revision_match:
         raise SystemExit("Pinned CAD source commit is missing from MODEL_SOURCE_REVISION.md")
     source_revision = revision_match.group(1)
