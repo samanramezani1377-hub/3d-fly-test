@@ -46,6 +46,7 @@ def main(argv=None):
     p.add_argument("--randomization-config", type=Path, default=Path(__file__).resolve().parents[1] / "vehicle_models/family/domain_randomization.json")
     p.add_argument("--curriculum-stage", type=int, choices=(1, 2, 3, 4, 5), default=5)
     p.add_argument("--held-out", action="store_true", help="Use independent evaluation bounds without applying a training stage.")
+    p.add_argument("--no-teacher", action="store_true", help="Force zero reference-teacher guidance during evaluation.")
     p.add_argument("--episodes", type=int, default=20)
     p.add_argument("--seed", type=int, default=90000)
     p.add_argument("--stable-hover-seconds", type=float, default=STABLE_HOVER_SECONDS)
@@ -72,7 +73,7 @@ def main(argv=None):
             randomization_path=args.randomization_config,
             curriculum_stage=None if args.held_out else args.curriculum_stage,
             vehicle_id=profile["vehicle_id"], randomize=True,
-        ))
+        ), disable_teacher=args.no_teacher)
         plant_env = env.env
         episodes = []
         required_stable_steps = None
@@ -141,6 +142,7 @@ def main(argv=None):
             "vehicle_id": profile["vehicle_id"],
             "calibration_status": profile["calibration_status"],
             "reference_teacher_weight": env.reference_weight,
+            "teacher_disabled": args.no_teacher,
             "episodes": episodes,
             "hover_success_rate": sum(e["hover_success"] for e in episodes) / count,
             "crash_rate": sum(e["crashed"] for e in episodes) / count,
@@ -176,6 +178,7 @@ def main(argv=None):
         },
         "profiles": reports,
         "evaluation_distribution": "independent_held_out" if args.held_out else f"curriculum_stage_{args.curriculum_stage}",
+        "reference_teacher_disabled": args.no_teacher,
         "policy_action_semantics": "unbounded_gaussian_tanh_squashed_collective_roll_pitch_yaw_body_wrench",
         "motor_allocator": "geometry-derived nominal-profile wrench allocation",
         "observation_scaling": "dimensionless state/action history",
