@@ -1,8 +1,9 @@
 """Vectorized-friendly, deterministic 6-DoF rigid-body quadrotor plant.
 
-This is a fast research model, not CFD. It uses first-order motor lag,
-quadratic rotor thrust, reaction torque, rigid-body Euler equations and
-quadratic translational drag. All physical coefficients are explicit inputs.
+This is a fast 6-DoF research model, not CFD. It uses exact-discrete first-order
+motor lag, quadratic rotor thrust, reaction/optional gyroscopic torque, quaternion
+attitude integration and body-axis linear/quadratic translational drag. Physical
+coefficients remain explicit and calibration-dependent.
 """
 from __future__ import annotations
 
