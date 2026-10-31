@@ -1,18 +1,57 @@
 {
   "schema_version": 1,
   "vehicle_id": "smooth2-parametric-v1",
-  "status": "uncalibrated",
+  "status": "cad_and_bemt_estimated_provisional",
   "physical_properties": {
     "coordinate_frame": "CAD_EXPORT_Z_UP",
-    "takeoff_mass_kg": null,
-    "center_of_mass_m": null,
-    "inertia_tensor_kg_m2": null,
+    "takeoff_mass_kg": 0.6,
+    "center_of_mass_m": [
+      0,
+      0,
+      0
+    ],
+    "inertia_tensor_kg_m2": [
+      [
+        0.0038,
+        0,
+        0
+      ],
+      [
+        0,
+        0.0038,
+        0
+      ],
+      [
+        0,
+        0,
+        0.0075
+      ]
+    ],
     "linear_drag_kg_s": 0.08,
     "quadratic_drag_kg_m": 0.015,
     "angular_damping_nms": 0.002,
     "linear_drag_body_kg_s": null,
     "quadratic_drag_body_kg_m": null,
-    "evidence": "scalar drag and damping defaults are numerical regularizers; body-axis drag coefficients and rotor polar inertia are unmeasured and remain unknown"
+    "evidence": "scalar drag and damping defaults are numerical regularizers; body-axis drag coefficients and rotor polar inertia are unmeasured and remain unknown",
+    "estimate_method": {
+      "mass": "0.6 kg engineering baseline retained as the nominal assembled mass; current CAD exports do not encode verified material assignments or electronics masses, so this is a BOM-level estimate rather than a mesh-density measurement.",
+      "cg": "CAD geometric origin estimate; battery/electronics placement uncertainty is covered by training randomization.",
+      "inertia": "component-layout approximation: four generic 53 g A2212 motors at CAD rotor stations, central frame/electronics/battery mass lump, plus small central component inertias. Not a CAD-solid integration or measured inertia tensor.",
+      "uncertainty": {
+        "mass_fractional": [
+          -0.25,
+          0.25
+        ],
+        "cg_offset_m": [
+          -0.015,
+          0.015
+        ],
+        "inertia_fractional": [
+          -0.35,
+          0.35
+        ]
+      }
+    }
   },
   "motor_propeller": {
     "motor_make": "Generic/unbranded A2212-series (exact manufacturer not identified)",
@@ -20,13 +59,13 @@
     "esc_model": null,
     "propeller_geometry_source": "3D repository kilo branch at 38d4820fc5f7e2208e6ce502ca6b54a83989196a; cad/parametric/model.params.json and output/smooth2-parametric/assembly-manifest.json. Four-blade parametric propeller; geometry is not a measured thrust/torque curve.",
     "battery_model": null,
-    "max_rotor_speed_rad_s": null,
-    "thrust_coefficient_n_per_rad_s2": null,
-    "torque_to_thrust_m": null,
-    "motor_time_constant_s": null,
-    "rotor_inertia_kg_m2": null,
-    "thrust_curve_source": null,
-    "torque_curve_source": null,
+    "max_rotor_speed_rad_s": 1088.3,
+    "thrust_coefficient_n_per_rad_s2": 0.0000039133,
+    "torque_to_thrust_m": 0.01112,
+    "motor_time_constant_s": 0.045,
+    "rotor_inertia_kg_m2": 0.00002,
+    "thrust_curve_source": "CAD blade-element/momentum screening calculation using cad/parametric/model.params.json prop_blade_stations, 4 blades, 158.999 mm diameter, 98.004 mm nominal pitch represented by the exported station twist, rho=1.225 kg/m3, Prandtl tip loss, generic A2212 motor model (1000KV, 0.12 ohm, 0.5A no-load), 3S 11.1V. Not a bench measurement.",
+    "torque_curve_source": "CAD blade-element/momentum screening calculation using cad/parametric/model.params.json prop_blade_stations, 4 blades, 158.999 mm diameter, 98.004 mm nominal pitch represented by the exported station twist, rho=1.225 kg/m3, Prandtl tip loss, generic A2212 motor model (1000KV, 0.12 ohm, 0.5A no-load), 3S 11.1V. Not a bench measurement.",
     "evidence": "Catalog identity and limits partially characterized from multiple vendor sources; exact manufacturer/lot and exact motor+ESC+battery+propeller bench calibration remain unknown.",
     "kv_rpm_per_volt": 1000,
     "motor_reference_file": "vehicle_models/components/a2212_1000kv_motor.json",
@@ -79,7 +118,92 @@
       },
       "source_parameter_file": "cad/parametric/model.params.json"
     },
-    "simulator_thrust_model_policy": "unchanged_by_CAD_sync; existing simulator thrust coefficient, torque proxy, motor lag and rotor-speed limits are preserved; no measured thrust curve is inferred from CAD."
+    "simulator_thrust_model_policy": "unchanged_by_CAD_sync; existing simulator thrust coefficient, torque proxy, motor lag and rotor-speed limits are preserved; no measured thrust curve is inferred from CAD.",
+    "bemt_estimate": {
+      "method": "existing cad/parametric/prop_bemt.py analyse() + motor_operating_point() model",
+      "assumptions": {
+        "air_density_kg_m3": 1.225,
+        "blade_count": 4,
+        "propeller_diameter_m": 0.158998964432,
+        "hub_radius_m": 0.01,
+        "motor_kv_rpm_per_v": 1000,
+        "motor_resistance_ohm": 0.12,
+        "no_load_current_a": 0.5,
+        "battery_voltage_v": 11.1,
+        "battery_cells": 3,
+        "prandtl_tip_loss": true
+      },
+      "full_throttle_operating_point": {
+        "rpm": 10392.47,
+        "omega_rad_s": 1088.3,
+        "thrust_per_rotor_N": 4.6349,
+        "torque_per_rotor_Nm": 0.05153,
+        "shaft_power_per_rotor_W": 56.08,
+        "current_per_motor_A": 5.9
+      },
+      "fitted_coefficients": {
+        "thrust_coefficient_n_per_rad_s2": 0.0000039133,
+        "torque_coefficient_nm_per_rad_s2": 4.351e-8,
+        "torque_to_thrust_m": 0.01112
+      },
+      "static_thrust_curve": [
+        {
+          "rpm": 4000,
+          "thrust_N": 0.6866,
+          "torque_Nm": 0.00763
+        },
+        {
+          "rpm": 5000,
+          "thrust_N": 1.0729,
+          "torque_Nm": 0.01193
+        },
+        {
+          "rpm": 6000,
+          "thrust_N": 1.5449,
+          "torque_Nm": 0.01718
+        },
+        {
+          "rpm": 7000,
+          "thrust_N": 2.1028,
+          "torque_Nm": 0.02338
+        },
+        {
+          "rpm": 8000,
+          "thrust_N": 2.7465,
+          "torque_Nm": 0.03053
+        },
+        {
+          "rpm": 9000,
+          "thrust_N": 3.4761,
+          "torque_Nm": 0.03865
+        },
+        {
+          "rpm": 10392,
+          "thrust_N": 4.6349,
+          "torque_Nm": 0.05153
+        }
+      ],
+      "vehicle_level": {
+        "total_static_thrust_N": 18.5396,
+        "nominal_mass_kg": 0.6,
+        "estimated_thrust_to_weight": 3.15
+      },
+      "uncertainty": {
+        "thrust_coefficient_fractional": [
+          -0.3,
+          0.3
+        ],
+        "rpm_fractional": [
+          -0.15,
+          0.05
+        ],
+        "torque_to_thrust_fractional": [
+          -0.3,
+          0.3
+        ]
+      },
+      "warning": "BEMT screening estimate, sensitive to station interpretation, airfoil polar assumptions, Reynolds number, blade flexibility, inflow, guard interference and motor vendor variation. Do not use as a verified real-flight limit."
+    }
   },
   "synthetic_software_test_values": {
     "warning": "Only enabled by an explicit software-only flag. Never use for physical predictions or real flight.",
@@ -99,15 +223,14 @@
     "torque_to_thrust_m": 0.012
   },
   "required_before_physical_calibration": [
-    "weigh the complete takeoff aircraft including battery and payload",
-    "measure CG in the declared CAD_EXPORT_Z_UP frame",
-    "calculate full inertia tensor from validated solids and verified material densities, then cross-check experimentally where practical",
-    "identify exact motor, ESC, battery and propeller combination",
-    "obtain or measure thrust, torque, RPM, voltage and current data over the operating range",
-    "verify rotor spin directions and motor numbering"
+    "replace nominal mass/CG/inertia priors with mesh integration using verified material densities and a verified electronics/battery bill of materials",
+    "identify exact motor, ESC, battery and propeller production parts",
+    "bench-test thrust, torque, RPM, voltage, current and temperature across throttle",
+    "measure motor step response to replace the 0.045 s lag estimate",
+    "verify actual propeller rotation and motor numbering"
   ],
   "electrical_model": {
-    "status": "provisional_estimate_only",
+    "status": "provisional_bemt_motor_model",
     "battery_reference": {
       "cell_count": 3,
       "nominal_voltage_v": 11.1,
@@ -117,14 +240,17 @@
     },
     "motor_reference": {
       "efficiency_upper_bound_fraction": 0.8,
-      "no_load_current_a": null,
+      "no_load_current_a": 0.5,
       "catalog_no_load_current_a_at_10v": 0.5,
-      "note": "Catalog no-load current is available for a generic A2212 vendor reference, but exact motor identity is not verified; it is intentionally not injected into the simulation."
+      "note": "Catalog no-load current is available for a generic A2212 vendor reference, but exact motor identity is not verified; it is intentionally not injected into the simulation.",
+      "resistance_ohm_assumed": 0.12
     },
     "esc": {
       "model": null,
       "continuous_current_limit_a": null,
-      "thermal_limit": null
+      "thermal_limit": null,
+      "continuous_current_limit_a_per_motor_assumed": 9,
+      "model_identity": "unknown"
     },
     "simulation_policy": "Estimate shaft-power-derived current/energy telemetry only. Do not apply battery voltage sag or current limiting until exact pack resistance and ESC limits are measured."
   }
