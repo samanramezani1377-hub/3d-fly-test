@@ -56,5 +56,10 @@ jobs:
       - name: Validate committed CAD assets
         run: python scripts/validate_preflight_assets.py
 
+      - name: Derive and validate Smooth2 CAD propulsion estimate
+        run: |
+          python scripts/derive_smooth2_propulsion.py --check
+          python -m pytest -q tests/test_smooth2_propulsion_derivation.py
+
       - name: Run existing CAD asset-validator tests
         run: python -m pytest -q tests/test_preflight_asset_validator.py
