@@ -107,7 +107,87 @@
             0.8
           ],
           "note": "Initial domain-randomization priors, not validated hardware limits."
-        }
+        },
+        "propeller_bemt": {
+          "model": "cad_station_blade_element_momentum",
+          "radius_m": 0.079499482216,
+          "hub_radius_m": 0.01,
+          "blade_count": 4,
+          "stations": [
+            [
+              0.1069,
+              0.011767,
+              32.23
+            ],
+            [
+              0.2,
+              0.014821999999999998,
+              27.3
+            ],
+            [
+              0.25,
+              0.016463000000000002,
+              25.99
+            ],
+            [
+              0.3,
+              0.018104,
+              25.06
+            ],
+            [
+              0.4,
+              0.016681,
+              21.53
+            ],
+            [
+              0.5,
+              0.015259,
+              18.98
+            ],
+            [
+              0.6,
+              0.013836000000000001,
+              16.99
+            ],
+            [
+              0.7,
+              0.012414,
+              15.36
+            ],
+            [
+              0.8,
+              0.010990999999999999,
+              13.96
+            ],
+            [
+              0.9,
+              0.009569000000000001,
+              12.72
+            ],
+            [
+              0.96,
+              0.008716,
+              12.04
+            ],
+            [
+              1,
+              0.008147,
+              11.59
+            ]
+          ],
+          "air_density_kg_m3": 1.225,
+          "zero_lift_angle_deg": -4.15448,
+          "cl_limit": 1.2,
+          "cd0": 0.012,
+          "cd_k": 0.01,
+          "integration_sections": 48,
+          "source_repository": "samanramezani1377-hub/3D",
+          "source_branch": "kilo",
+          "source_commit": "38d4820fc5f7e2208e6ce502ca6b54a83989196a",
+          "source_file": "cad/parametric/model.params.json",
+          "calibration": "screening_estimate_not_bench_measured"
+        },
+        "propeller_model_status": "runtime_BEMT_enabled_for_Smooth2_only"
       }
     },
     {
