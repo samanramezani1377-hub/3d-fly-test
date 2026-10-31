@@ -222,6 +222,16 @@ class VehicleFamilyEnv(gym.Env):
             shape=(self.history_length * 16 + 2 + (3 if self.velocity_control else 0) + VEHICLE_FEATURE_SIZE,), dtype=np.float32,
         )
 
+    def _combine_observation(self, observation: np.ndarray) -> np.ndarray:
+        # Keep the complete legacy observation byte-for-byte at the front.
+        # This lets checkpoint migration append three zero-initialized command
+        # inputs without shifting the twelve hardware-conditioning features.
+        if self.velocity_control:
+            legacy_state = observation[:-3]
+            command = observation[-3:]
+            return np.concatenate((legacy_state, self.active_features, command)).astype(np.float32)
+        return np.concatenate((observation, self.active_features)).astype(np.float32)
+
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
         requested = (options or {}).get("vehicle_id", self.pinned_vehicle_id)
@@ -270,7 +280,7 @@ class VehicleFamilyEnv(gym.Env):
             "vehicle_profile": self.active_profile["display_name"],
             "policy_observation_excludes_episode_randomization_ground_truth": True,
         }
-        return np.concatenate((obs, self.active_features)).astype(np.float32), info
+        return self._combine_observation(obs), info
 
     def step(self, action):
         if self.inner is None:
@@ -278,7 +288,7 @@ class VehicleFamilyEnv(gym.Env):
         obs, reward, terminated, truncated, info = self.inner.step(action)
         info = {**info, "vehicle_id": self.active_profile["vehicle_id"],
                 "calibration_status": self.active_profile["calibration_status"]}
-        return np.concatenate((obs, self.active_features)).astype(np.float32), reward, terminated, truncated, info
+        return self._combine_observation(obs), reward, terminated, truncated, info
 
     def close(self):
         if self.inner is not None:
