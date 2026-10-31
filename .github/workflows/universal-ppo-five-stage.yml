@@ -106,7 +106,13 @@ jobs:
           smooth2 = next(x for x in p["profiles"] if x["vehicle_id"] == "smooth2-a2212-custom-prop")
           assert abs(smooth2["propulsion"]["thrust_coefficient_n_per_rad_s2"] - 5.53666e-6) < 1e-10
           assert abs(smooth2["propulsion"]["max_rotor_speed_rad_s"] - 1051.8) < 0.2
-          print("Smooth2 CAD/BEMT estimate selected for this Smooth2-only curriculum:", status_by_id)
+          bemt = smooth2["propulsion"]["propeller_bemt"]
+          assert bemt["model"] == "cad_station_blade_element_momentum", bemt.get("model")
+          assert len(bemt["stations"]) >= 3 and bemt["integration_sections"] >= 8
+          mass = smooth2["physical"]["mass_properties_estimate"]
+          assert mass["status"] == "provisional_not_mesh_integrated", mass
+          assert len(smooth2["physical"]["inertia_kg_m2"]) == 3
+          print("Smooth2 CAD/BEMT profile and provisional mass/inertia estimates selected:", status_by_id)
           PY
           mkdir -p training/runs
           cp "$source_model" training/runs/universal-initial-from-1m-teacher-best.zip
