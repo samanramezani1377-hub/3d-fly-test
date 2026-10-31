@@ -18,7 +18,7 @@
 |---|---|---|
 | Complete takeoff mass | Unknown for the CAD airframe; family training uses a provisional 0.6 kg | Weigh the complete aircraft with installed battery, wiring and payload |
 | Centre of gravity | Unknown; software baseline uses a geometric-centre assumption | Measure in the documented CAD_EXPORT_Z_UP frame |
-| Full inertia tensor | A provisional symmetric 3x3 tensor is active; diagonal values are a component-lumped estimate, not mesh integration | Component masses, component CGs and centroidal inertias; cross-check the assembled result |
+| Full inertia tensor | A provisional symmetric 3x3 tensor and shifted CG are active from an explicit component-lumped BOM estimate; not mesh integration | Component masses, component CGs and centroidal inertias; cross-check the assembled result |
 | Motor identity | Generic A2212/13T 1000KV reference only | Manufacturer, exact SKU, winding and physical motor mass |
 | Motor time constant | 0.045 s software estimate; no step-response measurement | Synchronized motor command target and measured RPM log |
 | Battery identity | Provisional 3S 11.1 V / 2.2 Ah reference | Exact pack label, cell count, capacity and discharge rating |
