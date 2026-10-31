@@ -328,7 +328,7 @@
       "cl_limit": 1.2,
       "cd0": 0.012,
       "cd_k": 0.01,
-      "integration_sections": 48,
+      "integration_sections": 120,
       "source_repository": "samanramezani1377-hub/3D",
       "source_branch": "kilo",
       "source_commit": "38d4820fc5f7e2208e6ce502ca6b54a83989196a",
@@ -336,7 +336,8 @@
       "calibration": "screening_estimate_not_bench_measured",
       "reference_thrust_coefficient_n_per_rad_s2": 0.00000553666,
       "reference_torque_to_thrust_m": 0.01294
-    }
+    },
+    "electrical_model_status": "bemt_and_generic_motor_screening_estimate_not_bench_calibrated"
   },
   "synthetic_software_test_values": {
     "warning": "Only enabled by an explicit software-only flag. Never use for physical predictions or real flight.",
