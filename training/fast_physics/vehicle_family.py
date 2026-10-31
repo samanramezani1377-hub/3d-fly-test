@@ -17,7 +17,11 @@ import numpy as np
 from gymnasium import spaces
 
 from .env import AdaptiveDroneEnv
-from .parameters import VehicleParameters
+from .parameters import (
+    VehicleParameters,
+    cad_export_inertia_to_body_flu,
+    cad_export_vector_to_body_flu,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_VEHICLE_FAMILY = ROOT / "vehicle_models" / "family" / "vehicle_profiles.json"
@@ -61,6 +65,20 @@ def resolve_profile(profile: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"{p.get('vehicle_id')}: rotor {i} spin_sign must be +1 or -1")
         rotor_xyz.append(point)
     rotor_xyz = np.asarray(rotor_xyz)
+    source_frame = p.get("coordinate_frame", "BODY_FORWARD_LEFT_UP")
+    if source_frame == "CAD_EXPORT_Z_UP":
+        rotor_xyz = np.asarray([cad_export_vector_to_body_flu(point) for point in rotor_xyz])
+        p["rotors"] = [
+            {**rotor, "position_m": rotor_xyz[index].tolist()}
+            for index, rotor in enumerate(positions)
+        ]
+        physical["center_of_mass_m"] = cad_export_vector_to_body_flu(
+            physical["center_of_mass_m"]
+        ).tolist()
+        p["source_coordinate_frame"] = source_frame
+        p["coordinate_frame"] = "BODY_FORWARD_LEFT_UP"
+    elif source_frame != "BODY_FORWARD_LEFT_UP":
+        raise ValueError(f"{p.get('vehicle_id')}: unsupported coordinate frame {source_frame!r}")
     arm_radius_sq = float(np.mean(np.sum(rotor_xyz[:, :2] ** 2, axis=1)))
 
     inertia = physical.get("inertia_kg_m2")
@@ -76,6 +94,11 @@ def resolve_profile(profile: dict[str, Any]) -> dict[str, Any]:
         if arr.shape not in ((3,), (3, 3)) or not np.all(np.isfinite(arr)):
             raise ValueError(f"{p.get('vehicle_id')}: inertia must be a diagonal 3-vector or finite 3x3 matrix")
         physical["inertia_kg_m2"] = arr.reshape(-1).tolist()
+
+    if p.get("source_coordinate_frame") == "CAD_EXPORT_Z_UP":
+        physical["inertia_kg_m2"] = cad_export_inertia_to_body_flu(
+            physical["inertia_kg_m2"]
+        ).reshape(-1).tolist()
 
     voltage = propulsion.get("nominal_battery_voltage_v")
     kv = propulsion.get("kv_rpm_per_volt")
@@ -125,6 +148,9 @@ def profile_to_parameters(profile: dict[str, Any]) -> VehicleParameters:
         linear_drag_kg_s=float(physical.get("linear_drag_kg_s", 0.08)),
         quadratic_drag_kg_m=float(physical.get("quadratic_drag_kg_m", 0.015)),
         angular_damping_nms=float(physical.get("angular_damping_nms", 0.002)),
+        linear_drag_body_kg_s=tuple(physical["linear_drag_body_kg_s"]) if physical.get("linear_drag_body_kg_s") is not None else None,
+        quadratic_drag_body_kg_m=tuple(physical["quadratic_drag_body_kg_m"]) if physical.get("quadratic_drag_body_kg_m") is not None else None,
+        rotor_inertia_kg_m2=float(propulsion.get("rotor_inertia_kg_m2", 0.0)),
     )
 
 
