@@ -1,9 +1,14 @@
 # Current drone model
 
-When you are ready to test the real model's appearance, upload a file named exactly:
+The authoritative source is the pinned Smooth2 parametric CAD package:
 
-`models/current/drone.glb`
+- Repository: https://github.com/samanramezani1377-hub/3D
+- Branch: `kilo`
+- Revision: `38d4820fc5f7e2208e6ce502ca6b54a83989196a`
+- Committed source and exports: `cad/parametric/` and `output/smooth2-parametric/`
 
-The deployment will load this GLB into the browser scene as the drone's **visual mesh**. Adjust `model_scale` in `config/drone.json` if the size/orientation needs tuning.
+The browser-ready `drone.glb` is generated from all 26 committed component STL files during the existing Flight Lab Pages deployment. It is published at `models/current/drone.glb`; it is not a manually maintained binary copy. The four propellers remain separate named nodes so the Flight Lab can animate them using the active profile's rotor commands and spin directions.
 
-Important: the mesh does not automatically supply physical properties. Update the mass, rotor radius, motor arm length, motor KV, battery voltage, inertia and wind in `config/drone.json` as well. The current SkySim browser core uses a simplified quad-X physical model; GLB import is visual only and does not create collision geometry or infer aerodynamics.
+The export converts CAD millimetres to metres, rotates CAD Z-up into the browser's Y-up frame, and places the rotor plane at the visual origin. The model is visual geometry; physical parameters are still read from the vehicle profile and calibration files.
+
+The simulator profile geometry is checked against the pinned CAD parameters by `scripts/validate_smooth2_model_sync.py`. The Smooth2 profile remains provisional until mass, centre of gravity, inertia, exact motor/ESC/battery identity and measured thrust/torque curves are supplied. The GLB does not infer collision geometry, mass, inertia or aerodynamics.
