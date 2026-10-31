@@ -2,6 +2,7 @@ name: Physics, vehicle-family, hover and CAD validation
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
