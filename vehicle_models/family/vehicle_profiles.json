@@ -22,13 +22,84 @@
           0
         ],
         "inertia_kg_m2": [
-          0.0038,
-          0.0038,
-          0.0075
+          [
+            0.0038,
+            0,
+            0
+          ],
+          [
+            0,
+            0.0038,
+            0
+          ],
+          [
+            0,
+            0,
+            0.0075
+          ]
         ],
         "linear_drag_kg_s": 0.08,
         "quadratic_drag_kg_m": 0.015,
-        "angular_damping_nms": 0.002
+        "angular_damping_nms": 0.002,
+        "linear_drag_body_kg_s": [
+          0.02,
+          0.02,
+          0.012
+        ],
+        "quadratic_drag_body_kg_m": [
+          0.022,
+          0.022,
+          0.012
+        ],
+        "aerodynamic_estimate": {
+          "method": "CAD-envelope projected-area estimate using body, four arms and four vertical guard rings",
+          "reference_air_density_kg_m3": 1.225,
+          "drag_coefficient_assumed": 1,
+          "quadratic_drag_coefficients_kg_m": [
+            0.022,
+            0.022,
+            0.012
+          ],
+          "uncertainty_fractional": [
+            -0.5,
+            0.8
+          ],
+          "note": "Not CFD or wind-tunnel calibrated; guard/arm interference and propwash are not resolved."
+        },
+        "mass_properties_estimate": {
+          "method": "component-lumped engineering estimate constrained to nominal takeoff mass",
+          "total_mass_kg": 0.6,
+          "motor_count": 4,
+          "motor_mass_each_kg_assumed": 0.053,
+          "remaining_frame_battery_electronics_fasteners_mass_kg": 0.388,
+          "center_of_mass_m": [
+            0,
+            0,
+            0
+          ],
+          "inertia_tensor_kg_m2": [
+            [
+              0.0038,
+              0,
+              0
+            ],
+            [
+              0,
+              0.0038,
+              0
+            ],
+            [
+              0,
+              0,
+              0.0075
+            ]
+          ],
+          "uncertainty_fractional": [
+            -0.35,
+            0.35
+          ],
+          "note": "Full symmetric tensor is represented, but values are not integrated from STEP solids because material density assignments and verified battery/electronics BOM are absent. Zero products of inertia assume nominal bilateral symmetry."
+        }
       },
       "rotors": [
         {
