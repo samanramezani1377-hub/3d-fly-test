@@ -122,7 +122,7 @@ def policy_action_to_motor_commands(action, params: VehicleParameters) -> np.nda
 
 class BodyWrenchActionWrapper(gym.ActionWrapper):
     """Blend PPO body-wrench requests with a teacher that fades across stages."""
-    def __init__(self, env, disable_teacher: bool = False):
+    def __init__(self, env, disable_teacher: bool = False, reference_weight_override: float | None = None):
         super().__init__(env)
         # SB3 PPO requires finite Box bounds. Keep a deliberately wide
         # symmetric envelope because the policy emits raw Gaussian samples;
@@ -136,7 +136,14 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
         self._cached_params = None
         self._reference = None
         stage = getattr(env, "curriculum_stage", None)
-        self.reference_weight = 0.0 if disable_teacher else (REFERENCE_WEIGHT_BY_STAGE.get(int(stage), 0.0) if stage else 0.0)
+        if reference_weight_override is not None and not 0.0 <= float(reference_weight_override) <= 1.0:
+            raise ValueError("reference_weight_override must be between 0.0 and 1.0")
+        if disable_teacher:
+            self.reference_weight = 0.0
+        elif reference_weight_override is not None:
+            self.reference_weight = float(reference_weight_override)
+        else:
+            self.reference_weight = REFERENCE_WEIGHT_BY_STAGE.get(int(stage), 0.0) if stage else 0.0
 
     def reset(self, **kwargs):
         observation, info = self.env.reset(**kwargs)
