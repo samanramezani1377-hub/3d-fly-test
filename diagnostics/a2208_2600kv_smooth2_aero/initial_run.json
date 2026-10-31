@@ -1,0 +1,59 @@
+{
+  "branch": "diagnostic/a2208-2600kv-smooth2-aero",
+  "status": "initial_diagnostic_run_placeholder_polar",
+  "motor": "A2208/8T 2600KV",
+  "propeller": {
+    "type": "Smooth2 CAD snapshot",
+    "diameter_mm": 74.802,
+    "pitch_mm": 53.086,
+    "blades": 2
+  },
+  "method": "static BEMT with Prandtl tip/root loss coupled to approximate DC motor torque equilibrium",
+  "results": [
+    {
+      "battery": "3S nominal",
+      "voltage_at_motor_V": 11.1,
+      "loaded_rpm_estimate": 28300.09,
+      "thrust_N_per_motor": 1.33267,
+      "thrust_gf_per_motor": 135.89,
+      "current_A": 3.4734,
+      "input_W": 38.55,
+      "Reynolds_min": 6939.7,
+      "Reynolds_max": 51544.1
+    },
+    {
+      "battery": "2S nominal",
+      "voltage_at_motor_V": 7.4,
+      "loaded_rpm_estimate": 18939.29,
+      "thrust_N_per_motor": 0.59259,
+      "thrust_gf_per_motor": 60.43,
+      "current_A": 1.8654,
+      "input_W": 13.8,
+      "Reynolds_min": 4618.8,
+      "Reynolds_max": 34494.9
+    },
+    {
+      "battery": "3S with 0.6V sag",
+      "voltage_at_motor_V": 10.5,
+      "loaded_rpm_estimate": 26786.82,
+      "thrust_N_per_motor": 1.19342,
+      "thrust_gf_per_motor": 121.7,
+      "current_A": 3.1835,
+      "input_W": 33.43,
+      "Reynolds_min": 6563.7,
+      "Reynolds_max": 48787.9
+    }
+  ],
+  "nominal_3S_four_motor_total_thrust_gf": 543.58,
+  "limitations": [
+    "placeholder low-Re airfoil polar, not measured NACA 4410 data",
+    "no motor temperature or ESC efficiency model",
+    "battery sag is supplied as a scenario, not predicted from pack impedance",
+    "static thrust only; no guard interaction or ground effect",
+    "published motor data vary by vendor and exact variant",
+    "not flight calibration or safety approval"
+  ],
+  "production_profile_modified": false,
+  "ppo_training_started": false,
+  "pr23_modified": false
+}
