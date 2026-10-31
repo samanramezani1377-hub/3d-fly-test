@@ -339,7 +339,7 @@ jobs:
             "evaluation_neutral_speed_sustained_seconds": 0.5,
             "checkpoint_frequency": 50000,
             "parallel_environments": 100,
-            "geometry_and_rotor_positions": "fixed Smooth2 CAD geometry",
+            "geometry_and_rotor_positions": "profile-specific geometry and rotor positions; Smooth2 uses its pinned CAD-derived geometry",
             "minimum_worst_case_thrust_to_weight_ratio": 1.05,
             "thrust_margin_calculation": "includes mass, battery voltage squared, motor effectiveness, maximum rotor speed squared and thrust coefficient",
             "randomized_parameters": ["mass", "center_of_mass", "inertia_tensor", "motor_effectiveness", "motor_response_time", "maximum_rotor_speed", "thrust_coefficient", "torque_to_thrust_ratio", "battery_voltage_factor", "aerodynamic_drag", "wind", "sensor_noise"],
