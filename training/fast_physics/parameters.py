@@ -203,6 +203,15 @@ def load_vehicle_parameters(
         linear_drag_body_kg_s=tuple(physical["linear_drag_body_kg_s"]) if physical.get("linear_drag_body_kg_s") is not None else None,
         quadratic_drag_body_kg_m=tuple(physical["quadratic_drag_body_kg_m"]) if physical.get("quadratic_drag_body_kg_m") is not None else None,
         rotor_inertia_kg_m2=float(motor.get("rotor_inertia_kg_m2") or 0.0),
+        battery_nominal_voltage_v=(
+            float(calibration.get("electrical_model", {}).get("battery_reference", {}).get("nominal_voltage_v"))
+            if calibration.get("electrical_model", {}).get("battery_reference", {}).get("nominal_voltage_v") is not None else None
+        ),
+        battery_capacity_ah=(
+            float(calibration.get("electrical_model", {}).get("battery_reference", {}).get("capacity_ah"))
+            if calibration.get("electrical_model", {}).get("battery_reference", {}).get("capacity_ah") is not None else None
+        ),
+        motor_efficiency_upper_bound=float(calibration.get("electrical_model", {}).get("motor_reference", {}).get("efficiency_upper_bound_fraction", 0.8)),
     )
     params.validate()
     metadata = {
@@ -216,6 +225,7 @@ def load_vehicle_parameters(
         "source_coordinate_frame": source_frame,
         "physical_coordinate_frame": physical_frame,
         "body_coordinate_frame": "BODY_FORWARD_LEFT_UP",
+        "electrical_model_status": calibration.get("electrical_model", {}).get("status", "not_configured"),
     }
     return params, metadata
 
