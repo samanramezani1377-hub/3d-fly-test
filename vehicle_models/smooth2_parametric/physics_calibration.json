@@ -9,7 +9,9 @@
     "linear_drag_kg_s": 0.08,
     "quadratic_drag_kg_m": 0.015,
     "angular_damping_nms": 0.002,
-    "evidence": "drag and damping defaults are numerical regularizers for software experiments, not measured aircraft values"
+    "linear_drag_body_kg_s": null,
+    "quadratic_drag_body_kg_m": null,
+    "evidence": "scalar drag and damping defaults are numerical regularizers; body-axis drag coefficients and rotor polar inertia are unmeasured and remain unknown"
   },
   "motor_propeller": {
     "motor_make": "Generic/unbranded A2212-series (exact manufacturer not identified)",
@@ -21,6 +23,7 @@
     "thrust_coefficient_n_per_rad_s2": null,
     "torque_to_thrust_m": null,
     "motor_time_constant_s": null,
+    "rotor_inertia_kg_m2": null,
     "thrust_curve_source": null,
     "torque_curve_source": null,
     "evidence": "Catalog identity and limits partially characterized from multiple vendor sources; exact manufacturer/lot and exact motor+ESC+battery+propeller bench calibration remain unknown.",
