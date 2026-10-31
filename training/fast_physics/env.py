@@ -497,7 +497,7 @@ class AdaptiveDroneEnv(gym.Env):
             "ground_contact": ground_contact,
             "ground_clearance_m": float(ground_clearance_m),
             "ground_penetration_before_solve_m": float(ground_penetration_m),
-            "lowest_point_height_m": float(min(telemetry.get("ground_support_point_heights_m", [z - ground_clearance_m]))),
+            "lowest_point_height_m": float(min(telemetry.get("ground_support_point_heights_m") or [z - ground_clearance_m])),
             "altitude_m": float(z),
             "position_xyz_m": safe_state[:3].astype(float).tolist(),
             "position_error_m": float(np.linalg.norm(position_error)),
