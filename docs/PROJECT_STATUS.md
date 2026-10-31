@@ -172,6 +172,10 @@ The workflow is started manually from [GitHub Actions](https://github.com/samanr
 
 This training pipeline is a simulation research experiment, not a real-flight controller release. No checkpoint is approved for direct use on a physical aircraft.
 
+A mandatory teacher-only capability preflight now runs before checkpoint restoration and before any PPO training. It executes 12 randomized Stage-5 closed-loop episodes (three per vehicle profile) with teacher weight 1.0 and no PPO action contribution. All episodes must meet the same velocity/yaw mission thresholds used by the PPO evaluator, including pure in-place turns and neutral braking; otherwise the workflow stops and uploads the failure report. This checks a finite deterministic sample of configured randomization, not every possible disturbance or real-world flight condition. See [the operational PPO guide](UNIVERSAL_PPO_SINGLE_STAGE_GUIDE.md#mandatory-teacher-only-capability-gate-runs-before-checkpoint-restore-and-ppo).
+
+
+
 ## 8B. Robust/adaptive fast-physics backend (2026-10-30)
 
 An additive experimental backend has been introduced for the fixed `smooth2-parametric-v1` airframe. It contains a simplified 6-DoF plant, explicit physical calibration record, bounded domain randomization, hidden-parameter Gymnasium observations with four-frame state/action history, a separate PPO entry point, and unit tests.
