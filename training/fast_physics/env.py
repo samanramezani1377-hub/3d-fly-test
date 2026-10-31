@@ -98,8 +98,6 @@ class AdaptiveDroneEnv(gym.Env):
         self._last_action = np.zeros(4, dtype=np.float32)
         self._steps = 0
         self._taken_off = False
-        self.desired_velocity_body[:] = 0.0
-        self._command_steps_remaining = 100
         self._scenario_details: dict = {}
         self._last_finite_state = np.zeros(12, dtype=np.float32)
         self._previous_altitude_potential = 0.0
