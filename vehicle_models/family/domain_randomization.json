@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "description": "Smooth2-only staged domain randomization. CAD rotor geometry and propeller layout remain fixed; only bounded physical/propulsion/environment parameters vary per episode. Simulation research bounds, not flight-safety limits.",
+  "description": "Family PPO domain randomization. Smooth2 nominal physics now uses CAD/BEMT screening estimates; these ranges deliberately expose their uncertainty. All bounds are simulation priors, not verified flight limits.",
   "mass": {
     "scale": [
-      0.8,
-      1.1
+      0.75,
+      1.25
     ]
   },
   "center_of_mass": {
@@ -23,15 +23,15 @@
     ],
     "max_rotor_speed_scale": [
       0.85,
-      1.1
+      1.05
     ],
     "time_constant_scale": [
-      0.75,
-      1.25
+      0.5,
+      1.8
     ],
     "torque_to_thrust_scale": [
-      0.8,
-      1.2
+      0.7,
+      1.3
     ]
   },
   "battery": {
@@ -243,13 +243,13 @@
       "stage": 5,
       "name": "robust-generalization",
       "mass_scale": [
-        0.8,
-        1.06
+        0.75,
+        1.25
       ],
       "cg_offset_arm_fraction": 0.1,
       "inertia_scale": [
-        0.7,
-        1.4
+        0.65,
+        1.45
       ],
       "motor_effectiveness": [
         0.95,
@@ -268,27 +268,27 @@
         2
       ],
       "max_rotor_speed_scale": [
-        0.95,
-        1.1
+        0.85,
+        1.05
       ],
       "motor_time_constant_scale": [
-        0.75,
-        1.25
+        0.5,
+        1.8
       ],
       "torque_to_thrust_scale": [
-        0.8,
-        1.2
+        0.7,
+        1.3
       ],
       "thrust_coefficient_scale": [
-        0.95,
-        1.2
+        0.7,
+        1.3
       ]
     }
   ],
   "thrust": {
     "coefficient_scale": [
-      0.8,
-      1.2
+      0.7,
+      1.3
     ]
   }
 }
