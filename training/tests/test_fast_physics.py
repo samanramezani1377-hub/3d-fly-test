@@ -16,6 +16,7 @@ from fast_physics.ppo_action import wrench_to_motor_commands
 from fast_physics.vehicle_family import load_vehicle_profiles, profile_to_parameters
 from fast_physics.velocity_reference import VelocityYawReferenceController
 from fast_physics.dynamics import rotation_matrix, _quaternion_from_euler, _rotation_matrix_from_quaternion
+from fast_physics.propeller import BladeElementPropeller
 from fast_physics.system_identification import estimate_first_order_time_constant, estimate_body_axis_drag_coefficients
 from fast_physics.mass_properties import aggregate_mass_properties
 from evaluate_robust_ppo import summarize_episode
@@ -38,14 +39,29 @@ def synthetic_params():
     )
 
 
-def test_unknown_calibration_is_not_silently_filled():
+def _write_incomplete_calibration(tmp_path):
+    calibration = json.loads(CALIBRATION.read_text(encoding="utf-8"))
+    physical = calibration["physical_properties"]
+    motor = calibration["motor_propeller"]
+    for key in ("takeoff_mass_kg", "center_of_mass_m", "inertia_tensor_kg_m2"):
+        physical[key] = None
+    for key in ("max_rotor_speed_rad_s", "thrust_coefficient_n_per_rad_s2", "torque_to_thrust_m"):
+        motor[key] = None
+    path = tmp_path / "incomplete-calibration.json"
+    path.write_text(json.dumps(calibration), encoding="utf-8")
+    return path
+
+
+def test_unknown_calibration_is_not_silently_filled(tmp_path):
+    incomplete = _write_incomplete_calibration(tmp_path)
     with pytest.raises(ValueError, match="Physical calibration is incomplete"):
-        load_vehicle_parameters(AIRFRAME, CALIBRATION)
+        load_vehicle_parameters(AIRFRAME, incomplete)
 
 
-def test_synthetic_calibration_requires_explicit_opt_in():
+def test_synthetic_calibration_requires_explicit_opt_in(tmp_path):
+    incomplete = _write_incomplete_calibration(tmp_path)
     params, metadata = load_vehicle_parameters(
-        AIRFRAME, CALIBRATION, allow_synthetic_calibration=True
+        AIRFRAME, incomplete, allow_synthetic_calibration=True
     )
     assert metadata["synthetic_calibration_used"] is True
     assert params.mass_kg == pytest.approx(0.6)
@@ -253,7 +269,7 @@ def test_smooth2_cad_frame_is_converted_to_forward_left_up_body_frame():
     ])
     assert np.allclose(params.rotor_positions_m, expected)
     # The 90-degree frame rotation swaps CAD X/Y principal inertias.
-    assert np.allclose(params.inertia_matrix, np.diag([0.006, 0.004, 0.004]))
+    assert np.allclose(params.inertia_matrix, np.diag([0.004031247909363858, 0.003935447909363858, 0.007722739818727713]))
 
 
 def test_smooth2_family_profile_coordinate_conversion_is_idempotent():
@@ -433,12 +449,13 @@ def test_a2212_catalog_reference_is_recorded_without_claiming_physical_calibrati
     assert motor["confirmed_or_repeated_catalog_values"]["internal_resistance_ohm_catalog"] == pytest.approx(0.09)
     assert len(motor["published_static_test_points"]) >= 2
     assert calibration["motor_propeller"]["kv_rpm_per_volt"] == 1000
-    assert calibration["motor_propeller"]["max_rotor_speed_rad_s"] is None
-    assert calibration["motor_propeller"]["thrust_coefficient_n_per_rad_s2"] is None
-    assert calibration["motor_propeller"]["torque_to_thrust_m"] is None
-    assert calibration["motor_propeller"]["motor_time_constant_s"] is None
-    with pytest.raises(ValueError, match="Physical calibration is incomplete"):
-        load_vehicle_parameters(AIRFRAME, CALIBRATION)
+    assert calibration["motor_propeller"]["max_rotor_speed_rad_s"] == pytest.approx(1051.8)
+    assert calibration["motor_propeller"]["thrust_coefficient_n_per_rad_s2"] == pytest.approx(5.53666e-6)
+    assert calibration["motor_propeller"]["torque_to_thrust_m"] == pytest.approx(0.01294)
+    assert calibration["motor_propeller"]["motor_time_constant_s"] == pytest.approx(0.045)
+    assert calibration["motor_propeller"]["electrical_model_status"] == "bemt_and_generic_motor_screening_estimate_not_bench_calibrated"
+    params, metadata = load_vehicle_parameters(AIRFRAME, CALIBRATION)
+    assert metadata["synthetic_calibration_used"] is False
 
 
 def test_electrical_telemetry_estimates_current_and_battery_consumption_without_claiming_voltage_sag():
@@ -476,7 +493,11 @@ def test_vehicle_profiles_expose_nominal_battery_capacity_for_telemetry():
         assert params.battery_nominal_voltage_v == pytest.approx(profile["propulsion"]["nominal_battery_voltage_v"])
         assert params.battery_capacity_ah == pytest.approx(profile["propulsion"]["battery_capacity_ah"])
         assert profile["propulsion"]["battery_internal_resistance_ohm"] is None
-        assert profile["propulsion"]["esc_current_limit_a_per_motor"] is None
+        if profile["vehicle_id"] == "smooth2-a2212-custom-prop":
+            assert profile["propulsion"]["esc_current_limit_a_per_motor"] == 9
+            assert profile["propulsion"]["electrical_model_status"] == "bemt_and_generic_motor_screening_estimate_not_bench_calibrated"
+        else:
+            assert profile["propulsion"]["esc_current_limit_a_per_motor"] is None
 
 
 def test_first_order_motor_time_constant_can_be_identified_from_rpm_step_log():
@@ -514,3 +535,21 @@ def test_body_axis_drag_identification_recovers_linear_and_quadratic_coefficient
     assert result["linear_drag_body_kg_s"] == pytest.approx(expected_linear, rel=1e-8)
     assert result["quadratic_drag_body_kg_m"] == pytest.approx(expected_quadratic, rel=1e-8)
     assert result["fit_r_squared_by_axis"] == pytest.approx([1.0, 1.0, 1.0], abs=1e-10)
+
+
+def test_smooth2_runtime_bemt_uses_cad_blade_stations_and_reports_model_status():
+    params, metadata = load_vehicle_parameters(AIRFRAME, CALIBRATION)
+    assert params.propeller_bemt is not None
+    assert metadata["synthetic_calibration_used"] is False
+    propeller = BladeElementPropeller(params.propeller_bemt)
+    thrust, torque = propeller.evaluate(params.max_rotor_speed_rad_s)
+    assert thrust == pytest.approx(6.125, rel=0.12)
+    assert torque == pytest.approx(0.07927, rel=0.15)
+    assert propeller.evaluate(0.0) == (0.0, 0.0)
+
+    plant = FastQuadrotor(params)
+    plant.motor_omega[:] = params.max_rotor_speed_rad_s
+    _, telemetry = plant.step(np.ones(4, dtype=np.float64))
+    assert telemetry["thrust_model_status"].startswith("runtime_CAD_station_BEMT")
+    assert telemetry["total_thrust_n"] == pytest.approx(4.0 * thrust, rel=0.03)
+    assert len(telemetry["rotor_shaft_torque_nm"]) == 4

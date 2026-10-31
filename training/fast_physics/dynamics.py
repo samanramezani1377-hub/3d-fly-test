@@ -10,6 +10,7 @@ from __future__ import annotations
 import numpy as np
 
 from .parameters import VehicleParameters
+from .propeller import BladeElementPropeller
 
 
 def rotation_matrix(angles: np.ndarray) -> np.ndarray:
@@ -76,6 +77,7 @@ class FastQuadrotor:
         if not np.isfinite(dt) or dt <= 0 or not np.isfinite(gravity_m_s2) or gravity_m_s2 <= 0:
             raise ValueError("dt and gravity must be finite and positive")
         self.params = params
+        self.propeller_model = BladeElementPropeller(params.propeller_bemt) if params.propeller_bemt else None
         self.dt = float(dt)
         self.gravity = float(gravity_m_s2)
         self.position = np.zeros(3, dtype=np.float64)
@@ -122,16 +124,50 @@ class FastQuadrotor:
         self.motor_omega += alpha * (target_omega - self.motor_omega)
         motor_omega_dot = (self.motor_omega - previous_motor_omega) / self.dt
 
-        thrusts = (
-            p.thrust_coefficient_n_per_rad_s2
-            * self.motor_omega ** 2
-            * np.asarray(p.motor_effectiveness, dtype=np.float64)
+        # Reconstruct attitude before rotor aerodynamics so each blade model
+        # sees local axial inflow, including body rotation at the rotor station.
+        quaternion = _quaternion_from_euler(self.attitude)
+        rot = _rotation_matrix_from_quaternion(quaternion)
+        air_velocity_world = self.velocity - self.wind
+        air_velocity_body = rot.T @ air_velocity_world
+        rotor_positions = np.asarray(p.rotor_positions_m, dtype=np.float64) - np.asarray(
+            p.center_of_mass_m, dtype=np.float64
         )
+        local_air_velocity = air_velocity_body[None, :] + np.cross(
+            np.broadcast_to(self.angular_velocity, rotor_positions.shape), rotor_positions
+        )
+        if self.propeller_model is not None:
+            bemt_results = [
+                self.propeller_model.evaluate(
+                    omega, axial_inflow_m_s=-float(local_air_velocity[i, 2])
+                )
+                for i, omega in enumerate(self.motor_omega)
+            ]
+            motor_scale = np.asarray(p.motor_effectiveness, dtype=np.float64)
+            thrust_scale = (
+                p.thrust_coefficient_n_per_rad_s2
+                / float(p.propeller_bemt.get("reference_thrust_coefficient_n_per_rad_s2", p.thrust_coefficient_n_per_rad_s2))
+            )
+            torque_scale = (
+                p.torque_to_thrust_m
+                / float(p.propeller_bemt.get("reference_torque_to_thrust_m", p.torque_to_thrust_m))
+            )
+            thrusts = np.asarray([item[0] for item in bemt_results], dtype=np.float64) * thrust_scale * motor_scale
+            rotor_shaft_torque_nm = np.asarray([item[1] for item in bemt_results], dtype=np.float64) * torque_scale * motor_scale
+            thrust_model_status = "runtime_CAD_station_BEMT_with_axial_inflow_and_randomized_effectiveness"
+        else:
+            thrusts = (
+                p.thrust_coefficient_n_per_rad_s2
+                * self.motor_omega ** 2
+                * np.asarray(p.motor_effectiveness, dtype=np.float64)
+            )
+            rotor_shaft_torque_nm = p.torque_to_thrust_m * thrusts
+            thrust_model_status = "quadratic_coefficient_fallback"
         # Electrical telemetry is a model-based estimate from the configured
         # reaction-torque proxy. It deliberately excludes no-load, copper,
         # ESC and wiring losses; no battery sag is applied because pack IR and
         # ESC limits are not characterized. It must not be read as measured current.
-        estimated_shaft_torque_nm = p.torque_to_thrust_m * thrusts
+        estimated_shaft_torque_nm = rotor_shaft_torque_nm
         estimated_shaft_power_w = np.abs(estimated_shaft_torque_nm * self.motor_omega)
         if p.battery_nominal_voltage_v is not None:
             estimated_motor_current_a = estimated_shaft_power_w / (
@@ -150,16 +186,12 @@ class FastQuadrotor:
             estimated_battery_current_a = None
             estimated_electrical_power_w = None
             battery_soc_estimate = None
-        rotor_positions = np.asarray(p.rotor_positions_m, dtype=np.float64) - np.asarray(
-            p.center_of_mass_m, dtype=np.float64
-        )
         forces_body = np.zeros((4, 3), dtype=np.float64)
         forces_body[:, 2] = thrusts
         torques_body = np.cross(rotor_positions, forces_body)
         torques_body[:, 2] += (
             np.asarray(p.spin_signs, dtype=np.float64)
-            * p.torque_to_thrust_m
-            * thrusts
+            * rotor_shaft_torque_nm
         )
         total_force_body = forces_body.sum(axis=0)
         total_torque_body = torques_body.sum(axis=0)
@@ -236,6 +268,8 @@ class FastQuadrotor:
             "rotor_thrust_n": thrusts.astype(float).tolist(),
             "rotor_omega_rad_s": self.motor_omega.astype(float).tolist(),
             "total_thrust_n": float(thrusts.sum()),
+            "thrust_model_status": thrust_model_status,
+            "rotor_shaft_torque_nm": rotor_shaft_torque_nm.astype(float).tolist(),
             "estimated_motor_shaft_torque_nm": estimated_shaft_torque_nm.astype(float).tolist(),
             "estimated_motor_shaft_power_w": estimated_shaft_power_w.astype(float).tolist(),
             "estimated_motor_current_a": estimated_motor_current_a.astype(float).tolist() if estimated_motor_current_a is not None else None,

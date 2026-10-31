@@ -33,8 +33,8 @@ def main() -> None:
         raise SystemExit("Pinned CAD source commit is missing from MODEL_SOURCE_REVISION.md")
     source_revision = revision_match.group(1)
 
-    if profile.get("calibration_status") != "provisional_estimate":
-        raise SystemExit("Smooth2 profile must remain explicitly provisional until measured")
+    if profile.get("calibration_status") not in {"provisional_estimate", "cad_bemt_estimate"}:
+        raise SystemExit("Smooth2 profile must remain explicitly provisional (including CAD/BEMT estimates) until measured")
     if source_revision not in profile.get("parameter_source", ""):
         raise SystemExit("Vehicle profile does not reference the pinned CAD source revision")
     if calibration.get("motor_propeller", {}).get("propeller_design_revision") != source_revision:

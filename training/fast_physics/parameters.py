@@ -62,6 +62,7 @@ class VehicleParameters:
     battery_nominal_voltage_v: float | None = None
     battery_capacity_ah: float | None = None
     motor_efficiency_upper_bound: float = 0.8
+    propeller_bemt: dict[str, Any] | None = None
 
     def validate(self) -> None:
         if not np.isfinite(self.mass_kg) or self.mass_kg <= 0:
@@ -212,6 +213,7 @@ def load_vehicle_parameters(
             if calibration.get("electrical_model", {}).get("battery_reference", {}).get("capacity_ah") is not None else None
         ),
         motor_efficiency_upper_bound=float(calibration.get("electrical_model", {}).get("motor_reference", {}).get("efficiency_upper_bound_fraction", 0.8)),
+        propeller_bemt=motor.get("propeller_bemt"),
     )
     params.validate()
     metadata = {

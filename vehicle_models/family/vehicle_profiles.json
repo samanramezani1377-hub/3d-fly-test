@@ -6,9 +6,9 @@
     {
       "vehicle_id": "smooth2-a2212-custom-prop",
       "coordinate_frame": "CAD_EXPORT_Z_UP",
-      "display_name": "Latest 3D/kilo Smooth2 CAD + unchanged A2212 simulator reference",
-      "calibration_status": "provisional_estimate",
-      "parameter_source": "Geometry synchronized from 3D/kilo@38d4820fc5f7e2208e6ce502ca6b54a83989196a; synthetic mass, inertia and propulsion coefficients remain unchanged for software training.",
+      "display_name": "Smooth2 CAD-derived geometry + BEMT propulsion estimate",
+      "calibration_status": "cad_bemt_estimate",
+      "parameter_source": "Geometry from 3D/kilo@38d4820fc5f7e2208e6ce502ca6b54a83989196a; propulsion coefficients updated from the repository's four-blade CAD station geometry using the existing screening BEMT model and generic A2212 1000KV/3S motor assumptions. Mass/inertia remain explicit engineering estimates; not measured.",
       "geometry": {
         "arm_span_diagonal_m": 0.35395355080602864,
         "propeller_diameter_m": 0.158998964432,
@@ -19,16 +19,72 @@
         "center_of_mass_m": [
           0,
           0,
-          0
+          0.005183333333333333
         ],
         "inertia_kg_m2": [
-          0.004,
-          0.006,
-          0.004
+          [
+            0.003935447909363858,
+            0,
+            0
+          ],
+          [
+            0,
+            0.004031247909363858,
+            0
+          ],
+          [
+            0,
+            0,
+            0.007722739818727713
+          ]
         ],
         "linear_drag_kg_s": 0.08,
         "quadratic_drag_kg_m": 0.015,
-        "angular_damping_nms": 0.002
+        "angular_damping_nms": 0.002,
+        "linear_drag_body_kg_s": [
+          0.02,
+          0.02,
+          0.012
+        ],
+        "quadratic_drag_body_kg_m": [
+          0.022,
+          0.022,
+          0.012
+        ],
+        "aerodynamic_estimate": {
+          "method": "CAD-envelope projected-area estimate using body, four arms and four vertical guard rings",
+          "reference_air_density_kg_m3": 1.225,
+          "drag_coefficient_assumed": 1,
+          "quadratic_drag_coefficients_kg_m": [
+            0.022,
+            0.022,
+            0.012
+          ],
+          "uncertainty_fractional": [
+            -0.5,
+            0.8
+          ],
+          "note": "Not CFD or wind-tunnel calibrated; guard/arm interference and propwash are not resolved."
+        },
+        "mass_properties_estimate": {
+          "source": "vehicle_models/smooth2_parametric/mass_properties_estimate.json",
+          "method": "component-lumped CAD-envelope estimate with parallel-axis theorem; assumed component masses and cuboid/cylinder inertias",
+          "status": "provisional_not_mesh_integrated",
+          "uncertainty_fractional": {
+            "mass": [
+              -0.25,
+              0.25
+            ],
+            "center_of_mass_offset_m": [
+              -0.015,
+              0.015
+            ],
+            "inertia": [
+              -0.35,
+              0.35
+            ]
+          }
+        }
       },
       "rotors": [
         {
@@ -67,19 +123,129 @@
       "propulsion": {
         "motor_name": "A2212/13T 1000KV reference",
         "kv_rpm_per_volt": 1000,
-        "max_rotor_speed_rad_s": 1100,
-        "thrust_coefficient_n_per_rad_s2": 0.000002,
-        "torque_to_thrust_m": 0.012,
+        "max_rotor_speed_rad_s": 1051.8,
+        "thrust_coefficient_n_per_rad_s2": 0.00000553666,
+        "torque_to_thrust_m": 0.01294,
         "motor_time_constant_s": 0.045,
         "nominal_battery_voltage_v": 11.1,
         "battery_cells": 3,
         "battery_capacity_ah": 2.2,
         "motor_efficiency_upper_bound": 0.8,
-        "motor_no_load_current_a": null,
+        "motor_no_load_current_a": 0.5,
         "battery_internal_resistance_ohm": null,
-        "esc_model": null,
-        "esc_current_limit_a_per_motor": null,
-        "electrical_model_status": "provisional_estimate_shaft_power_only"
+        "esc_model": "unknown_generic_reference",
+        "esc_current_limit_a_per_motor": 9,
+        "electrical_model_status": "bemt_and_generic_motor_screening_estimate_not_bench_calibrated",
+        "motor_resistance_ohm": 0.12,
+        "parameter_uncertainty": {
+          "mass_fractional": [
+            -0.25,
+            0.25
+          ],
+          "inertia_fractional": [
+            -0.35,
+            0.35
+          ],
+          "thrust_coefficient_fractional": [
+            -0.3,
+            0.3
+          ],
+          "max_rotor_speed_fractional": [
+            -0.15,
+            0.05
+          ],
+          "torque_to_thrust_fractional": [
+            -0.3,
+            0.3
+          ],
+          "motor_time_constant_fractional": [
+            -0.5,
+            0.8
+          ],
+          "note": "Initial domain-randomization priors, not validated hardware limits."
+        },
+        "propeller_bemt": {
+          "model": "cad_station_blade_element_momentum",
+          "radius_m": 0.079499482216,
+          "hub_radius_m": 0.01,
+          "blade_count": 4,
+          "stations": [
+            [
+              0.1069,
+              0.016638867476,
+              32.23
+            ],
+            [
+              0.2,
+              0.020958723016,
+              27.3
+            ],
+            [
+              0.25,
+              0.023279142964000004,
+              25.99
+            ],
+            [
+              0.3,
+              0.025599562912,
+              25.06
+            ],
+            [
+              0.4,
+              0.023587401068000002,
+              21.53
+            ],
+            [
+              0.5,
+              0.021576653252000002,
+              18.98
+            ],
+            [
+              0.6,
+              0.019564491408,
+              16.99
+            ],
+            [
+              0.7,
+              0.017553743592,
+              15.36
+            ],
+            [
+              0.8,
+              0.015541581748,
+              13.96
+            ],
+            [
+              0.9,
+              0.013530833932000002,
+              12.72
+            ],
+            [
+              0.96,
+              0.012324668048,
+              12.04
+            ],
+            [
+              1,
+              0.011520086116,
+              11.59
+            ]
+          ],
+          "air_density_kg_m3": 1.225,
+          "zero_lift_angle_deg": -4.15448,
+          "cl_limit": 1.2,
+          "cd0": 0.012,
+          "cd_k": 0.01,
+          "integration_sections": 120,
+          "source_repository": "samanramezani1377-hub/3D",
+          "source_branch": "kilo",
+          "source_commit": "38d4820fc5f7e2208e6ce502ca6b54a83989196a",
+          "source_file": "cad/parametric/model.params.json",
+          "calibration": "screening_estimate_not_bench_measured",
+          "reference_thrust_coefficient_n_per_rad_s2": 0.00000553666,
+          "reference_torque_to_thrust_m": 0.01294
+        },
+        "propeller_model_status": "runtime_BEMT_enabled_for_Smooth2_only"
       }
     },
     {

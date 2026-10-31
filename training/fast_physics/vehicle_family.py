@@ -154,6 +154,7 @@ def profile_to_parameters(profile: dict[str, Any]) -> VehicleParameters:
         battery_nominal_voltage_v=float(propulsion["nominal_battery_voltage_v"]) if propulsion.get("nominal_battery_voltage_v") is not None else None,
         battery_capacity_ah=float(propulsion["battery_capacity_ah"]) if propulsion.get("battery_capacity_ah") is not None else None,
         motor_efficiency_upper_bound=float(propulsion.get("motor_efficiency_upper_bound", 0.8)),
+        propeller_bemt=propulsion.get("propeller_bemt"),
     )
 
 
@@ -183,7 +184,7 @@ def load_vehicle_profiles(path: str | Path = DEFAULT_VEHICLE_FAMILY) -> list[dic
         if min(float(g["arm_span_diagonal_m"]), float(g["propeller_diameter_m"]),
                float(pr["nominal_battery_voltage_v"]), float(pr.get("battery_capacity_ah") or 1.0)) <= 0:
             raise ValueError(f"{vid}: geometry and battery values must be positive")
-        if p.get("calibration_status") not in {"provisional_estimate", "user_supplied", "measured"}:
+        if p.get("calibration_status") not in {"provisional_estimate", "cad_bemt_estimate", "user_supplied", "measured"}:
             raise ValueError(f"{vid}: calibration_status must be provisional_estimate, user_supplied or measured")
         profile_to_parameters(p).validate()
         resolved.append(p)
@@ -197,9 +198,12 @@ def vehicle_feature_vector(profile: dict[str, Any]) -> np.ndarray:
     positions = np.asarray([r["position_m"] for r in p["rotors"]], dtype=np.float64)
     arm_radius = float(np.mean(np.linalg.norm(positions[:, :2], axis=1)))
     derived_fraction = len(p.get("derived_estimates", [])) / 6.0
-    status_confidence = {"provisional_estimate": 0.25, "user_supplied": 0.60, "measured": 1.0}[
-        p["calibration_status"]
-    ]
+    status_confidence = {
+        "provisional_estimate": 0.25,
+        "cad_bemt_estimate": 0.40,
+        "user_supplied": 0.60,
+        "measured": 1.0,
+    }[p["calibration_status"]]
     values = np.asarray([
         float(ph["mass_kg"]) / 2.0,
         arm_radius / 0.25,
