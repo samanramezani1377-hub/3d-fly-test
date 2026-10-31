@@ -94,7 +94,7 @@ jobs:
             python training/evaluate_universal_ppo.py \
               --model "$model" --episodes 100 --seed 990001 \
               --randomization-config training/runs/independent-held-out-domain-randomization.json \
-              --held-out --no-teacher \
+              --held-out --no-teacher --stable-hover-seconds 20 \
               --output "$model_dir/final-test-$candidate.json" \
               2>&1 | tee "$model_dir/final-test-$candidate.log"
           done
@@ -180,5 +180,6 @@ jobs:
             training/runs/
             training/models/universal-quad-v5-foundation/
             single-stage-training.log
+            teacher-free-training.log
           if-no-files-found: warn
           retention-days: 90
