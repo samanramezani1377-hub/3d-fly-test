@@ -167,6 +167,7 @@ class BalancedProfileCallback(BaseCallback):
                                     and info.get("state_finite", True)
                                     and float(info.get("velocity_tracking_error_m_s", 999)) <= 0.35
                                     and float(info.get("altitude_error_m", 999)) <= 0.25
+                                    and float(info.get("horizontal_error_m", 999)) <= 0.50
                                     and tilt <= 0.25 and angular_rate_sq <= 0.5 ** 2)
                             else:
                                 stable = bool(info.get("has_taken_off", False)
