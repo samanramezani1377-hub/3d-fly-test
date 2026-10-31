@@ -317,7 +317,7 @@ jobs:
             "evaluation_worst_direction_error_acceptance_m_s": 0.85,
             "evaluation_neutral_speed_acceptance_m_s": 0.25,
             "evaluation_neutral_speed_sustained_seconds": 0.5,
-            "checkpoint_frequency": 20000,
+            "checkpoint_frequency": 50000,
             "parallel_environments": 100,
             "geometry_and_rotor_positions": "fixed Smooth2 CAD geometry",
             "minimum_worst_case_thrust_to_weight_ratio": 1.05,
