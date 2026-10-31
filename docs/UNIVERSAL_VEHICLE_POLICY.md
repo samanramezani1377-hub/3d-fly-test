@@ -181,3 +181,28 @@ measured performance, flight clearance, or evidence of sim-to-real transfer.
 The Smooth2 propeller geometry and thrust calibration remain deliberately
 separate from this training workflow and must be updated only after the
 redesign and subsequent motor/propeller characterization are available.
+
+
+## Electrical and mass-property work completed without propeller changes
+
+- The four vehicle profiles now pass their nominal pack voltage and capacity
+  into the simulation telemetry. The plant reports model-based shaft power,
+  estimated current, accumulated Ah/Wh and estimated state of charge.
+- These values are diagnostics only. They do not affect PPO observations or
+  motor commands. The model explicitly does not simulate battery sag, ESC
+  current limiting, motor temperature, wiring loss or no-load current because
+  the exact battery resistance, ESC and thermal limits are unknown.
+- The A2212 0.8 efficiency value is an optimistic catalog upper-bound reference,
+  not a measured operating efficiency. Generic vehicle profiles use it only as
+  a provisional estimate. Current/energy values must not be treated as
+  calibrated consumption or flight-time predictions.
+- A first-order motor time-constant identification function accepts measured
+  RPM/target-speed logs without using propeller data.
+- A component mass-properties utility and CSV template are provided to compute
+  assembled mass, CG and the full inertia tensor from user-supplied component
+  measurements using the parallel-axis theorem.
+
+The Smooth2 propeller geometry, thrust coefficient and torque coefficient have
+not been edited by this work. Physical battery voltage sag, ESC constraints,
+thermal behavior, and aircraft mass properties remain uncalibrated until
+traceable measurements are available.
