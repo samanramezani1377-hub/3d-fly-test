@@ -1,4 +1,4 @@
-name: Universal PPO - Stage 2 teacher-to-teacher-free
+name: Smooth2 PPO - Five-stage teacher curriculum
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: universal-ppo-five-stage-${{ github.ref }}
+  group: smooth2-ppo-five-stage-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -17,10 +17,13 @@ env:
   OPENBLAS_NUM_THREADS: "1"
   NUMEXPR_NUM_THREADS: "1"
   PYTHONUNBUFFERED: "1"
+  SMOOTH2_ID: smooth2-a2212-custom-prop
+  STAGE_STEPS: "400000"
+  N_ENVS: "20"
 
 jobs:
-  train-stage2-ppo:
-    name: Stage 2 (700K teacher-free warm start, 1M at 0.8 teacher + 1M teacher-free)
+  train-smooth2:
+    name: Smooth2 only - 5 x 400K progressive stages
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
@@ -44,93 +47,104 @@ jobs:
           python -m pip install -r training/requirements.txt
           python -c "import torch; assert torch.version.cuda is None; print('CPU-only PyTorch:', torch.__version__)"
 
-      - name: Restore the selected 700K teacher-free checkpoint from the previous run
+      - name: Restore selected 1M teacher-assisted checkpoint
         uses: actions/download-artifact@v4
         with:
           name: universal-ppo-stage2-teacher-to-teacher-free-backup
-          run-id: 41153598860
+          run-id: 41158518207
           github-token: ${{ github.token }}
           path: bootstrap
 
-      - name: Verify and preserve the selected 700K teacher-free checkpoint
+      - name: Verify selected teacher-assisted 1M checkpoint and Smooth2-only profile
         run: |
           set -euo pipefail
-          source_dir="bootstrap/training/runs/universal-quad-v5-foundation-stage2-teacher-free"
+          source_dir="bootstrap/training/runs/universal-quad-v5-foundation-stage2-teacher"
           source_model="$source_dir/best/best_model.zip"
           source_selection="$source_dir/best/selection.json"
-          test -s "$source_model" || { echo "Selected teacher-free best_model.zip is missing."; exit 1; }
-          test -s "$source_selection" || { echo "Teacher-free checkpoint selection metadata is missing."; exit 1; }
+          test -s "$source_model"
+          test -s "$source_selection"
           python - "$source_selection" <<'PY'
           import json, sys
           from pathlib import Path
-          selection = json.loads(Path(sys.argv[1]).read_text())
-          assert selection.get("timesteps") == 700000, f"Expected selected 700K checkpoint: {selection}"
-          assert selection.get("report") == "profile-evaluation-700000.json", f"Unexpected selected report: {selection}"
-          print("Verified selected teacher-free checkpoint:", selection)
+          selected = json.loads(Path(sys.argv[1]).read_text())
+          assert selected.get("timesteps") == 1000000, f"Expected the selected 1M teacher checkpoint: {selected}"
+          print("Verified 1M teacher-assisted checkpoint:", selected)
+          PY
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path("vehicle_models/family/vehicle_profiles.json").read_text())
+          matches = [x for x in p["profiles"] if x["vehicle_id"] == "smooth2-a2212-custom-prop"]
+          assert len(matches) == 1, "Smooth2 profile missing or duplicated"
+          Path("training/runs").mkdir(parents=True, exist_ok=True)
+          Path("training/runs/smooth2-only-profiles.json").write_text(
+              json.dumps({"schema_version": 1, "profiles": matches}, indent=2)
+          )
+          print("Only profile enabled:", matches[0]["vehicle_id"])
           PY
           mkdir -p training/runs
-          cp "$source_model" training/runs/stage2-initial-from-700k-teacher-free.zip
-          cp "$source_selection" training/runs/stage2-initial-from-700k-teacher-free-selection.json
-          sha256sum "$source_model" | tee training/runs/stage2-initial-from-700k-teacher-free.sha256
+          cp "$source_model" training/runs/smooth2-initial-from-1m-teacher-best.zip
+          cp "$source_selection" training/runs/smooth2-initial-from-1m-teacher-best-selection.json
+          sha256sum "$source_model" | tee training/runs/smooth2-initial-from-1m-teacher-best.sha256
 
-      - name: Stage 2 - train 1M steps with 80% reference teacher
+      - name: Train five chained stages with progressive randomization and teacher fade
         run: |
           set -euo pipefail
-          python training/train_universal_ppo.py \
-            --timesteps 1000000 --n-envs 20 --seed 2042 \
-            --run-name universal-quad-v5-foundation-stage2-teacher \
-            --output-dir training/runs --curriculum-stage 2 \
-            --load-model training/runs/stage2-initial-from-700k-teacher-free.zip \
-            --teacher-weight 0.8 \
-            --eval-episodes 10 --eval-frequency 200000 \
-            --checkpoint-frequency 20000 \
-            2>&1 | tee stage2-teacher-training.log
+          checkpoint="training/runs/smooth2-initial-from-1m-teacher-best.zip"
+          teacher_weights=(0.8 0.6 0.4 0.2 0.0)
+          for stage in 1 2 3 4 5; do
+            teacher="${teacher_weights[$((stage-1))]}"
+            run_name="smooth2-ppo-stage-${stage}"
+            echo "===== Smooth2 stage $stage: 400K steps, teacher=$teacher ====="
+            python training/train_universal_ppo.py \
+              --timesteps "$STAGE_STEPS" --n-envs "$N_ENVS" \
+              --seed "$((2042 + stage))" \
+              --run-name "$run_name" --output-dir training/runs \
+              --vehicle-family training/runs/smooth2-only-profiles.json \
+              --vehicle-id "$SMOOTH2_ID" \
+              --randomization-config vehicle_models/family/domain_randomization.json \
+              --curriculum-stage "$stage" \
+              --load-model "$checkpoint" \
+              --teacher-weight "$teacher" \
+              --eval-episodes 10 --eval-frequency 200000 \
+              --checkpoint-frequency 20000 \
+              2>&1 | tee "$run_name.log"
+            selected="training/runs/$run_name/best/best_model.zip"
+            selection="training/runs/$run_name/best/selection.json"
+            test -s "$selected" || { echo "Stage $stage did not produce an evaluated best checkpoint"; exit 1; }
+            test -s "$selection"
+            checkpoint="$selected"
+          done
+          cp "$checkpoint" training/runs/smooth2-final-selected-best.zip
 
-      - name: Stage 2 - continue for 1M steps with the teacher disabled (0%)
-        run: |
-          set -euo pipefail
-          teacher_final="training/runs/universal-quad-v5-foundation-stage2-teacher/final_model.zip"
-          test -s "$teacher_final" || { echo "Stage-2 teacher-trained final checkpoint is missing."; exit 1; }
-          python training/train_universal_ppo.py \
-            --timesteps 1000000 --n-envs 20 --seed 2043 \
-            --run-name universal-quad-v5-foundation-stage2-teacher-free \
-            --output-dir training/runs --curriculum-stage 2 --no-teacher \
-            --load-model "$teacher_final" \
-            --eval-episodes 10 --eval-frequency 200000 \
-            --checkpoint-frequency 20000 \
-            2>&1 | tee stage2-teacher-free-training.log
-
-      - name: Publish stage-2 training outputs
+      - name: Publish Smooth2 curriculum outputs
         if: success()
         run: |
           set -euo pipefail
-          source="training/runs"
-          teacher="universal-quad-v5-foundation-stage2-teacher"
-          teacher_free="universal-quad-v5-foundation-stage2-teacher-free"
-          test -s "$source/$teacher/final_model.zip"
-          test -s "$source/$teacher/best/best_model.zip"
-          test -s "$source/$teacher_free/final_model.zip"
-          test -s "$source/$teacher_free/best/best_model.zip"
-          target="training/models/universal-quad-v5-foundation/universal-quad-v5-foundation-stage2-teacher-to-teacher-free"
+          target="training/models/smooth2-ppo-five-stage"
           mkdir -p "$target"
-          cp -a "$source/$teacher" "$target/"
-          cp -a "$source/$teacher_free" "$target/"
-          cp "$source/stage2-initial-from-700k-teacher-free.zip" "$target/"
-          cp "$source/stage2-initial-from-700k-teacher-free-selection.json" "$target/"
-          cp "$source/stage2-initial-from-700k-teacher-free.sha256" "$target/"
+          cp -a training/runs/smooth2-ppo-stage-* "$target/"
+          cp training/runs/smooth2-initial-from-1m-teacher-best.zip "$target/"
+          cp training/runs/smooth2-initial-from-1m-teacher-best-selection.json "$target/"
+          cp training/runs/smooth2-initial-from-1m-teacher-best.sha256 "$target/"
+          cp training/runs/smooth2-final-selected-best.zip "$target/"
+          cp vehicle_models/family/domain_randomization.json "$target/domain_randomization.json"
           cat > "$target/training-plan.json" <<'JSON'
           {
-            "active_curriculum_stage": 2,
-            "stage_1_training": false,
-            "initial_checkpoint_source": "best/best_model.zip from run 41153598860, stage-2 teacher-free, selected at 700000 steps",
-            "stage_2_teacher_segment_timesteps": 1000000,
-            "stage_2_teacher_weight": 0.8,
-            "stage_2_teacher_free_segment_timesteps": 1000000,
-            "stage_2_teacher_free_weight": 0.0,
-            "first_segment_initial_checkpoint": "selected 700K teacher-free best_model.zip from run 41153598860",
-            "second_segment_initial_checkpoint": "stage-2 teacher-trained final_model.zip",
+            "airframe": "smooth2-a2212-custom-prop",
+            "initial_checkpoint": "best teacher-assisted checkpoint selected at 1000000 steps from run 41158518207",
+            "stages": 5,
+            "timesteps_per_stage": 400000,
+            "total_additional_timesteps": 2000000,
+            "teacher_training_weights": [0.8, 0.6, 0.4, 0.2, 0.0],
+            "periodic_evaluation_teacher_weight": 0.0,
+            "evaluation_frequency": 200000,
+            "evaluation_episodes": 10,
+            "checkpoint_frequency": 20000,
             "parallel_environments": 20,
-            "total_stage_2_timesteps": 2000000,
+            "geometry_and_rotor_positions": "fixed Smooth2 CAD geometry",
+            "randomized_parameters": ["mass", "center_of_mass", "inertia_tensor", "motor_effectiveness", "motor_response_time", "maximum_rotor_speed", "thrust_coefficient", "torque_to_thrust_ratio", "battery_voltage_factor", "aerodynamic_drag", "wind", "sensor_noise"],
+            "episode_randomization_ground_truth_hidden": true,
             "simulation_only": true,
             "physical_flight_eligible": false
           }
@@ -140,33 +154,30 @@ jobs:
           git add "$target"
           if ! git diff --cached --quiet; then
             find "$target" -type f -size +90M -print -quit | grep -q . && { echo "Checkpoint exceeds 90 MB."; exit 1; } || true
-            git commit -m "Train universal PPO from 700K teacher-free checkpoint with 80% teacher then teacher-free"
+            git commit -m "Train Smooth2 PPO through five staged randomized teacher-fade stages"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
-      - name: Print stage-2 training summaries
+      - name: Print Smooth2 training summaries
         if: always()
         run: |
-          for log in stage2-teacher-training.log stage2-teacher-free-training.log; do
+          for log in smooth2-ppo-stage-*.log; do
             echo "===== $log ====="
-            if [ -f "$log" ]; then tail -c 30000 "$log"; else echo "Log not produced"; fi
+            if [ -f "$log" ]; then tail -c 30000 "$log"; fi
           done
-          for state in \
-            training/runs/universal-quad-v5-foundation-stage2-teacher/training_state.json \
-            training/runs/universal-quad-v5-foundation-stage2-teacher-free/training_state.json; do
+          for state in training/runs/smooth2-ppo-stage-*/training_state.json; do
             echo "===== $state ====="
-            if [ -f "$state" ]; then cat "$state"; else echo "State not produced"; fi
+            if [ -f "$state" ]; then cat "$state"; fi
           done
 
-      - name: Upload stage-2 training backup
+      - name: Upload Smooth2 curriculum backup
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: universal-ppo-stage2-teacher-to-teacher-free-backup
+          name: smooth2-ppo-five-stage-backup
           path: |
             training/runs/
-            training/models/universal-quad-v5-foundation/
-            stage2-teacher-training.log
-            stage2-teacher-free-training.log
+            training/models/smooth2-ppo-five-stage/
+            smooth2-ppo-stage-*.log
           if-no-files-found: warn
           retention-days: 90
