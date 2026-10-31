@@ -89,7 +89,7 @@ class BalancedProfileCallback(BaseCallback):
         self.frequency = max(1, frequency)
         self.checkpoint_frequency = max(1, checkpoint_frequency)
         self.best_dir, self.reports_dir = Path(best_dir), Path(reports_dir)
-        self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, -1.0, -1.0, float("-inf"), float("-inf")), None
+        self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, -1.0, -1.0, -1.0, float("-inf"), float("-inf")), None
         self.latest_dir = self.best_dir.parent
         self.sampling_weights_path = self.latest_dir / "profile-sampling-weights.json"
         self.latest_dir.mkdir(parents=True, exist_ok=True)
@@ -103,8 +103,8 @@ class BalancedProfileCallback(BaseCallback):
         if selection_path.is_file():
             saved = json.loads(selection_path.read_text(encoding="utf-8"))
             saved_score = tuple(saved.get("score", ()))
-            # Older selection rules are not comparable to the v5 six-field rule.
-            if len(saved_score) == 6:
+            # Older selection rules are not comparable to the current seven-field rule.
+            if len(saved_score) == 7:
                 self.best_score = saved_score
                 self.best_report = saved.get("report")
 
@@ -214,7 +214,7 @@ class BalancedProfileCallback(BaseCallback):
                                     neutral_started_step = int(plant_env.inner._steps)
                                 if neutral_stop_time is None:
                                     current_speed = float(np.linalg.norm(info.get("state_velocity_m_s", [999, 999, 999])))
-                                    current_yaw_rate = abs(float((info.get("angular_velocity_rad_s") or [999, 999, 999])[2]))
+                                    current_yaw_rate = abs(float(info.get("measured_yaw_rate_rad_s", 999.0)))
                                     neutral_stop_stable_steps = neutral_stop_stable_steps + 1 if current_speed <= 0.25 and current_yaw_rate <= 0.15 else 0
                                     if neutral_stop_stable_steps >= 25:
                                         neutral_stop_time = (
@@ -313,12 +313,14 @@ class BalancedProfileCallback(BaseCallback):
             -max(x["crash_rate"] for x in profile_reports),
             min(x["takeoff_success_rate"] for x in profile_reports),
             -sum(x["mean_velocity_tracking_error_m_s"] for x in profile_reports) / len(profile_reports) if self.velocity_control else sum(x["mean_stable_hover_seconds"] for x in profile_reports) / len(profile_reports),
-            -sum(x["mean_motor_saturation_fraction"] for x in profile_reports) / len(profile_reports),
+            -sum(x["mean_yaw_rate_tracking_error_rad_s"] for x in profile_reports) / len(profile_reports) if self.velocity_control else 0.0,
+            -sum(x["mean_motor_saturation_fraction"] for x in profile_reports) / len(profile_reports), 
             sum(x["mean_return"] for x in profile_reports) / len(profile_reports))
         report = {"timesteps": int(self.num_timesteps), "selection_score": list(score),
             "selection_rule": ["maximize minimum per-profile mission success",
                 "minimize worst-profile crash rate", "maximize minimum per-profile takeoff rate",
                 ("minimize mean velocity tracking error" if self.velocity_control else "maximize mean stable-hover duration"),
+                ("minimize mean yaw-rate tracking error" if self.velocity_control else "not applicable"),
                 "minimize motor saturation", "maximize mean return as final tie-breaker"], "profiles": profile_reports}
         self.reports_dir.mkdir(parents=True, exist_ok=True)
         report_path = self.reports_dir / f"profile-evaluation-{self.num_timesteps}.json"
@@ -542,7 +544,7 @@ def main(argv=None):
             "best_checkpoint": str(best_checkpoint),
             "balanced_selection_score": list(eval_callback.best_score),
             "balanced_selection_report": eval_callback.best_report,
-            "checkpoint_selection": ("min_profile_velocity_mission_success_then_min_worst_crash_then_min_profile_takeoff_then_min_velocity_tracking_error_then_min_motor_saturation_then_mean_return" if args.velocity_control else "min_profile_hover_then_min_worst_crash_then_min_profile_takeoff_then_stable_duration_then_min_upper_motor_saturation_then_mean_episode_return"),
+            "checkpoint_selection": ("min_profile_velocity_mission_success_then_min_worst_crash_then_min_profile_takeoff_then_min_velocity_tracking_error_then_min_yaw_rate_tracking_error_then_min_motor_saturation_then_mean_return" if args.velocity_control else "min_profile_hover_then_min_worst_crash_then_min_profile_takeoff_then_stable_duration_then_min_upper_motor_saturation_then_mean_episode_return"),
             "history_length": args.history_length, "curriculum_stage": args.curriculum_stage,
             "initial_model": str(args.load_model) if args.load_model else None,
             "domain_randomization": not args.no_randomization,
