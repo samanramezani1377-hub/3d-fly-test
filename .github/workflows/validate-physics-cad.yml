@@ -2,6 +2,7 @@ name: Physics, vehicle-family, hover and CAD validation
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -38,7 +39,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
           python -m pip install -r training/requirements.txt
-          python -m pip install pytest
+          python -m pip install pytest trimesh
 
       - name: Compile Python training modules
         run: python -m compileall -q training
@@ -58,3 +59,16 @@ jobs:
 
       - name: Run existing CAD asset-validator tests
         run: python -m pytest -q tests/test_preflight_asset_validator.py
+
+      - name: Validate Smooth2 CAD-to-simulator geometry synchronization
+        run: python scripts/validate_smooth2_model_sync.py
+
+      - name: Check Flight Lab JavaScript and model export scripts
+        run: |
+          node --check site/app.js
+          python -m py_compile scripts/validate_smooth2_model_sync.py scripts/export_smooth2_glb.py
+
+      - name: Build and validate the browser GLB from committed CAD components
+        run: |
+          python scripts/export_smooth2_glb.py --output /tmp/smooth2-drone.glb
+          test -s /tmp/smooth2-drone.glb

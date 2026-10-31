@@ -24,14 +24,55 @@ async function copyAllLogs(){
 function renderEngineDiagnostics(){if(!engineDiagnostics)return;try{const rows=JSON.parse(engineDiagnostics());for(const x of rows)diagLog(x.level||"info",x.message||JSON.stringify(x),x.code||"")}catch(e){diagLog("error",e.stack||e.message,"diagnostics.read")}}
 function rotationMatrix(a){const [r,p,y]=a,[cr,sr,cp,sp,cy,sy]=[Math.cos(r),Math.sin(r),Math.cos(p),Math.sin(p),Math.cos(y),Math.sin(y)];return [[cy*cp,cy*sp*sr-sy*cr,cy*sp*cr+sy*sr],[sy*cp,sy*sp*sr+cy*cr,sy*sp*cr-cy*sr],[-sp,cp*sr,cp*cr]]}
 function threeRotation(a){const R=rotationMatrix(a);return [[R[0][0],-R[0][2],R[0][1]],[ -R[2][0],R[2][2],-R[2][1]],[R[1][0],-R[1][2],R[1][1]]]}
-function buildDrone(){if(!scene||!profile)return;if(droneMesh)scene.remove(droneMesh);propellers=[];droneMesh=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(.18,.07,.18),new THREE.MeshStandardMaterial({color:0x263e4a,metalness:.6,roughness:.35}));droneMesh.add(body);
- for(let i=0;i<4;i++){const p=profile.rotors[i].position_m;const x=p[0],z=-p[1];const arm=new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,Math.hypot(x,z),10),new THREE.MeshStandardMaterial({color:0x6a8998,metalness:.5}));arm.position.set(x/2,0,z/2);arm.rotation.z=-Math.atan2(x,z);droneMesh.add(arm);const motor=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,.025,16),new THREE.MeshStandardMaterial({color:0x56d6a0,metalness:.6}));motor.position.set(x,.025,z);droneMesh.add(motor);const prop=new THREE.Mesh(new THREE.BoxGeometry(.12,.006,.012),new THREE.MeshStandardMaterial({color:0x9db8c2,transparent:true,opacity:.72}));prop.position.set(x,.043,z);droneMesh.add(prop);propellers.push(prop)}
- scene.add(droneMesh)}
+let droneModelRequest=0;
+function buildDrone(){
+ if(!scene||!profile)return;
+ if(droneMesh)scene.remove(droneMesh);
+ propellers=[];
+ const request=++droneModelRequest;
+ droneMesh=new THREE.Group();
+ const body=new THREE.Mesh(new THREE.BoxGeometry(.18,.07,.18),new THREE.MeshStandardMaterial({color:0x263e4a,metalness:.6,roughness:.35}));
+ droneMesh.add(body);
+ for(let i=0;i<4;i++){
+  const p=profile.rotors[i].position_m,x=p[0],z=-p[1];
+  const arm=new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,Math.hypot(x,z),10),new THREE.MeshStandardMaterial({color:0x6a8998,metalness:.5}));
+  arm.position.set(x/2,0,z/2);arm.rotation.z=-Math.atan2(x,z);droneMesh.add(arm);
+  const motor=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,.025,16),new THREE.MeshStandardMaterial({color:0x56d6a0,metalness:.6}));
+  motor.position.set(x,.025,z);droneMesh.add(motor);
+  const prop=new THREE.Mesh(new THREE.BoxGeometry(.12,.006,.012),new THREE.MeshStandardMaterial({color:0x9db8c2,transparent:true,opacity:.72}));
+  prop.position.set(x,.043,z);droneMesh.add(prop);propellers.push(prop);
+ }
+ scene.add(droneMesh);
+ if(!THREE.GLTFLoader){diagLog("warn","GLTFLoader unavailable; using the profile-based fallback model","cad.glb.loader");return;}
+ new THREE.GLTFLoader().load("./models/current/drone.glb",gltf=>{
+  if(request!==droneModelRequest||!droneMesh)return;
+  const model=gltf.scene,byRotor=new Array(4);
+  model.traverse(node=>{
+   if(!node.isMesh||!/^prop_[1-4]$/.test(node.name))return;
+   let best=-1,bestDistance=Infinity;
+   profile.rotors.forEach((rotor,index)=>{
+    const dx=node.position.x-Number(rotor.position_m[0]);
+    const dz=node.position.z+Number(rotor.position_m[1]);
+    const distance=dx*dx+dz*dz;
+    if(distance<bestDistance){bestDistance=distance;best=index;}
+   });
+   if(best>=0&&bestDistance<1e-6)byRotor[best]=node;
+  });
+  while(droneMesh.children.length)droneMesh.remove(droneMesh.children[0]);
+  droneMesh.add(model);
+  propellers=byRotor;
+  $("profileCaption").textContent=profile.display_name+" · CAD Smooth2/kilo";
+  if(propellers.some(p=>!p))diagLog("warn","GLB loaded but one or more propeller nodes could not be mapped to simulator rotors","cad.glb.rotor-map");
+  else diagLog("ok","26-part Smooth2 CAD GLB loaded; propellers mapped to the active rotor profile","cad.glb.loaded");
+ },undefined,error=>{
+  if(request===droneModelRequest)diagLog("warn","CAD GLB load failed; using profile-based fallback: "+(error.message||String(error)),"cad.glb.load");
+ });
+}
 function init3D(){const host=$("scene");scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(45,host.clientWidth/host.clientHeight,.1,100);camera.position.set(2.7,2.4,3.7);camera.lookAt(0,.65,0);renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(host.clientWidth,host.clientHeight);host.appendChild(renderer.domElement);scene.add(new THREE.HemisphereLight(0xb9e5ff,0x20313b,2));const light=new THREE.DirectionalLight(0xffffff,2.2);light.position.set(4,8,5);scene.add(light);const grid=new THREE.GridHelper(10,20,0x315365,0x203b4c);scene.add(grid);buildDrone();new ResizeObserver(()=>{const w=host.clientWidth,h=host.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h)}).observe(host);requestAnimationFrame(draw)}
 function draw(now){requestAnimationFrame(draw);if(!lastFrame)lastFrame=now;const elapsed=Math.min((now-lastFrame)/1000,.1);lastFrame=now;
  if(armed&&!paused&&pyodide&&!stepBusy){accumulator+=elapsed;let count=0;while(accumulator>=DT&&count<stepsPerFrame){if(keys.w||keys.s||keys.arrowup||keys.arrowdown||keys.arrowleft||keys.arrowright||keys.a||keys.d)directMotorMode=false;if(keys.w)throttle=clamp(throttle+.55*DT,0,1);if(keys.s)throttle=clamp(throttle-.55*DT,0,1);$("throttle").value=throttle*100;$("throttleValue").textContent=Math.round(throttle*100)+"%";const cmd=currentAction();motors=cmd;try{snapshot=JSON.parse(engineStep(JSON.stringify(cmd)));if(snapshot.step%50===0)renderEngineDiagnostics();}catch(e){diagLog("error",e.stack||e.message,"physics.step");log("خطای موتور فیزیک: "+e.message);armed=false;setStatus("خطا در موتور");break}accumulator-=DT;count++;if(snapshot.terminated||snapshot.truncated){armed=false;$("armBtn").textContent="مسلح‌سازی موتورها";log(snapshot.info?.crash_reasons?.join(", ")||"پایان اپیزود؛ برای شروع دوباره بازنشانی کنید.");break}}if(count)updateUI()}
  if(droneMesh&&snapshot){const s=snapshot.state;droneMesh.position.set(s[0],s[2],-s[1]);const m=threeRotation(s.slice(6,9));const mat=new THREE.Matrix4().set(m[0][0],m[0][1],m[0][2],0,m[1][0],m[1][1],m[1][2],0,m[2][0],m[2][1],m[2][2],0,0,0,0,1);droneMesh.quaternion.setFromRotationMatrix(mat)}
- propellers.forEach((p,i)=>p.rotation.y+=motors[i]*.8);renderer.render(scene,camera)}
+ propellers.forEach((p,i)=>{if(p)p.rotation.y+=motors[i]*.8*-Number(profile.rotors[i].spin_sign||1)});renderer.render(scene,camera)}
 function currentAction(){if(directMotorMode)return motors.map(v=>clamp(v,0,1));let roll=(keys.arrowleft?1:0)-(keys.arrowright?1:0),pitch=(keys.arrowup?1:0)-(keys.arrowdown?1:0),yaw=(keys.d?1:0)-(keys.a?1:0);return [throttle+roll*.14-pitch*.14+yaw*.07,throttle-roll*.14-pitch*.14-yaw*.07,throttle-roll*.14+pitch*.14+yaw*.07,throttle+roll*.14+pitch*.14-yaw*.07].map(v=>clamp(v,0,1))}
 function updateUI(){if(!snapshot)return;const s=snapshot.state,[x,y,z,vx,vy,vz,r,p,yaw]=s,speed=norm([vx,vy,vz]);$("alt").textContent=z.toFixed(3)+" m";$("vz").textContent=vz.toFixed(3)+" m/s";$("speed").textContent=speed.toFixed(3)+" m/s";$("thrust").textContent=Number(snapshot.total_thrust_n||0).toFixed(2)+" N";$("roll").textContent=(r*180/Math.PI).toFixed(1)+"°";$("pitch").textContent=(p*180/Math.PI).toFixed(1)+"°";$("yaw").textContent=(yaw*180/Math.PI).toFixed(1)+"°";$("mass").textContent=Number(snapshot.mass_kg).toFixed(3)+" kg";$("altHud").textContent=z.toFixed(2)+" m";$("speedHud").textContent=speed.toFixed(2)+" m/s";$("timeHud").textContent=Number(snapshot.time_s).toFixed(2)+" s";$("flightState").textContent=z>.18?"در حال پرواز":armed?"موتورها مسلح":"روی زمین";const actual=snapshot.info?.rotor_omega_rad_s||[0,0,0,0],max=profile.propulsion.max_rotor_speed_rad_s;$("motorBars").innerHTML=motors.map((v,i)=>{const pct=Math.round(v*100);return '<div class="bar-row"><span>موتور '+(i+1)+'</span><div class="bar"><i style="width:'+pct+'%"></i></div><b>'+pct+'%</b></div>'}).join("");$("statusText").textContent=armed?"موتور فیزیک آموزشی فعال":"موتور آماده";$("statusDot").style.background=armed?"#56d6a0":"#f0b66a";$("timeHud").textContent=Number(snapshot.time_s).toFixed(2)+" s";if(snapshot.step%25===0){$("engineMeta").textContent="گام "+snapshot.step+" · dt="+snapshot.dt_s+"s · obs="+snapshot.observation_size+" · reward="+Number(snapshot.reward||0).toFixed(3)}}
 function loadExternalScript(src){return new Promise((resolve,reject)=>{const existing=[...document.scripts].find(s=>s.src===src);if(existing){if(window.loadPyodide)return resolve();existing.addEventListener("load",resolve,{once:true});existing.addEventListener("error",()=>reject(Error("بارگذاری اسکریپت ناموفق: "+src)),{once:true});return}const script=document.createElement("script");script.src=src;script.async=true;script.onload=resolve;script.onerror=()=>reject(Error("دریافت اسکریپت Pyodide ناموفق: "+src));document.head.appendChild(script)})}
