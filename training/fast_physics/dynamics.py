@@ -262,9 +262,14 @@ class FastQuadrotor:
             quaternion /= max(float(np.linalg.norm(quaternion)), 1e-12)
         self.attitude = _euler_from_quaternion(quaternion)
         self.attitude = (self.attitude + np.pi) % (2.0 * np.pi) - np.pi
+        contact_count, penetration_m, normal_impulse_ns = self._resolve_ground_contact()
         self.time += self.dt
 
         return self.state(), {
+            "ground_contact_model": "CAD_support_points_6dof_sequential_impulse",
+            "ground_contact_active_points": int(contact_count),
+            "ground_penetration_before_solve_m": float(penetration_m),
+            "ground_normal_impulse_ns": float(normal_impulse_ns),
             "rotor_thrust_n": thrusts.astype(float).tolist(),
             "rotor_axial_inflow_m_s": (-local_air_velocity[:, 2]).astype(float).tolist(),
             "motor_effectiveness": np.asarray(p.motor_effectiveness, dtype=np.float64).astype(float).tolist(),
