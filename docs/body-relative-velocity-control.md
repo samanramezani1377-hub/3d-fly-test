@@ -10,7 +10,11 @@ The PPO policy is conditioned on a three-component velocity command in a yaw-ali
 
 The horizontal axes rotate with yaw. The vertical command remains aligned with world-up so a pitch/roll manoeuvre does not redefine what "up" means. This is a yaw-aligned body frame, not the fully tilted rigid-body frame.
 
-The software-training command envelope is currently `[1.5, 1.5, 0.75] m/s` for forward/left/up. These are simulation curriculum limits only; they are not measured safe flight speeds for the physical Smooth2 aircraft.
+The software-training command envelope is currently `[1.5, 1.5, 0.75] m/s` for forward/left/up. The virtual altitude reference is bounded between 0.60 m and 8.0 m; a vertical command toward a reached bound is neutralized. These are simulation curriculum limits only; they are not measured safe flight speeds or safe operating altitudes for the physical Smooth2 aircraft.
+
+## Camera-model interface
+
+The camera model is intentionally separate from the flight-stability policy. Its future output should be a desired velocity vector in this same frame, `[forward_m_s, left_m_s, up_m_s]`, with each component normalized/clamped to the controller's accepted range. It must not output motor commands. The flight controller remains responsible for attitude stabilization, disturbance rejection, velocity tracking and safe stopping.
 
 ## Training curriculum
 
