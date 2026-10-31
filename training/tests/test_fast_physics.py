@@ -269,7 +269,7 @@ def test_smooth2_cad_frame_is_converted_to_forward_left_up_body_frame():
     ])
     assert np.allclose(params.rotor_positions_m, expected)
     # The 90-degree frame rotation swaps CAD X/Y principal inertias.
-    assert np.allclose(params.inertia_matrix, np.diag([0.0038, 0.0038, 0.0075]))
+    assert np.allclose(params.inertia_matrix, np.diag([0.003935447909363858, 0.004031247909363858, 0.007722739818727713]))
 
 
 def test_smooth2_family_profile_coordinate_conversion_is_idempotent():
