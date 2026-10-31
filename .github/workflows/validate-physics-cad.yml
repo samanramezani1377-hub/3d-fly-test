@@ -61,3 +61,8 @@ jobs:
 
       - name: Validate Smooth2 CAD-to-simulator geometry synchronization
         run: python scripts/validate_smooth2_model_sync.py
+
+      - name: Check Flight Lab JavaScript and model export scripts
+        run: |
+          node --check site/app.js
+          python -m py_compile scripts/validate_smooth2_model_sync.py scripts/export_smooth2_glb.py
