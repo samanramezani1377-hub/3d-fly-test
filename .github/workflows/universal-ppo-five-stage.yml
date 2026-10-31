@@ -117,6 +117,89 @@ jobs:
           done
           cp "$checkpoint" training/runs/smooth2-final-selected-best.zip
 
+      - name: Run independent final velocity and yaw-rate evaluation
+        run: |
+          set -euo pipefail
+          evaluation_dir="training/runs/smooth2-final-independent-evaluation"
+          mkdir -p "$evaluation_dir"
+          python - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          from stable_baselines3 import PPO
+
+          sys.path.insert(0, str(Path("training").resolve()))
+          from train_universal_ppo import BalancedProfileCallback
+          from fast_physics.vehicle_family import load_vehicle_profiles
+
+          model_path = Path("training/runs/smooth2-final-selected-best.zip")
+          family_path = Path("training/runs/smooth2-only-profiles.json")
+          randomization_path = Path("vehicle_models/family/domain_randomization.json")
+          output_dir = Path("training/runs/smooth2-final-independent-evaluation")
+          assert model_path.is_file() and model_path.stat().st_size > 0, "Final selected PPO model is missing"
+          profiles = load_vehicle_profiles(family_path)
+          assert len(profiles) == 1 and profiles[0]["vehicle_id"] == "smooth2-a2212-custom-prop", profiles
+
+          model = PPO.load(str(model_path), device="cpu")
+          callback = BalancedProfileCallback(
+              profiles=profiles,
+              family_path=family_path,
+              randomization_path=randomization_path,
+              history_length=4,
+              stage=5,
+              episodes=10,
+              frequency=1,
+              checkpoint_frequency=2**62,
+              best_dir=output_dir / "selection",
+              reports_dir=output_dir / "reports",
+              seed=987654,
+              disable_teacher=True,
+              teacher_weight=0.0,
+              velocity_control=True,
+          )
+          callback.init_callback(model)
+          callback.last_checkpoint_timesteps = int(model.num_timesteps)
+          callback.last_eval_timesteps = 0
+          callback._on_rollout_end()
+
+          reports = sorted((output_dir / "reports").glob("profile-evaluation-*.json"))
+          assert len(reports) == 1, f"Expected exactly one final evaluation report, found {reports}"
+          report = json.loads(reports[0].read_text(encoding="utf-8"))
+          assert len(report.get("profiles", [])) == 1, report
+          result = report["profiles"][0]
+          assert len(result.get("episodes", [])) == 10, result
+          metadata = {
+              "evaluation_type": "independent_final_evaluation",
+              "independence": "fresh deterministic seed range, separate from all periodic checkpoint-selection evaluations",
+              "seed_start": 987654,
+              "episodes": 10,
+              "curriculum_stage": 5,
+              "teacher_disabled": True,
+              "velocity_control": True,
+              "model": str(model_path),
+              "model_timesteps": int(model.num_timesteps),
+              "report": str(reports[0]),
+              "metrics": {
+                  key: result.get(key) for key in (
+                      "success_rate", "takeoff_success_rate", "takeoff_failure_rate",
+                      "crash_rate", "mean_velocity_tracking_error_m_s",
+                      "mean_max_direction_tracking_error_m_s",
+                      "mean_velocity_direction_coverage",
+                      "mean_yaw_rate_tracking_error_rad_s",
+                      "mean_max_yaw_command_tracking_error_rad_s",
+                      "mean_yaw_command_coverage",
+                      "mean_neutral_braking_time_seconds",
+                      "mean_motor_saturation_fraction",
+                  )
+              },
+          }
+          (output_dir / "final-evaluation-summary.json").write_text(
+              json.dumps(metadata, indent=2), encoding="utf-8"
+          )
+          print(json.dumps(metadata, indent=2))
+          PY
+
       - name: Publish Smooth2 curriculum outputs
         if: success()
         run: |
@@ -128,6 +211,7 @@ jobs:
           cp training/runs/smooth2-initial-from-1m-teacher-best-selection.json "$target/"
           cp training/runs/smooth2-initial-from-1m-teacher-best.sha256 "$target/"
           cp training/runs/smooth2-final-selected-best.zip "$target/"
+          cp -a training/runs/smooth2-final-independent-evaluation "$target/"
           cp vehicle_models/family/domain_randomization.json "$target/domain_randomization.json"
           cat > "$target/training-plan.json" <<'JSON'
           {
