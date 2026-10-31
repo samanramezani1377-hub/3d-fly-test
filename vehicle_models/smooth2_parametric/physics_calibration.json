@@ -8,23 +8,23 @@
     "center_of_mass_m": [
       0,
       0,
-      0
+      0.005183333333333333
     ],
     "inertia_tensor_kg_m2": [
       [
-        0.0038,
+        0.003935447909363858,
         0,
         0
       ],
       [
         0,
-        0.0038,
+        0.004031247909363858,
         0
       ],
       [
         0,
         0,
-        0.0075
+        0.007722739818727713
       ]
     ],
     "linear_drag_kg_s": 0.08,
@@ -76,37 +76,23 @@
       "note": "Screening estimate only; no CFD or wind-tunnel validation. Propwash/guard interference not resolved."
     },
     "mass_properties_estimate": {
-      "method": "component-lumped estimate constrained to nominal 0.6 kg takeoff mass",
-      "motor_count": 4,
-      "motor_mass_each_kg_assumed": 0.053,
-      "remaining_frame_battery_electronics_fasteners_mass_kg": 0.388,
-      "center_of_mass_m": [
-        0,
-        0,
-        0
-      ],
-      "inertia_tensor_kg_m2": [
-        [
-          0.0038,
-          0,
-          0
+      "source": "vehicle_models/smooth2_parametric/mass_properties_estimate.json",
+      "method": "component-lumped CAD-envelope estimate with parallel-axis theorem; assumed component masses and cuboid/cylinder inertias",
+      "status": "provisional_not_mesh_integrated",
+      "uncertainty_fractional": {
+        "mass": [
+          -0.25,
+          0.25
         ],
-        [
-          0,
-          0.0038,
-          0
+        "center_of_mass_offset_m": [
+          -0.015,
+          0.015
         ],
-        [
-          0,
-          0,
-          0.0075
+        "inertia": [
+          -0.35,
+          0.35
         ]
-      ],
-      "uncertainty_fractional": [
-        -0.35,
-        0.35
-      ],
-      "note": "Full tensor format, but not integrated from STEP solids: CAD material densities and verified battery/electronics BOM are unavailable. Products of inertia set to zero under nominal symmetry assumption."
+      }
     }
   },
   "motor_propeller": {
