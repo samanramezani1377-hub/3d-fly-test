@@ -273,7 +273,8 @@ class BalancedProfileCallback(BaseCallback):
                 "mean_velocity_direction_coverage": sum(x["velocity_direction_coverage"] for x in episodes) / count,
                 "mean_neutral_braking_time_seconds": (
                     sum(x["neutral_braking_time_seconds"] for x in episodes if x["neutral_braking_time_seconds"] is not None)
-                    / max(sum(x["neutral_braking_time_seconds"] is not None for x in episodes), 1)
+                    / sum(x["neutral_braking_time_seconds"] is not None for x in episodes)
+                    if any(x["neutral_braking_time_seconds"] is not None for x in episodes) else None
                 ),
                 "mean_motor_saturation_fraction": sum(x["mean_motor_saturation_fraction"] for x in episodes) / count,
                 "mean_motor_zero_command_fraction": sum(x["mean_motor_zero_command_fraction"] for x in episodes) / count,
