@@ -58,3 +58,6 @@ jobs:
 
       - name: Run existing CAD asset-validator tests
         run: python -m pytest -q tests/test_preflight_asset_validator.py
+
+      - name: Validate Smooth2 CAD-to-simulator geometry synchronization
+        run: python scripts/validate_smooth2_model_sync.py
