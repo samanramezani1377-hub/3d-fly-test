@@ -425,10 +425,29 @@ def load_ppo_checkpoint(PPO, checkpoint, env, args, run_dir):
             )
     if len(expanded) != 2:
         raise RuntimeError(f"Expected to expand actor and critic input layers, expanded: {expanded}")
+
+    # The legacy Smooth2 CAD export used X=lateral, Y=longitudinal (nose=-Y),
+    # while the corrected plant uses X=forward, Y=left. The proper +90 degree
+    # body-frame rotation maps old [roll, pitch, yaw] torque outputs to
+    # new [-old_pitch, old_roll, old_yaw]. Remap the actor mean and its std
+    # so the old hover stabilizer keeps the same physical action after frame
+    # normalization; yaw and collective remain unchanged.
+    action_weight = old_state.get("action_net.weight")
+    action_bias = old_state.get("action_net.bias")
+    if action_weight is None or action_bias is None or action_weight.shape[0] != 4 or action_bias.shape[0] != 4:
+        raise RuntimeError("Legacy checkpoint does not expose the expected four-axis action head.")
+    new_state["action_net.weight"][1].copy_(-action_weight[2])
+    new_state["action_net.weight"][2].copy_(action_weight[1])
+    new_state["action_net.bias"][1].copy_(-action_bias[2])
+    new_state["action_net.bias"][2].copy_(action_bias[1])
+    if "log_std" in old_state and tuple(old_state["log_std"].shape) == (4,):
+        new_state["log_std"][1].copy_(old_state["log_std"][2])
+        new_state["log_std"][2].copy_(old_state["log_std"][1])
+
     model.policy.load_state_dict(new_state)
     print(
-        "[CHECKPOINT_MIGRATION] preserved all compatible hover-policy weights; "
-        f"zero-initialized command inputs in {expanded}; optimizer state reinitialized.",
+        "[CHECKPOINT_MIGRATION] expanded command inputs with zeros; remapped legacy "
+        "roll/pitch action axes for the CAD-to-body frame correction; optimizer state reinitialized.",
         flush=True,
     )
     return model
