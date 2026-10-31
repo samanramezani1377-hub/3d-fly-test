@@ -205,6 +205,12 @@ class AdaptiveDroneEnv(gym.Env):
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
         self.target = self.initial_target.copy()
+        requested_target = (options or {}).get("target_position")
+        if requested_target is not None:
+            requested_target = np.asarray(requested_target, dtype=np.float64)
+            if requested_target.shape != (3,) or not np.all(np.isfinite(requested_target)):
+                raise ValueError("reset target_position must contain three finite values")
+            self.target = requested_target.copy()
         if self.randomize:
             episode_params, self._scenario_details = sample_scenario(
                 self.base_params, self.np_random, self.active_randomization
