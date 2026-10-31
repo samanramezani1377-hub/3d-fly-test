@@ -450,3 +450,52 @@ This is a target workflow, not a completed autopilot deployment stack. The curre
 | Real-time motor/ESC/battery safety supervisor | Not implemented |
 | Native SkySim universal-policy adapter | Not implemented |
 | Real-hardware validation or flight clearance | Not performed |
+
+
+## 10. Electrical telemetry and identification boundaries
+
+The family profiles now carry their declared nominal battery voltage and capacity
+into the plant. The simulator reports per-motor shaft-power estimates, a
+model-based battery-current estimate, accumulated estimated Ah/Wh, and an
+estimated state of charge. This is diagnostic telemetry only; it does not add
+new policy observations or change PPO action selection.
+
+The electrical estimate is derived from the existing configured reaction-torque
+proxy and an optimistic motor-efficiency upper bound. It intentionally excludes
+motor no-load current, winding/copper losses, ESC losses, wiring losses and
+battery internal resistance. Consequently, it is not a calibrated current
+prediction and must not be used to size the battery, ESC, wiring or flight time.
+Battery voltage sag, ESC current limiting and thermal dynamics remain disabled
+because the exact battery pack resistance, ESC model/limits and thermal data are
+unknown. The 3S / 11.1 V / 2.2 Ah Smooth2 entry is a provisional software
+reference, not confirmation of the installed pack. See
+`vehicle_models/components/lipo_3s_2200mah_reference.json`.
+
+A first-order motor time-constant fitter is available as
+`fast_physics.system_identification.estimate_first_order_time_constant`.
+It consumes synchronized target-speed and measured-RPM logs. It estimates
+actuator lag only; it does not fit thrust, torque or propeller coefficients.
+
+## 11. Mass, centre-of-gravity and inertia measurement workflow
+
+The Smooth2 CAD export supplies geometry and rotor locations, but it does not
+supply verified material density, component mass, assembled centre of gravity
+or inertia. The empty data-entry sheet is
+`vehicle_models/smooth2_parametric/component_mass_measurements_template.csv`.
+Record each component's measured mass, centre in the declared
+`CAD_EXPORT_Z_UP` frame, and centroidal inertia tensor where available.
+
+The aggregation utility
+`training/fast_physics/mass_properties.py` sums component masses, calculates
+the weighted CG and combines centroidal inertias using the parallel-axis
+theorem. Run it after filling the CSV:
+
+```bash
+PYTHONPATH=training python -m fast_physics.mass_properties \
+  vehicle_models/smooth2_parametric/component_mass_measurements_template.csv \
+  /tmp/smooth2-mass-properties.json
+```
+
+The output is a calculation from supplied measurements, not an automatic CAD
+mass estimate. Do not populate the production calibration record until every
+required component is represented and the coordinate frame is checked.
