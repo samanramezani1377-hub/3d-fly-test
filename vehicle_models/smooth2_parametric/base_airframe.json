@@ -42,7 +42,9 @@
     "propeller_diameter_mm_final": 158.998964432,
     "propeller_pitch_mm_design": 98.004,
     "guard_outer_radius_mm_design": 44.375,
-    "camera_tilt_down_deg": 35
+    "camera_tilt_down_deg": 35,
+    "lowest_assembled_point_z_m": -0.0059737,
+    "ground_clearance_reference": "CAD-derived from minimum assembled Z=-5.9737 mm in output/smooth2-parametric/validation-report.json; clearance is recomputed relative to each episode CG"
   },
   "rotors": [
     {
