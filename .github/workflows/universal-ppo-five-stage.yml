@@ -87,14 +87,14 @@ jobs:
           cp "$source_selection" training/runs/smooth2-initial-from-1m-teacher-best-selection.json
           sha256sum "$source_model" | tee training/runs/smooth2-initial-from-1m-teacher-best.sha256
 
-      - name: Train five chained stages with progressive randomization and teacher fade
+      - name: Train five chained teacher-free 3D velocity stages
         run: |
           set -euo pipefail
           checkpoint="training/runs/smooth2-initial-from-1m-teacher-best.zip"
           teacher_weight="0.0"
           for stage in 1 2 3 4 5; do
             teacher="$teacher_weight"
-            run_name="smooth2-ppo-stage-${stage}"
+            run_name="smooth2-velocity-ppo-stage-${stage}"
             echo "===== Smooth2 velocity stage $stage: 400K steps, teacher disabled ====="
             python training/train_universal_ppo.py \
               --timesteps "$STAGE_STEPS" --n-envs "$N_ENVS" \
@@ -123,7 +123,7 @@ jobs:
           set -euo pipefail
           target="training/models/smooth2-ppo-five-stage"
           mkdir -p "$target"
-          cp -a training/runs/smooth2-ppo-stage-* "$target/"
+          cp -a training/runs/smooth2-velocity-ppo-stage-* "$target/"
           cp training/runs/smooth2-initial-from-1m-teacher-best.zip "$target/"
           cp training/runs/smooth2-initial-from-1m-teacher-best-selection.json "$target/"
           cp training/runs/smooth2-initial-from-1m-teacher-best.sha256 "$target/"
@@ -173,11 +173,11 @@ jobs:
       - name: Print Smooth2 training summaries
         if: always()
         run: |
-          for log in smooth2-ppo-stage-*.log; do
+          for log in smooth2-velocity-ppo-stage-*.log; do
             echo "===== $log ====="
             if [ -f "$log" ]; then tail -c 30000 "$log"; fi
           done
-          for state in training/runs/smooth2-ppo-stage-*/training_state.json; do
+          for state in training/runs/smooth2-velocity-ppo-stage-*/training_state.json; do
             echo "===== $state ====="
             if [ -f "$state" ]; then cat "$state"; fi
           done
@@ -186,7 +186,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smooth2-ppo-five-stage-backup
+          name: smooth2-velocity-ppo-five-stage-backup
           path: |
             training/runs/
             training/models/smooth2-ppo-five-stage/
