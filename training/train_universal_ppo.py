@@ -296,7 +296,7 @@ def main(argv=None):
                 curriculum_stage=args.curriculum_stage,
                 sampling_weights_path=sampling_weights_path,
             )
-            return BodyWrenchActionWrapper(base_env)
+            return BodyWrenchActionWrapper(base_env, disable_teacher=args.no_teacher)
         return _init
 
     env = SubprocVecEnv([make_env(i) for i in range(args.n_envs)])
