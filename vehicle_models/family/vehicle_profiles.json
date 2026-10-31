@@ -236,7 +236,7 @@
           "cl_limit": 1.2,
           "cd0": 0.012,
           "cd_k": 0.01,
-          "integration_sections": 48,
+          "integration_sections": 120,
           "source_repository": "samanramezani1377-hub/3D",
           "source_branch": "kilo",
           "source_commit": "38d4820fc5f7e2208e6ce502ca6b54a83989196a",
