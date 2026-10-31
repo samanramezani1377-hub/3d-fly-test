@@ -65,7 +65,12 @@ def test_all_curriculum_stages_preserve_minimum_hover_thrust_margin():
             worst_mass = max(stage["mass"]["scale"])
             worst_voltage = min(stage["battery"]["voltage_factor"])
             worst_motor = min(stage["motor"]["effectiveness"])
-            worst_case_twr = nominal_twr * worst_voltage**2 * worst_motor / worst_mass
+            worst_rotor_speed = min(stage["motor"]["max_rotor_speed_scale"])
+            worst_thrust_coefficient = min(stage["thrust"]["coefficient_scale"])
+            worst_case_twr = (
+                nominal_twr * worst_voltage**2 * worst_motor
+                * worst_rotor_speed**2 * worst_thrust_coefficient / worst_mass
+            )
             assert worst_case_twr > 1.05, (
                 f"{profile['vehicle_id']} stage {stage_number} has insufficient "
                 f"worst-case thrust-to-weight margin: {worst_case_twr:.3f}"
