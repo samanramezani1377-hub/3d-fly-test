@@ -63,6 +63,9 @@ class VehicleParameters:
     battery_capacity_ah: float | None = None
     motor_efficiency_upper_bound: float = 0.8
     propeller_bemt: dict[str, Any] | None = None
+    # CAD-export Z of the lowest assembled solid, relative to the CAD origin.
+    # The plant origin is the calibrated CG, so clearance also depends on CG Z.
+    airframe_lowest_point_z_m: float = -0.0059737
 
     def validate(self) -> None:
         if not np.isfinite(self.mass_kg) or self.mass_kg <= 0:
@@ -214,6 +217,7 @@ def load_vehicle_parameters(
         ),
         motor_efficiency_upper_bound=float(calibration.get("electrical_model", {}).get("motor_reference", {}).get("efficiency_upper_bound_fraction", 0.8)),
         propeller_bemt=motor.get("propeller_bemt"),
+        airframe_lowest_point_z_m=float(airframe.get("geometry", {}).get("lowest_assembled_point_z_m", -0.0059737)),
     )
     params.validate()
     metadata = {
