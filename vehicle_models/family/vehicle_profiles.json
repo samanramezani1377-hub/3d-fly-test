@@ -5,6 +5,7 @@
   "profiles": [
     {
       "vehicle_id": "smooth2-a2212-custom-prop",
+      "coordinate_frame": "CAD_EXPORT_Z_UP",
       "display_name": "Current smooth2 CAD + A2212 reference",
       "calibration_status": "provisional_estimate",
       "parameter_source": "CAD-derived rotor geometry plus synthetic mass, inertia and propulsion coefficients for software training",
