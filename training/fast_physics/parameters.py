@@ -173,6 +173,9 @@ def load_vehicle_parameters(
         linear_drag_kg_s=float(physical.get("linear_drag_kg_s", 0.08)),
         quadratic_drag_kg_m=float(physical.get("quadratic_drag_kg_m", 0.015)),
         angular_damping_nms=float(physical.get("angular_damping_nms", 0.002)),
+        linear_drag_body_kg_s=tuple(physical["linear_drag_body_kg_s"]) if physical.get("linear_drag_body_kg_s") is not None else None,
+        quadratic_drag_body_kg_m=tuple(physical["quadratic_drag_body_kg_m"]) if physical.get("quadratic_drag_body_kg_m") is not None else None,
+        rotor_inertia_kg_m2=float(motor.get("rotor_inertia_kg_m2", 0.0)),
     )
     params.validate()
     metadata = {
@@ -241,6 +244,14 @@ def sample_scenario(
         motor_time_constant_s=base.motor_time_constant_s * motor_response_scale,
         linear_drag_kg_s=base.linear_drag_kg_s * drag_scale,
         quadratic_drag_kg_m=base.quadratic_drag_kg_m * drag_scale,
+        linear_drag_body_kg_s=(
+            tuple((np.asarray(base.linear_drag_body_kg_s) * drag_scale).tolist())
+            if base.linear_drag_body_kg_s is not None else None
+        ),
+        quadratic_drag_body_kg_m=(
+            tuple((np.asarray(base.quadratic_drag_body_kg_m) * drag_scale).tolist())
+            if base.quadratic_drag_body_kg_m is not None else None
+        ),
     )
     sampled.validate()
     details = {
