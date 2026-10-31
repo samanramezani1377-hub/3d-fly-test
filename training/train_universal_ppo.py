@@ -34,44 +34,46 @@ def parse_args(argv=None):
     p.add_argument("--no-randomization", action="store_true")
     p.add_argument("--no-teacher", action="store_true", help="Disable privileged reference guidance while retaining the selected physics curriculum.")
     p.add_argument("--teacher-weight", type=float, default=None, help="Override the curriculum reference-teacher blend weight (0.0 to 1.0).")
-    p.add_argument("--velocity-control", action="store_true", help="Train nose-relative forward/left plus world-up velocity tracking.")
+    p.add_argument("--velocity-control", action="store_true", help="Train nose-relative 3D velocity plus independent yaw-rate tracking.")
     return p.parse_args(argv)
 
 
 
 def build_velocity_evaluation_sequence(episode_index: int, stage: int, limits_m_s=(1.5, 1.5, 0.75)):
-    """Cover 6 cardinal, 12 two-axis and 8 three-axis directions, including reversals."""
+    """Exercise 26 translational combinations plus yaw-only turns and combined turns."""
     limits = np.asarray(limits_m_s, dtype=np.float64)
     if limits.shape != (3,) or np.any(limits <= 0):
         raise ValueError("velocity evaluation limits must be three positive values")
     stage_bands = {1: (0.25, 0.02), 2: (0.35, 0.03), 3: (0.45, 0.035), 4: (0.50, 0.04), 5: (0.55, 0.05)}
     base_scale, episode_increment = stage_bands.get(int(stage), stage_bands[5])
     speed_scale = base_scale + episode_increment * (int(episode_index) % 10)
+    yaw_limits = {1: np.deg2rad(20), 2: np.deg2rad(35), 3: np.deg2rad(50), 4: np.deg2rad(70), 5: np.deg2rad(90)}
+    yaw_limit = float(yaw_limits.get(int(stage), yaw_limits[5]))
     direction_pairs = []
-    # Three cardinal axes; each is immediately followed by its reverse.
     for axis in range(3):
         vector = np.zeros(3, dtype=np.float64)
         vector[axis] = speed_scale * limits[axis]
         direction_pairs.append(vector)
-    # Six unique two-axis directions modulo sign; reverse each one immediately.
     for first, second in ((0, 1), (0, 2), (1, 2)):
         for sign_second in (-1.0, 1.0):
             vector = np.zeros(3, dtype=np.float64)
             vector[first] = speed_scale * limits[first] / np.sqrt(2.0)
             vector[second] = sign_second * speed_scale * limits[second] / np.sqrt(2.0)
             direction_pairs.append(vector)
-    # Four unique three-axis directions modulo sign; reverse each one immediately.
     for sign_y in (-1.0, 1.0):
         for sign_z in (-1.0, 1.0):
-            direction_pairs.append(
-                speed_scale * limits * np.array([1.0, sign_y, sign_z]) / np.sqrt(3.0)
-            )
+            direction_pairs.append(speed_scale * limits * np.array([1.0, sign_y, sign_z]) / np.sqrt(3.0))
     offset = (int(episode_index) * 5) % len(direction_pairs)
     direction_pairs = direction_pairs[offset:] + direction_pairs[:offset]
     commands = []
-    for vector in direction_pairs:
-        commands.extend((vector, -vector))
-    return [{"velocity_m_s": command.tolist(), "duration_steps": 45} for command in commands]
+    for index, vector in enumerate(direction_pairs):
+        yaw_rate = yaw_limit if index % 2 == 0 else -yaw_limit
+        commands.append({"velocity_m_s": vector.tolist(), "yaw_rate_rad_s": yaw_rate, "duration_steps": 35})
+        commands.append({"velocity_m_s": (-vector).tolist(), "yaw_rate_rad_s": -yaw_rate, "duration_steps": 35})
+    # Pure in-place turns, both directions and lower-rate precision checks.
+    for yaw_rate in (yaw_limit, -yaw_limit, 0.5 * yaw_limit, -0.5 * yaw_limit):
+        commands.append({"velocity_m_s": [0.0, 0.0, 0.0], "yaw_rate_rad_s": yaw_rate, "duration_steps": 35})
+    return commands
 
 class BalancedProfileCallback(BaseCallback):
     """Choose the checkpoint that best protects the weakest vehicle profile."""
@@ -183,6 +185,8 @@ class BalancedProfileCallback(BaseCallback):
                     zero_command_samples = []
                     velocity_tracking_errors = []
                     velocity_command_errors = {}
+                    yaw_rate_errors = []
+                    yaw_command_errors = {}
                     neutral_started_step = None
                     neutral_stop_time = None
                     neutral_stop_stable_steps = 0
@@ -201,12 +205,16 @@ class BalancedProfileCallback(BaseCallback):
                                 velocity_command_errors.setdefault(command_index, []).append(
                                     float(info.get("velocity_tracking_error_m_s", float("inf")))
                                 )
+                                yaw_error = abs(float(info.get("yaw_rate_tracking_error_rad_s", float("inf"))))
+                                yaw_rate_errors.append(yaw_error)
+                                yaw_command_errors.setdefault(command_index, []).append(yaw_error)
                             if info.get("velocity_command_sequence_complete"):
                                 if neutral_started_step is None:
                                     neutral_started_step = int(plant_env.inner._steps)
                                 if neutral_stop_time is None:
                                     current_speed = float(np.linalg.norm(info.get("state_velocity_m_s", [999, 999, 999])))
-                                    neutral_stop_stable_steps = neutral_stop_stable_steps + 1 if current_speed <= 0.25 else 0
+                                    current_yaw_rate = abs(float((info.get("angular_velocity_rad_s") or [999, 999, 999])[2]))
+                                    neutral_stop_stable_steps = neutral_stop_stable_steps + 1 if current_speed <= 0.25 and current_yaw_rate <= 0.15 else 0
                                     if neutral_stop_stable_steps >= 25:
                                         neutral_stop_time = (
                                             int(plant_env.inner._steps) - neutral_started_step - 24
@@ -248,9 +256,15 @@ class BalancedProfileCallback(BaseCallback):
                     command_means = [sum(values) / len(values) for values in velocity_command_errors.values()]
                     max_command_error = max(command_means, default=float("inf")) if self.velocity_control else 0.0
                     command_coverage = len(velocity_command_errors) if self.velocity_control else 0
+                    mean_yaw_rate_error = sum(yaw_rate_errors) / max(len(yaw_rate_errors), 1) if self.velocity_control else 0.0
+                    max_yaw_command_error = max((sum(values) / len(values) for values in yaw_command_errors.values()), default=float("inf")) if self.velocity_control else 0.0
+                    yaw_command_coverage = len(yaw_command_errors) if self.velocity_control else 0
                     success = bool(not crashed and took_off and (
                         mean_tracking_error <= 0.50 and max_command_error <= 0.85
-                        and command_coverage == 26 and neutral_stop_time is not None and neutral_stop_time <= 3.5
+                        and command_coverage == 26
+                        and mean_yaw_rate_error <= 0.30 and max_yaw_command_error <= 0.50
+                        and yaw_command_coverage == 30
+                        and neutral_stop_time is not None and neutral_stop_time <= 3.5
                         if self.velocity_control else stable_seconds >= 5.0))
                     episodes.append({"seed": seed, "success": success,
                         "takeoff_success": took_off, "takeoff_failed": bool(not took_off and truncated),
@@ -259,6 +273,9 @@ class BalancedProfileCallback(BaseCallback):
                         "mean_velocity_tracking_error_m_s": mean_tracking_error,
                         "max_direction_velocity_tracking_error_m_s": max_command_error,
                         "velocity_direction_coverage": command_coverage,
+                        "mean_yaw_rate_tracking_error_rad_s": mean_yaw_rate_error,
+                        "max_yaw_command_tracking_error_rad_s": max_yaw_command_error,
+                        "yaw_command_coverage": yaw_command_coverage,
                         "neutral_braking_time_seconds": neutral_stop_time,
                         "return": total,
                         "mean_motor_saturation_fraction": sum(saturation_samples) / max(len(saturation_samples), 1),
@@ -279,6 +296,9 @@ class BalancedProfileCallback(BaseCallback):
                 "mean_velocity_tracking_error_m_s": sum(x["mean_velocity_tracking_error_m_s"] for x in episodes) / count,
                 "mean_max_direction_tracking_error_m_s": sum(x["max_direction_velocity_tracking_error_m_s"] for x in episodes) / count,
                 "mean_velocity_direction_coverage": sum(x["velocity_direction_coverage"] for x in episodes) / count,
+                "mean_yaw_rate_tracking_error_rad_s": sum(x["mean_yaw_rate_tracking_error_rad_s"] for x in episodes) / count,
+                "mean_max_yaw_command_tracking_error_rad_s": sum(x["max_yaw_command_tracking_error_rad_s"] for x in episodes) / count,
+                "mean_yaw_command_coverage": sum(x["yaw_command_coverage"] for x in episodes) / count,
                 "mean_neutral_braking_time_seconds": (
                     sum(x["neutral_braking_time_seconds"] for x in episodes if x["neutral_braking_time_seconds"] is not None)
                     / sum(x["neutral_braking_time_seconds"] is not None for x in episodes)
@@ -369,14 +389,14 @@ def load_ppo_checkpoint(PPO, checkpoint, env, args, run_dir):
         raise RuntimeError("A same-stage resume checkpoint must already use the current observation shape.")
     if not args.velocity_control or len(source_shape) != 1 or len(target_shape) != 1:
         raise RuntimeError(f"Checkpoint observation shape {source_shape} is incompatible with environment {target_shape}.")
-    if target_shape[0] != source_shape[0] + 3:
+    if target_shape[0] != source_shape[0] + 4:
         raise RuntimeError(
-            f"Only the expected three velocity-command inputs may be added; "
+            f"Only the expected four velocity/yaw command inputs may be added; "
             f"checkpoint={source_shape}, environment={target_shape}."
         )
 
-    # Warm-start the old hover policy. The three new command columns start at
-    # zero, preserving the old policy response until PPO learns command tracking.
+    # Warm-start the old hover policy. Four new command columns (3D velocity + yaw rate)
+    # start at zero, preserving the old policy response at initialization.
     model = build_ppo(PPO, env, args, run_dir)
     old_state = source.policy.state_dict()
     new_state = model.policy.state_dict()
@@ -389,7 +409,7 @@ def load_ppo_checkpoint(PPO, checkpoint, env, args, run_dir):
             new_state[key] = old_tensor
         elif (key.endswith(".weight") and old_tensor.ndim == 2 and new_tensor.ndim == 2
               and old_tensor.shape[0] == new_tensor.shape[0]
-              and new_tensor.shape[1] == old_tensor.shape[1] + 3):
+              and new_tensor.shape[1] == old_tensor.shape[1] + 4):
             expanded_tensor = new_tensor.clone()
             expanded_tensor.zero_()
             expanded_tensor[:, :old_tensor.shape[1]] = old_tensor
@@ -528,12 +548,14 @@ def main(argv=None):
             "vehicle_family_file": str(args.vehicle_family),
             "vehicle_profiles": [{"vehicle_id":p["vehicle_id"],"calibration_status":p["calibration_status"],
                                   "parameter_source":p.get("parameter_source","unspecified")} for p in profiles],
-            "policy_observation": ("dimensionless-scaled state/action history + online lift estimate/confidence + normalized body-relative forward/left and world-up velocity command + 12 nominal hardware features" if args.velocity_control else "dimensionless-scaled state/action history + online lift estimate/confidence + 12 normalized nominal hardware features"),
+            "policy_observation": ("dimensionless-scaled state/action history + online lift estimate/confidence + normalized body-relative forward/left, world-up velocity and yaw-rate command + 12 nominal hardware features" if args.velocity_control else "dimensionless-scaled state/action history + online lift estimate/confidence + 12 normalized nominal hardware features"),
             "velocity_control_enabled": args.velocity_control,
             "velocity_command_frame": "yaw-aligned nose-forward/nose-left plus world-up; forward/left rotate with yaw, vertical remains world-up",
-            "velocity_evaluation_protocol": "every periodic evaluation episode covers 6 cardinal + 12 two-axis + 8 three-axis directions, 50 steps each, followed by a neutral braking interval",
+            "yaw_rate_command": "independent rotation about world vertical; positive is counter-clockwise viewed from above (nose turns left), negative turns right",
+            "yaw_rate_limits_deg_s_by_stage": {"1":20,"2":35,"3":50,"4":70,"5":90} if args.velocity_control else None,
+            "velocity_evaluation_protocol": "every periodic evaluation episode covers 26 translational command directions with simultaneous signed yaw-rate commands, four pure in-place yaw commands, and a neutral linear/angular braking tail; 35 steps per command", 
             "velocity_command_limits_m_s": [1.5, 1.5, 0.75] if args.velocity_control else None,
-            "velocity_command_curriculum": {"stage_1": "single-axis low speed", "stage_2": "single-axis medium speed", "stage_3": "two-axis combinations", "stage_4": "two/three-axis combinations", "stage_5": "continuous random 3D commands"} if args.velocity_control else None,
+            "velocity_command_curriculum": {"stage_1": "single-axis low speed including yaw-only", "stage_2": "single-axis medium speed including yaw", "stage_3": "two-axis translation/yaw combinations", "stage_4": "two/three-axis translation/yaw combinations", "stage_5": "continuous random 3D velocity plus yaw rate"} if args.velocity_control else None,
             "policy_action_semantics": "unbounded_gaussian_tanh_squashed_collective_roll_pitch_yaw_body_wrench",
             "motor_allocator": "geometry-derived nominal-profile wrench allocation; randomized episode parameters hidden",
             "policy_is_hardware_conditioned": True,
@@ -543,7 +565,7 @@ def main(argv=None):
             "reference_teacher_disabled_for_all_periodic_evaluations": True,
             "reference_teacher_weight_override": args.teacher_weight,
             "evaluation_reference_teacher_weight": 0.0,
-            "evaluation_metrics": (["takeoff_success", "all_26_direction_combinations_covered", "mean_and_worst_direction_velocity_tracking_error_m_s", "neutral_command_braking_time_seconds", "path_and_altitude_tracking", "crash_rate", "motor_saturation_fraction", "mean_return"] if args.velocity_control else ["takeoff_success", "five_second_sustained_hover", "crash_rate", "stable_hover_duration", "motor_saturation_fraction", "mean_return"]),
+            "evaluation_metrics": (["takeoff_success", "all_26_direction_combinations_covered", "yaw_only_and_combined_yaw_command_coverage", "mean_and_worst_velocity_and_yaw_rate_tracking_error", "neutral_linear_and_angular_braking_time_seconds", "path_and_altitude_tracking", "crash_rate", "motor_saturation_fraction", "mean_return"] if args.velocity_control else ["takeoff_success", "five_second_sustained_hover", "crash_rate", "stable_hover_duration", "motor_saturation_fraction", "mean_return"]),
             "sb3_diagnostics": ["train/approx_kl", "train/explained_variance", "train/entropy_loss", "train/value_loss", "train/policy_gradient_loss"],
             "episode_randomization_ground_truth_is_hidden": True,
             "physics_backend": "training.fast_physics.FastQuadrotor",
