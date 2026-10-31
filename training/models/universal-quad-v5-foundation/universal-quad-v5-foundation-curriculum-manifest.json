@@ -1,0 +1,51 @@
+{
+  "pipeline_version": 5,
+  "config": {
+    "pipeline_version": 5,
+    "active_stages": 1,
+    "timesteps_per_stage": 2000000,
+    "n_envs": 32,
+    "checkpoint_eval_episodes": 2,
+    "eval_frequency": 100000,
+    "checkpoint_frequency": 20000,
+    "ppo_n_steps": 500,
+    "ppo_batch_size": 250,
+    "final_evaluation_episodes": 20,
+    "min_final_success_rate": 0.5,
+    "max_final_crash_rate": 0.25,
+    "min_final_takeoff_rate": 0.75,
+    "vehicle_family": "/home/runner/work/3d-fly-test/3d-fly-test/vehicle_models/family/vehicle_profiles.json",
+    "seed": 42
+  },
+  "stages": [
+    {
+      "stage": 1,
+      "completed": true,
+      "training_timesteps": 2000000,
+      "best_checkpoint": "/home/runner/work/3d-fly-test/3d-fly-test/training/runs/universal-quad-v5-foundation-stage1/best/best_model.zip",
+      "final_checkpoint": "/home/runner/work/3d-fly-test/3d-fly-test/training/runs/universal-quad-v5-foundation-stage1/final_model.zip",
+      "checkpoint_evaluations": "/home/runner/work/3d-fly-test/3d-fly-test/training/runs/universal-quad-v5-foundation-stage1/profile-evaluations"
+    }
+  ],
+  "checkpoint_handoff": "previous_stage_best_evaluated_checkpoint",
+  "resume_policy": "same-stage latest checkpoint only; full fresh budget for each new stage",
+  "action_semantics": "collective-thrust-plus-body-torque-allocation-v2",
+  "reference_guidance": "privileged-teacher-weight-0.80-0.60-0.40-0.20-0.00",
+  "adaptive_profile_sampling": "smoothed-weak-profile-reweighting",
+  "checkpoint_selection": "min-hover-success,max-crash,min-takeoff,stable-duration,min-saturation,mean-reward",
+  "observation_scaling": "dimensionless-state-history-v1",
+  "progressive_initial_recovery": "ground-start-with-stage-scaled-position-and-attitude-perturbations",
+  "simulation_only": true,
+  "physical_flight_eligible": false,
+  "training_mode": "single_stage_takeoff_and_sustained_hover",
+  "active_stages": [
+    1
+  ],
+  "deferred_stages": [
+    2,
+    3,
+    4,
+    5
+  ],
+  "final_held_out_evaluation": "deferred_until_all_five_stages_are_reactivated"
+}

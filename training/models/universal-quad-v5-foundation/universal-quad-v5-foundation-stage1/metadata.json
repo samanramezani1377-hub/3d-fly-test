@@ -1,0 +1,80 @@
+{
+  "run_name": "universal-quad-v5-foundation-stage1",
+  "created_at": "2026-10-31T00:04:00.430826+00:00",
+  "timesteps": 2000000,
+  "n_envs": 32,
+  "seed": 42,
+  "evaluation_frequency_aggregate_steps": 100000,
+  "evaluation_episodes": 2,
+  "best_checkpoint": "/home/runner/work/3d-fly-test/3d-fly-test/training/runs/universal-quad-v5-foundation-stage1/best/best_model.zip",
+  "balanced_selection_score": [
+    1.0,
+    -0.0,
+    1.0,
+    28.924999999999997,
+    -0.0,
+    4962.417576974453
+  ],
+  "balanced_selection_report": "profile-evaluation-560000.json",
+  "checkpoint_selection": "min_profile_hover_then_min_worst_crash_then_min_profile_takeoff_then_stable_duration_then_min_upper_motor_saturation_then_mean_episode_return",
+  "history_length": 4,
+  "curriculum_stage": 1,
+  "initial_model": null,
+  "domain_randomization": true,
+  "vehicle_family_file": "/home/runner/work/3d-fly-test/3d-fly-test/vehicle_models/family/vehicle_profiles.json",
+  "vehicle_profiles": [
+    {
+      "vehicle_id": "smooth2-a2212-custom-prop",
+      "calibration_status": "provisional_estimate",
+      "parameter_source": "CAD-derived rotor geometry plus synthetic mass, inertia and propulsion coefficients for software training"
+    },
+    {
+      "vehicle_id": "generic-5inch-quad",
+      "calibration_status": "provisional_estimate",
+      "parameter_source": "Generic 5-inch class engineering estimate; not tied to a verified bill of materials"
+    },
+    {
+      "vehicle_id": "generic-7inch-long-range",
+      "calibration_status": "provisional_estimate",
+      "parameter_source": "Generic 7-inch class engineering estimate; not tied to a verified bill of materials"
+    },
+    {
+      "vehicle_id": "generic-3inch-cinewhoop",
+      "calibration_status": "provisional_estimate",
+      "parameter_source": "Generic ducted 3-inch class engineering estimate; not tied to a verified bill of materials"
+    }
+  ],
+  "policy_observation": "dimensionless-scaled state/action history + online lift estimate/confidence + 12 normalized nominal hardware features",
+  "policy_action_semantics": "unbounded_gaussian_tanh_squashed_collective_roll_pitch_yaw_body_wrench",
+  "motor_allocator": "geometry-derived nominal-profile wrench allocation; randomized episode parameters hidden",
+  "policy_is_hardware_conditioned": true,
+  "profile_sampling": "adaptive weakness-weighted sampling; smoothed updates from balanced profile evaluation",
+  "reference_teacher_schedule": {
+    "stage_1": 0.8,
+    "stage_2": 0.6,
+    "stage_3": 0.4,
+    "stage_4": 0.2,
+    "stage_5": 0.0
+  },
+  "evaluation_metrics": [
+    "takeoff_success",
+    "five_second_sustained_hover",
+    "crash_rate",
+    "stable_hover_duration",
+    "motor_saturation_fraction",
+    "mean_return"
+  ],
+  "sb3_diagnostics": [
+    "train/approx_kl",
+    "train/explained_variance",
+    "train/entropy_loss",
+    "train/value_loss",
+    "train/policy_gradient_loss"
+  ],
+  "episode_randomization_ground_truth_is_hidden": true,
+  "physics_backend": "training.fast_physics.FastQuadrotor",
+  "stable_baselines3_version": "2.9.2",
+  "simulation_only": true,
+  "physical_flight_eligible": false,
+  "warning": "Provisional profiles and this policy are not approved for physical flight."
+}
