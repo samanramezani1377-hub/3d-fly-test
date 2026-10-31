@@ -11,6 +11,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "training"))
 
 from fast_physics import AdaptiveDroneEnv, FastQuadrotor, VehicleParameters, load_vehicle_parameters, sample_scenario, OnlineThrustEstimator, randomization_for_stage
+from fast_physics.ppo_action import wrench_to_motor_commands
+from fast_physics.vehicle_family import load_vehicle_profiles, profile_to_parameters
+from fast_physics.velocity_reference import VelocityYawReferenceController
 from evaluate_robust_ppo import summarize_episode
 AIRFRAME = ROOT / "vehicle_models/smooth2_parametric/base_airframe.json"
 CALIBRATION = ROOT / "vehicle_models/smooth2_parametric/physics_calibration.json"
@@ -227,6 +230,139 @@ def test_online_estimator_uses_sensor_measurement_not_simulator_truth():
     finally:
         env.close()
 
+
+
+def test_smooth2_cad_frame_is_converted_to_forward_left_up_body_frame():
+    params, metadata = load_vehicle_parameters(
+        AIRFRAME, CALIBRATION, allow_synthetic_calibration=True
+    )
+    assert metadata["source_coordinate_frame"] == "CAD_EXPORT_Z_UP"
+    assert metadata["body_coordinate_frame"] == "BODY_FORWARD_LEFT_UP"
+    expected = np.array([
+        [-0.082013624, 0.082013624, 0.0],
+        [0.082013624, 0.082013624, 0.0],
+        [0.082013624, -0.082013624, 0.0],
+        [-0.082013624, -0.082013624, 0.0],
+    ])
+    assert np.allclose(params.rotor_positions_m, expected)
+    # The 90-degree frame rotation swaps CAD X/Y principal inertias.
+    assert np.allclose(params.inertia_matrix, np.diag([0.006, 0.004, 0.004]))
+
+
+def test_smooth2_family_profile_coordinate_conversion_is_idempotent():
+    profiles = load_vehicle_profiles(ROOT / "vehicle_models/family/vehicle_profiles.json")
+    profile = next(p for p in profiles if p["vehicle_id"] == "smooth2-a2212-custom-prop")
+    first = profile_to_parameters(profile)
+    second = profile_to_parameters(profile)
+    assert profile["coordinate_frame"] == "BODY_FORWARD_LEFT_UP"
+    assert profile["source_coordinate_frame"] == "CAD_EXPORT_Z_UP"
+    assert first.rotor_positions_m == second.rotor_positions_m
+    assert first.inertia_kg_m2 == second.inertia_kg_m2
+    assert np.allclose(first.rotor_positions_m[0], [-0.082013624, 0.082013624, 0.0])
+
+
+def test_body_yaw_velocity_axes_match_forward_left_and_world_heading():
+    forward = np.array([1.0, 0.0, 0.0])
+    left = np.array([0.0, 1.0, 0.0])
+    assert np.allclose(AdaptiveDroneEnv._body_yaw_velocity_to_world(forward, 0.0), [1, 0, 0])
+    assert np.allclose(AdaptiveDroneEnv._body_yaw_velocity_to_world(left, 0.0), [0, 1, 0])
+    assert np.allclose(
+        AdaptiveDroneEnv._body_yaw_velocity_to_world(forward, np.pi / 2),
+        [0, 1, 0], atol=1e-7,
+    )
+    world = np.array([0.0, 2.0, 0.3])
+    body = AdaptiveDroneEnv._world_velocity_to_body_yaw(world, np.pi / 2)
+    assert np.allclose(body, [2.0, 0.0, 0.3], atol=1e-7)
+
+
+def test_rotor_mixer_produces_correct_longitudinal_lateral_and_yaw_reactions():
+    params = VehicleParameters(
+        mass_kg=0.6, center_of_mass_m=(0.0, 0.0, 0.0),
+        inertia_kg_m2=(0.004, 0.006, 0.004),
+        rotor_positions_m=(
+            (-0.082, 0.082, 0.0), (0.082, 0.082, 0.0),
+            (0.082, -0.082, 0.0), (-0.082, -0.082, 0.0),
+        ),
+        spin_signs=(1.0, -1.0, 1.0, -1.0),
+        max_rotor_speed_rad_s=1100.0,
+        thrust_coefficient_n_per_rad_s2=2.0e-6,
+        torque_to_thrust_m=0.012,
+    )
+    hover_thrust = params.mass_kg * 9.80665 / 4.0
+    hover_omega = np.sqrt(hover_thrust / params.thrust_coefficient_n_per_rad_s2)
+
+    def run_wrench(wrench):
+        plant = FastQuadrotor(params, dt=0.01)
+        plant.reset(position=(0.0, 0.0, 1.0))
+        plant.motor_omega[:] = hover_omega
+        commands = wrench_to_motor_commands(wrench, params)
+        states = []
+        for _ in range(12):
+            state, telemetry = plant.step(commands)
+            states.append(state.copy())
+        return np.asarray(states), telemetry
+
+    pitch_states, pitch_telemetry = run_wrench([params.mass_kg * 9.80665, 0.0, 0.004, 0.0])
+    roll_states, roll_telemetry = run_wrench([params.mass_kg * 9.80665, 0.004, 0.0, 0.0])
+    yaw_states, yaw_telemetry = run_wrench([params.mass_kg * 9.80665, 0.0, 0.0, 0.001])
+    assert pitch_telemetry["body_torque_nm"][1] > 0.0
+    assert roll_telemetry["body_torque_nm"][0] > 0.0
+    assert yaw_telemetry["body_torque_nm"][2] > 0.0
+    assert pitch_states[-1, 4] > 0.0  # positive pitch moves nose-forward (+body X)
+    assert roll_states[-1, 3] < 0.0   # positive roll accelerates toward body-right (-Y)
+    assert yaw_states[-1, 11] > 0.0
+
+
+def test_velocity_teacher_requests_correct_pitch_roll_and_yaw_directions():
+    params = VehicleParameters(
+        mass_kg=0.6, center_of_mass_m=(0.0, 0.0, 0.0),
+        inertia_kg_m2=(0.004, 0.006, 0.004),
+        rotor_positions_m=(
+            (-0.082, 0.082, 0.0), (0.082, 0.082, 0.0),
+            (0.082, -0.082, 0.0), (-0.082, -0.082, 0.0),
+        ),
+        spin_signs=(1.0, -1.0, 1.0, -1.0),
+        max_rotor_speed_rad_s=1100.0,
+        thrust_coefficient_n_per_rad_s2=2.0e-6,
+        torque_to_thrust_m=0.012,
+    )
+    teacher = VelocityYawReferenceController(params)
+    state = np.zeros(12)
+    state[2] = 1.0
+    target = np.array([0.0, 0.0, 1.0])
+    forward = teacher.desired_wrench(
+        state, target_position=target,
+        desired_velocity_body=np.array([0.5, 0.0, 0.0]),
+        desired_yaw_rate_rad_s=0.0,
+    )
+    left = teacher.desired_wrench(
+        state, target_position=target,
+        desired_velocity_body=np.array([0.0, 0.5, 0.0]),
+        desired_yaw_rate_rad_s=0.0,
+    )
+    turn_left = teacher.desired_wrench(
+        state, target_position=target,
+        desired_velocity_body=np.zeros(3), desired_yaw_rate_rad_s=0.3,
+    )
+    turn_right = teacher.desired_wrench(
+        state, target_position=target,
+        desired_velocity_body=np.zeros(3), desired_yaw_rate_rad_s=-0.3,
+    )
+    assert forward[2] > 0.0
+    assert left[1] < 0.0
+    assert turn_left[3] > 0.0 and turn_right[3] < 0.0
+
+
+def test_quaternion_plant_integration_stays_finite_under_combined_body_rates():
+    params = synthetic_params()
+    plant = FastQuadrotor(params, dt=0.01)
+    plant.reset(position=(0.0, 0.0, 1.0))
+    plant.attitude[:] = [0.3, -0.25, 0.7]
+    plant.angular_velocity[:] = [1.5, -1.2, 2.0]
+    for _ in range(500):
+        state, telemetry = plant.step(np.full(4, 0.5))
+        assert np.all(np.isfinite(state))
+        assert np.isclose(np.linalg.norm(telemetry["attitude_quaternion_wxyz"]), 1.0, atol=1e-8)
 
 
 def test_a2212_catalog_reference_is_recorded_without_claiming_physical_calibration():
