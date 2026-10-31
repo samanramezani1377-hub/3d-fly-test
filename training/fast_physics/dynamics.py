@@ -73,8 +73,8 @@ class FastQuadrotor:
 
     def __init__(self, params: VehicleParameters, dt: float = 0.02, gravity_m_s2: float = 9.80665):
         params.validate()
-        if dt <= 0:
-            raise ValueError("dt must be positive")
+        if not np.isfinite(dt) or dt <= 0 or not np.isfinite(gravity_m_s2) or gravity_m_s2 <= 0:
+            raise ValueError("dt and gravity must be finite and positive")
         self.params = params
         self.dt = float(dt)
         self.gravity = float(gravity_m_s2)
@@ -95,6 +95,8 @@ class FastQuadrotor:
         self.wind = np.asarray(wind, dtype=np.float64).copy()
         if self.position.shape != (3,) or self.wind.shape != (3,):
             raise ValueError("position and wind must be 3-vectors")
+        if not np.all(np.isfinite(self.position)) or not np.all(np.isfinite(self.wind)):
+            raise ValueError("position and wind must be finite")
         self.time = 0.0
         return self.state()
 
@@ -105,6 +107,8 @@ class FastQuadrotor:
         command = np.asarray(motor_commands, dtype=np.float64)
         if command.shape != (4,):
             raise ValueError("motor_commands must contain four normalized rotor commands")
+        if not np.all(np.isfinite(command)):
+            raise ValueError("motor_commands must be finite")
         command = np.clip(command, 0.0, 1.0)
         p = self.params
         target_omega = command * p.max_rotor_speed_rad_s * p.voltage_factor
