@@ -184,7 +184,7 @@ def load_vehicle_profiles(path: str | Path = DEFAULT_VEHICLE_FAMILY) -> list[dic
         if min(float(g["arm_span_diagonal_m"]), float(g["propeller_diameter_m"]),
                float(pr["nominal_battery_voltage_v"]), float(pr.get("battery_capacity_ah") or 1.0)) <= 0:
             raise ValueError(f"{vid}: geometry and battery values must be positive")
-        if p.get("calibration_status") not in {"provisional_estimate", "user_supplied", "measured"}:
+        if p.get("calibration_status") not in {"provisional_estimate", "cad_bemt_estimate", "user_supplied", "measured"}:
             raise ValueError(f"{vid}: calibration_status must be provisional_estimate, user_supplied or measured")
         profile_to_parameters(p).validate()
         resolved.append(p)
