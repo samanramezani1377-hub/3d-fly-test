@@ -468,7 +468,7 @@ def main(argv=None):
             "reference_teacher_disabled_for_all_periodic_evaluations": True,
             "reference_teacher_weight_override": args.teacher_weight,
             "evaluation_reference_teacher_weight": 0.0,
-            "evaluation_metrics": (["takeoff_success", "3D_velocity_tracking_error_m_s", "commanded_axis_combinations", "crash_rate", "motor_saturation_fraction", "mean_return"] if args.velocity_control else ["takeoff_success", "five_second_sustained_hover", "crash_rate", "stable_hover_duration", "motor_saturation_fraction", "mean_return"]),
+            "evaluation_metrics": (["takeoff_success", "mean_3D_velocity_tracking_error_m_s", "path_and_altitude_tracking", "crash_rate", "motor_saturation_fraction", "mean_return"] if args.velocity_control else ["takeoff_success", "five_second_sustained_hover", "crash_rate", "stable_hover_duration", "motor_saturation_fraction", "mean_return"]),
             "sb3_diagnostics": ["train/approx_kl", "train/explained_variance", "train/entropy_loss", "train/value_loss", "train/policy_gradient_loss"],
             "episode_randomization_ground_truth_is_hidden": True,
             "physics_backend": "training.fast_physics.FastQuadrotor",
