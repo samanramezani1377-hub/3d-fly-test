@@ -8,17 +8,42 @@ const keys={};
 function setStatus(text,ok=false){$("statusText").textContent=text;$("statusDot").style.background=ok?"#56d6a0":"#f0b66a"}
 function log(text){$("log").textContent=text}
 function diagLog(level,message,code=""){const item={time:new Date().toLocaleTimeString(),level,message,code};diagnosticHistory.push(item);if(diagnosticHistory.length>300)diagnosticHistory.shift();const host=$("diagnosticLog");if(host){host.textContent=diagnosticHistory.map(x=>`[${x.time}] [${x.level.toUpperCase()}] ${x.code?x.code+" · ":""}${x.message}`).join("\n");host.scrollTop=host.scrollHeight}}
+function safeJson(value){try{return JSON.stringify(value,null,2)}catch(e){return String(value)}}
+function collectFlightDebugBundle(){
+ let engineChecks=[];try{if(engineDiagnostics)engineChecks=JSON.parse(engineDiagnostics())}catch(e){engineChecks={error:e.stack||e.message}}
+ const state=snapshot?.state||[];
+ const info=snapshot?.info||{};
+ const params={
+  mass_kg:snapshot?.mass_kg??info.mass_kg??info.scenario?.mass_kg??null,
+  center_of_mass_m:info.center_of_mass_m??null,
+  inertia_kg_m2:info.inertia_kg_m2??null,
+  rotor_positions_m:profile?.rotors?.map(r=>r.position_m)??null,
+  rotor_spin_signs:info.rotor_reaction_torque_sign??profile?.rotors?.map(r=>r.spin_sign)??null,
+  motor_effectiveness:info.motor_effectiveness??info.scenario?.motor_effectiveness??null,
+  scenario:info.scenario??snapshot?.info?.scenario??null,
+  thrust_model_status:info.thrust_model_status??null
+ };
+ return {
+  report_type:"flight_lab_debug_bundle",schema_version:2,captured_at:new Date().toISOString(),
+  page:{url:location.href,user_agent:navigator.userAgent,language:navigator.language,platform:navigator.platform,hardware_concurrency:navigator.hardwareConcurrency??null,device_memory_gb:navigator.deviceMemory??null,screen:{width:screen.width,height:screen.height,pixel_ratio:devicePixelRatio},secure_context:window.isSecureContext},
+  configuration:{vehicle_id:profile?.vehicle_id??null,vehicle_name:profile?.display_name??null,seed:Number($("seedInput")?.value),curriculum_stage:Number($("curriculumSelect")?.value),randomization_enabled:$("randomizeToggle")?.checked??null,armed,paused,direct_motor_mode:directMotorMode,throttle,manual_motor_commands:motors,dt_s:DT},
+  simulation:{step:snapshot?.step??null,time_s:snapshot?.time_s??null,terminated:snapshot?.terminated??null,truncated:snapshot?.truncated??null,reward:snapshot?.reward??null,state:{position_xyz_m:state.slice(0,3),velocity_xyz_m_s:state.slice(3,6),attitude_rpy_rad:state.slice(6,9),attitude_rpy_deg:state.slice(6,9).map(v=>v*180/Math.PI),angular_velocity_body_rad_s:state.slice(9,12)},snapshot:snapshot??null},
+  physical_parameters:params,
+  diagnostics:{engine_health_checks:engineChecks,ui_event_history:diagnosticHistory},
+  visible_logs:{runtime:$("log")?.textContent||"",engine_meta:$("engineMeta")?.textContent||"",diagnostic_panel:$("diagnosticLog")?.textContent||""},
+  interpretation_notes:["This bundle contains simulator model values, not hardware measurements.","For thrust/torque root-cause analysis, retain per-rotor thrust, rotor speed, motor effectiveness, body torque, angular acceleration, CG and inertia fields from simulation.info."]
+ };
+}
 async function copyAllLogs(){
- const diagnosticText=diagnosticHistory.map(x=>{const time=x.time||"";return "["+time+"] ["+(x.level||"INFO").toUpperCase()+"] "+(x.code?x.code+" · ":"")+(x.message||"")}).join("\n");
- const sections=["=== Flight Lab diagnostics ===",diagnosticText,"=== Startup / runtime log ===",$("log")?.textContent||"","=== Engine metadata ===",$("engineMeta")?.textContent||"","=== Browser ===",navigator.userAgent,"Page: "+location.href].filter(Boolean);
- const content=sections.join("\n\n");
+ const bundle=collectFlightDebugBundle();
+ const content="=== FLIGHT LAB DEBUG BUNDLE (JSON) ===\n"+safeJson(bundle)+"\n\n=== HUMAN-READABLE DIAGNOSTICS ===\n"+diagnosticHistory.map(x=>"["+(x.time||"")+"] ["+(x.level||"INFO").toUpperCase()+"] "+(x.code?x.code+" · ":"")+(x.message||"")).join("\n");
  try{
   if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(content);
   else{
    const area=document.createElement("textarea");area.value=content;area.setAttribute("readonly","");area.style.position="fixed";area.style.opacity="0";document.body.appendChild(area);area.select();
    const copied=document.execCommand("copy");area.remove();if(!copied)throw Error("مرورگر اجازهٔ کپی نداد");
   }
-  const button=$("copyDiagnostics");if(button){button.textContent="کپی شد";setTimeout(()=>button.textContent="کپی همهٔ لاگ‌ها",1800)}
+  const button=$("copyDiagnostics");if(button){button.textContent="گزارش کامل کپی شد";setTimeout(()=>button.textContent="کپی همهٔ لاگ‌ها",2200)}
  }catch(e){diagLog("error","کپی لاگ ناموفق بود: "+(e.message||String(e)),"diagnostics.copy")}
 }
 function renderEngineDiagnostics(){if(!engineDiagnostics)return;try{const rows=JSON.parse(engineDiagnostics());for(const x of rows)diagLog(x.level||"info",x.message||JSON.stringify(x),x.code||"")}catch(e){diagLog("error",e.stack||e.message,"diagnostics.read")}}
@@ -151,7 +176,7 @@ function resetEngine(){if(!engineReset)return;armed=false;paused=false;motors=[0
 function buildMotorSliders(){$("motorGrid").innerHTML=[0,1,2,3].map(i=>'<label>موتور '+(i+1)+'<b id="mval'+i+'">0%</b><input type="range" min="0" max="100" value="0" id="m'+i+'"></label>').join("");for(let i=0;i<4;i++)$("m"+i).addEventListener("input",e=>{motors[i]=Number(e.target.value)/100;directMotorMode=true;$("mval"+i).textContent=e.target.value+"%";if(armed)log("فرمان مستقیم روتورها؛ محیط همان VehicleFamilyEnv است.")})}
 async function init(){try{const response=await fetch("./vehicle_models/family/vehicle_profiles.json");if(!response.ok)throw Error("HTTP "+response.status);profiles=(await response.json()).profiles;profile=profiles[0];$("profileSelect").innerHTML=profiles.map((p,i)=>'<option value="'+i+'">'+p.display_name+'</option>').join("");$("profileSelect").addEventListener("change",()=>{profile=profiles[Number($("profileSelect").value)];buildDrone();resetEngine()});buildMotorSliders();init3D();await loadTrainingEngine();resetEngine();}catch(e){console.error("Flight Lab startup failure",e);diagLog("error",e.stack||e.message,"startup.failure");setStatus("خطا در بارگذاری موتور");log("خطای دقیق راه‌اندازی: "+(e.message||String(e)))}}
 $("armBtn").addEventListener("click",()=>{if(!snapshot||snapshot.terminated||snapshot.truncated)return;armed=!armed;$("armBtn").textContent=armed?"قطع موتورها":"مسلح‌سازی موتورها";if(!armed)motors=[0,0,0,0];setStatus(armed?"موتور در حال اجرا":"موتور متوقف شد",true)});
-$("copyDiagnostics").addEventListener("click",copyAllLogs);$("resetBtn").addEventListener("click",resetEngine);$("pauseBtn").addEventListener("click",()=>{paused=!paused;$("pauseBtn").textContent=paused?"ادامه":"توقف"});
+$("copyDiagnostics").addEventListener("click",copyAllLogs);$("clearDiagnostics").addEventListener("click",()=>{diagnosticHistory=[];const panel=$("diagnosticLog");if(panel)panel.textContent="نمایش لاگ پاک شد؛ گزارش بعدی از این نقطه ثبت می‌شود."});$("resetBtn").addEventListener("click",resetEngine);$("pauseBtn").addEventListener("click",()=>{paused=!paused;$("pauseBtn").textContent=paused?"ادامه":"توقف"});
 $("throttle").addEventListener("input",e=>{throttle=Number(e.target.value)/100;directMotorMode=false;$("throttleValue").textContent=e.target.value+"%"});
 $("profileSelect").addEventListener("change",()=>{});$("randomizeToggle").addEventListener("change",()=>resetEngine());$("curriculumSelect").addEventListener("change",()=>resetEngine());$("seedInput").addEventListener("change",()=>resetEngine());
 window.addEventListener("keydown",e=>{const k=e.key.toLowerCase();if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k))e.preventDefault();keys[k]=true;if(e.code==="Space"){armed=false;$("armBtn").textContent="مسلح‌سازی موتورها"}});window.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
