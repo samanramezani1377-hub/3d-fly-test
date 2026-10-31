@@ -148,24 +148,53 @@ def test_env_observation_contains_history_but_not_privileged_parameters():
         env.close()
 
 
-def test_env_starts_and_clamps_using_cad_lowest_point_clearance():
-    params = replace(synthetic_params(), airframe_lowest_point_z_m=-0.012)
+def test_env_uses_mult_point_cad_support_contact_and_resolves_penetration():
+    points = tuple(
+        (x, y, -0.012)
+        for x, y in [(-0.10, -0.10), (-0.10, 0.10), (0.10, -0.10), (0.10, 0.10)]
+    )
+    params = replace(
+        synthetic_params(),
+        airframe_lowest_point_z_m=-0.012,
+        ground_contact_points_m=points,
+    )
     env = AdaptiveDroneEnv(params=params, randomization_path=RANDOMIZATION, randomize=False)
     try:
         _, reset_info = env.reset(seed=5)
         expected_clearance = 0.012
         assert reset_info["ground_clearance_m"] == pytest.approx(expected_clearance)
         assert reset_info["initial_lowest_point_height_m"] == pytest.approx(0.08)
-        # Force a known penetration, then verify the ground response restores the
-        # CG to the CAD-derived clearance rather than incorrectly setting CG z=0.
         env.plant.position[2] = expected_clearance - 0.01
         _, _, _, _, info = env.step(np.zeros(4, dtype=np.float32))
         assert info["ground_contact"] is True
-        assert info["ground_clearance_m"] == pytest.approx(expected_clearance)
-        assert info["ground_penetration_before_clamp_m"] > 0.0
-        assert info["lowest_point_height_m"] == pytest.approx(0.0)
+        assert info["ground_contact_model"] == "CAD_support_points_6dof_sequential_impulse"
+        assert info["ground_penetration_before_solve_m"] > 0.0
+        assert info["lowest_point_height_m"] >= -1e-8
+        assert info["ground_normal_impulse_ns"] >= 0.0
     finally:
         env.close()
+
+
+def test_tilted_airframe_contact_uses_pose_and_generates_angular_response():
+    params = replace(
+        synthetic_params(),
+        ground_contact_points_m=(
+            (-0.10, -0.10, -0.012), (-0.10, 0.10, -0.012),
+            (0.10, -0.10, -0.012), (0.10, 0.10, -0.012),
+        ),
+    )
+    plant = FastQuadrotor(params, dt=0.01)
+    plant.reset(position=(0.0, 0.0, 0.012))
+    plant.attitude[:] = [0.35, 0.0, 0.0]
+    plant.velocity[:] = [0.0, 0.0, -1.0]
+    active, penetration, impulse = plant._resolve_ground_contact()
+    rotation = _rotation_matrix_from_quaternion(_quaternion_from_euler(plant.attitude))
+    heights = plant.position[2] + (rotation @ np.asarray(params.ground_contact_points_m).T).T[:, 2]
+    assert penetration > 0.0
+    assert active > 0
+    assert impulse > 0.0
+    assert np.min(heights) >= -1e-8
+    assert np.linalg.norm(plant.angular_velocity) > 0.0
 
 
 def test_randomized_env_seed_repeats_scenario():
