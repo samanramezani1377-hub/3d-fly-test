@@ -13,6 +13,7 @@ import gymnasium as gym
 import numpy as np
 
 from .hover_reference import HoverReferenceController
+from .velocity_reference import VelocityYawReferenceController
 from .parameters import VehicleParameters
 from .vehicle_family import profile_to_parameters
 
@@ -135,6 +136,7 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
         self._cached_profile_id = None
         self._cached_params = None
         self._reference = None
+        self._velocity_reference = None
         stage = getattr(env, "curriculum_stage", None)
         if reference_weight_override is not None and not 0.0 <= float(reference_weight_override) <= 1.0:
             raise ValueError("reference_weight_override must be between 0.0 and 1.0")
@@ -155,12 +157,18 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
             self._cached_params = profile_to_parameters(profile)
             self._cached_profile_id = profile_id
         self._reference = None
+        self._velocity_reference = None
         if self.reference_weight > 0.0:
             plant = self.env.inner.plant
-            self._reference = HoverReferenceController(
-                plant.params, target_position=self.env.inner.target,
-                wind_m_s=plant.wind, dt_s=self.env.inner.dt,
-            )
+            if bool(getattr(self.env.inner, "velocity_control", False)):
+                self._velocity_reference = VelocityYawReferenceController(
+                    plant.params, wind_m_s=plant.wind, dt_s=self.env.inner.dt,
+                )
+            else:
+                self._reference = HoverReferenceController(
+                    plant.params, target_position=self.env.inner.target,
+                    wind_m_s=plant.wind, dt_s=self.env.inner.dt,
+                )
         info = dict(info)
         info["reference_teacher_weight"] = self.reference_weight
         info["reference_teacher_uses_privileged_simulator_state"] = self.reference_weight > 0.0
@@ -170,7 +178,18 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
         if self._cached_params is None or self.env.inner is None:
             raise RuntimeError("environment must be reset before mapping PPO actions")
         policy_wrench = policy_action_to_wrench(action, self._cached_params)
-        if self._reference is not None and self.reference_weight > 0.0:
+        if self._velocity_reference is not None and self.reference_weight > 0.0:
+            inner = self.env.inner
+            teacher_wrench = self._velocity_reference.desired_wrench(
+                inner.plant.state(), target_position=inner.target,
+                desired_velocity_body=inner.desired_velocity_body,
+                desired_yaw_rate_rad_s=inner.desired_yaw_rate_rad_s,
+            )
+            wrench = (
+                (1.0 - self.reference_weight) * policy_wrench
+                + self.reference_weight * teacher_wrench
+            )
+        elif self._reference is not None and self.reference_weight > 0.0:
             plant = self.env.inner.plant
             teacher_wrench = self._reference.desired_wrench(plant.state())
             wrench = (
