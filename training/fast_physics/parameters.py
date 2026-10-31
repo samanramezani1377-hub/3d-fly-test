@@ -59,6 +59,9 @@ class VehicleParameters:
     linear_drag_body_kg_s: tuple[float, float, float] | None = None
     quadratic_drag_body_kg_m: tuple[float, float, float] | None = None
     rotor_inertia_kg_m2: float = 0.0
+    battery_nominal_voltage_v: float | None = None
+    battery_capacity_ah: float | None = None
+    motor_efficiency_upper_bound: float = 0.8
 
     def validate(self) -> None:
         if not np.isfinite(self.mass_kg) or self.mass_kg <= 0:
@@ -102,6 +105,12 @@ class VehicleParameters:
                 raise ValueError(f"{name} must be three finite non-negative body-axis coefficients")
         if not np.isfinite(self.rotor_inertia_kg_m2) or self.rotor_inertia_kg_m2 < 0:
             raise ValueError("rotor_inertia_kg_m2 must be finite and non-negative")
+        if self.battery_nominal_voltage_v is not None and (not np.isfinite(self.battery_nominal_voltage_v) or self.battery_nominal_voltage_v <= 0):
+            raise ValueError("battery_nominal_voltage_v must be finite and positive when provided")
+        if self.battery_capacity_ah is not None and (not np.isfinite(self.battery_capacity_ah) or self.battery_capacity_ah <= 0):
+            raise ValueError("battery_capacity_ah must be finite and positive when provided")
+        if not np.isfinite(self.motor_efficiency_upper_bound) or not 0 < self.motor_efficiency_upper_bound <= 1:
+            raise ValueError("motor_efficiency_upper_bound must be in (0, 1]")
 
     @property
     def inertia_matrix(self) -> np.ndarray:
