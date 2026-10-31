@@ -622,10 +622,18 @@ def main(argv=None):
             "velocity_command_limits_m_s": [1.5, 1.5, 0.75] if args.velocity_control else None,
             "velocity_command_curriculum": {"stage_1": "single-axis low speed including yaw-only", "stage_2": "single-axis medium speed including yaw", "stage_3": "two-axis translation/yaw combinations", "stage_4": "two/three-axis translation/yaw combinations", "stage_5": "continuous random 3D velocity plus yaw rate"} if args.velocity_control else None,
             "policy_action_semantics": "unbounded_gaussian_tanh_squashed_collective_roll_pitch_yaw_body_wrench",
-            "motor_allocator": "geometry-derived nominal-profile wrench allocation in BODY_FORWARD_LEFT_UP; randomized episode parameters hidden",
-            "physics_model": "6-DoF rigid body, exact-discrete first-order motor lag, quadratic rotor thrust/reaction torque, quaternion attitude integration, body-axis linear/quadratic drag with isotropic fallback, optional rotor gyroscopic coupling",
+            "motor_allocator": "geometry-derived wrench allocation; Smooth2 thrust-to-RPM inversion uses cached static BEMT lookup from the same CAD propeller model; yaw mixing uses nominal torque-to-thrust proxy",
+            "physics_model": (
+                "Smooth2-only 6-DoF rigid body; CAD-station runtime BEMT thrust and shaft torque with axial inflow; "
+                "exact-discrete motor lag; CAD-derived mass/CG/inertia estimates; anisotropic body-axis linear/quadratic drag; "
+                "quaternion attitude integration and optional rotor gyroscopic coupling"
+                if any(p.get("propulsion", {}).get("propeller_bemt") for p in profiles)
+                else "6-DoF rigid body with quadratic rotor fallback"
+            ),
+            "propeller_model": "CAD-station blade-element/momentum (BEMT), Prandtl tip loss and axial inflow" if any(p.get("propulsion", {}).get("propeller_bemt") for p in profiles) else "quadratic thrust fallback",
+            "mass_properties": "Smooth2 CAD-envelope estimate with component-lumped mass, CG and inertia; provisional and uncertainty-bounded, not measured",
             "policy_is_hardware_conditioned": True,
-            "profile_sampling": "adaptive weakness-weighted sampling; smoothed updates from balanced profile evaluation",
+            "profile_sampling": "pinned single-profile sampling; Smooth2 only",
             "reference_teacher_schedule": ({"stage_1": 0.80 if not args.no_teacher else 0.0, "stage_2": 0.80 if not args.no_teacher else 0.0, "stage_3": 0.80 if not args.no_teacher else 0.0, "stage_4": 0.80 if not args.no_teacher else 0.0, "stage_5": 0.80 if not args.no_teacher else 0.0} if args.velocity_control else {"stage_1": 0.80, "stage_2": 0.60, "stage_3": 0.40, "stage_4": 0.20, "stage_5": 0.0}),
             "reference_teacher_disabled_for_this_run": args.no_teacher,
             "reference_teacher_disabled_for_all_periodic_evaluations": True,
