@@ -111,7 +111,13 @@ jobs:
           assert len(bemt["stations"]) >= 3 and bemt["integration_sections"] >= 8
           mass = smooth2["physical"]["mass_properties_estimate"]
           assert mass["status"] == "provisional_not_mesh_integrated", mass
-          assert len(smooth2["physical"]["inertia_kg_m2"]) == 3
+          import numpy as np
+          inertia = np.asarray(smooth2["physical"]["inertia_kg_m2"], dtype=float)
+          assert inertia.size in (3, 9), f"Expected diagonal-3 or full-3x3 inertia, got shape {inertia.shape}"
+          inertia_matrix = np.diag(inertia) if inertia.size == 3 else inertia.reshape(3, 3)
+          assert np.all(np.isfinite(inertia_matrix)), "Inertia tensor contains non-finite values"
+          assert np.allclose(inertia_matrix, inertia_matrix.T, atol=1e-9), "Inertia tensor must be symmetric"
+          assert np.min(np.linalg.eigvalsh(inertia_matrix)) > 0, "Inertia tensor must be positive definite"
           print("Smooth2 CAD/BEMT profile and provisional mass/inertia estimates selected:", status_by_id)
           PY
           mkdir -p training/runs
