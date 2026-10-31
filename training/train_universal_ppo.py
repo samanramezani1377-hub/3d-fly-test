@@ -32,6 +32,7 @@ def parse_args(argv=None):
     p.add_argument("--randomization-config", type=Path, default=Path(__file__).resolve().parents[1] / "vehicle_models/family/domain_randomization.json")
     p.add_argument("--vehicle-id", action="append", default=None, help="Optional profile allow-list; repeat IDs.")
     p.add_argument("--no-randomization", action="store_true")
+    p.add_argument("--no-teacher", action="store_true", help="Disable privileged reference guidance while retaining the selected physics curriculum.")
     return p.parse_args(argv)
 
 
@@ -122,7 +123,8 @@ class BalancedProfileCallback(BaseCallback):
         for pi, profile in enumerate(self.profiles):
             e = BodyWrenchActionWrapper(VehicleFamilyEnv(vehicle_family_path=self.family_path,
                 randomization_path=self.randomization_path, history_length=self.history_length,
-                randomize=True, curriculum_stage=self.stage, vehicle_id=profile["vehicle_id"]))
+                randomize=True, curriculum_stage=self.stage, vehicle_id=profile["vehicle_id"]),
+                disable_teacher=args.no_teacher)
             plant_env = e.env
             episodes = []
             try:
@@ -368,6 +370,7 @@ def main(argv=None):
             "policy_is_hardware_conditioned": True,
             "profile_sampling": "adaptive weakness-weighted sampling; smoothed updates from balanced profile evaluation",
             "reference_teacher_schedule": {"stage_1": 0.80, "stage_2": 0.60, "stage_3": 0.40, "stage_4": 0.20, "stage_5": 0.0},
+            "reference_teacher_disabled_for_this_run": args.no_teacher,
             "evaluation_metrics": ["takeoff_success", "five_second_sustained_hover", "crash_rate", "stable_hover_duration", "motor_saturation_fraction", "mean_return"],
             "sb3_diagnostics": ["train/approx_kl", "train/explained_variance", "train/entropy_loss", "train/value_loss", "train/policy_gradient_loss"],
             "episode_randomization_ground_truth_is_hidden": True,
