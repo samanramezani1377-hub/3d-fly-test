@@ -22,7 +22,14 @@ from .propeller import BladeElementPropeller
 REFERENCE_WEIGHT_BY_STAGE = {1: 0.80, 2: 0.60, 3: 0.40, 4: 0.20, 5: 0.0}
 
 
-def _allocation_matrix(params: VehicleParameters) -> np.ndarray:
+def _allocation_matrix(
+    params: VehicleParameters,
+    rotor_thrust_n: np.ndarray | None = None,
+    *,
+    bemt_base_thrust: np.ndarray | None = None,
+    bemt_base_torque: np.ndarray | None = None,
+    effectiveness: np.ndarray | None = None,
+) -> np.ndarray:
     positions = np.asarray(params.rotor_positions_m, dtype=np.float64)
     cg = np.asarray(params.center_of_mass_m, dtype=np.float64)
     relative = positions - cg
@@ -30,17 +37,23 @@ def _allocation_matrix(params: VehicleParameters) -> np.ndarray:
     matrix[0, :] = 1.0
     matrix[1, :] = relative[:, 1]
     matrix[2, :] = -relative[:, 0]
-    matrix[3, :] = np.asarray(params.spin_signs, dtype=np.float64) * params.torque_to_thrust_m
+    if bemt_base_thrust is not None and bemt_base_torque is not None:
+        motor_scale = np.asarray(effectiveness, dtype=np.float64)
+        requested = np.asarray(rotor_thrust_n, dtype=np.float64)
+        base_thrust = requested / np.maximum(motor_scale, 1e-12)
+        thrust_at_point = np.interp(base_thrust, bemt_base_thrust, bemt_base_thrust)
+        torque_at_point = np.interp(base_thrust, bemt_base_thrust, bemt_base_torque)
+        torque_ratio = torque_at_point / np.maximum(thrust_at_point, 1e-9)
+    else:
+        torque_ratio = np.full(4, params.torque_to_thrust_m, dtype=np.float64)
+    matrix[3, :] = np.asarray(params.spin_signs, dtype=np.float64) * torque_ratio
     if not np.all(np.isfinite(matrix)) or np.linalg.matrix_rank(matrix) < 4:
         raise ValueError("vehicle rotor geometry does not provide a full-rank 4-axis mixer")
     return matrix
 
 
-# VehicleParameters may contain a dict-valued BEMT config and is therefore
-# intentionally not hashable. The 4x4 inverse is cheap; do not cache by params.
-def _allocation_inverse(params: VehicleParameters) -> np.ndarray:
-    return np.linalg.inv(_allocation_matrix(params))
-
+def _allocation_inverse(params: VehicleParameters, **kwargs) -> np.ndarray:
+    return np.linalg.inv(_allocation_matrix(params, **kwargs))
 
 def policy_action_to_wrench(action, params: VehicleParameters) -> np.ndarray:
     """Map raw Gaussian [collective, roll, pitch, yaw] samples to a body wrench."""
@@ -60,15 +73,21 @@ def policy_action_to_wrench(action, params: VehicleParameters) -> np.ndarray:
 
 
 @lru_cache(maxsize=16)
-def _bemt_static_lookup(config_json: str, max_omega: float, thrust_scale: float):
-    """Precompute a monotonic static BEMT thrust curve once per Smooth2 setup."""
+def _bemt_static_lookup(config_json: str, max_omega: float, thrust_scale: float, torque_scale: float):
+    """Precompute static BEMT thrust and shaft-torque curves for feed-forward allocation."""
     import json
     model = BladeElementPropeller(json.loads(config_json))
     omega_grid = np.linspace(0.0, float(max_omega), 129)
-    thrust_grid = np.asarray([model.evaluate(float(w), 0.0)[0] for w in omega_grid]) * float(thrust_scale)
-    if not np.all(np.isfinite(thrust_grid)) or np.any(np.diff(thrust_grid) < -1e-8):
-        raise ValueError("Smooth2 BEMT static thrust lookup is not finite and monotonic")
-    return omega_grid, np.maximum.accumulate(thrust_grid)
+    values = np.asarray([model.evaluate(float(w), 0.0) for w in omega_grid], dtype=np.float64)
+    thrust_grid = values[:, 0] * float(thrust_scale)
+    torque_grid = values[:, 1] * float(torque_scale)
+    if (
+        not np.all(np.isfinite(values))
+        or np.any(np.diff(thrust_grid) < -1e-8)
+        or np.any(np.diff(torque_grid) < -1e-8)
+    ):
+        raise ValueError("Smooth2 BEMT static thrust/torque lookup is not finite and monotonic")
+    return omega_grid, np.maximum.accumulate(thrust_grid), np.maximum.accumulate(torque_grid)
 
 
 def _rotor_thrust_limits_and_inverse(params: VehicleParameters):
@@ -79,13 +98,17 @@ def _rotor_thrust_limits_and_inverse(params: VehicleParameters):
         reference_kf = float(params.propeller_bemt.get(
             "reference_thrust_coefficient_n_per_rad_s2", params.thrust_coefficient_n_per_rad_s2
         ))
-        scale = params.thrust_coefficient_n_per_rad_s2 / reference_kf
-        omega_grid, base_thrust = _bemt_static_lookup(
+        reference_kq_kf = float(params.propeller_bemt.get(
+            "reference_torque_to_thrust_m", params.torque_to_thrust_m
+        ))
+        thrust_scale = params.thrust_coefficient_n_per_rad_s2 / reference_kf
+        torque_scale = params.torque_to_thrust_m / reference_kq_kf
+        omega_grid, base_thrust, base_torque = _bemt_static_lookup(
             json.dumps(params.propeller_bemt, sort_keys=True, separators=(",", ":")),
-            max_omega, scale,
+            max_omega, thrust_scale, torque_scale,
         )
-        return base_thrust[-1] * effectiveness, omega_grid, base_thrust, effectiveness
-    return params.thrust_coefficient_n_per_rad_s2 * effectiveness * max_omega ** 2, None, None, effectiveness
+        return base_thrust[-1] * effectiveness, omega_grid, base_thrust, base_torque, effectiveness
+    return params.thrust_coefficient_n_per_rad_s2 * effectiveness * max_omega ** 2, None, None, None, effectiveness
 
 
 def wrench_to_motor_commands(wrench, params: VehicleParameters) -> np.ndarray:
@@ -93,10 +116,9 @@ def wrench_to_motor_commands(wrench, params: VehicleParameters) -> np.ndarray:
     wrench = np.asarray(wrench, dtype=np.float64)
     if wrench.shape != (4,) or not np.all(np.isfinite(wrench)):
         raise ValueError("body wrench must be a finite four-value vector")
-    max_thrust, bemt_omega, bemt_base_thrust, effectiveness = _rotor_thrust_limits_and_inverse(params)
+    max_thrust, bemt_omega, bemt_base_thrust, bemt_base_torque, effectiveness = _rotor_thrust_limits_and_inverse(params)
     if np.any(max_thrust <= 0) or not np.all(np.isfinite(max_thrust)):
         raise ValueError("invalid per-rotor thrust authority")
-    inverse = _allocation_inverse(params)
     collective = float(np.clip(wrench[0], 0.0, float(max_thrust.sum())))
 
     def allocate(scale_collective: float, scale_torque: float) -> np.ndarray:
@@ -106,7 +128,20 @@ def wrench_to_motor_commands(wrench, params: VehicleParameters) -> np.ndarray:
             wrench[2] * scale_torque,
             wrench[3] * scale_torque,
         ], dtype=np.float64)
-        return inverse @ request
+        estimate = np.full(4, max(collective * scale_collective / 4.0, 1e-8), dtype=np.float64)
+        candidate = estimate
+        # BEMT reaction torque is nonlinear in rotor speed. Re-linearize its
+        # local Q/T ratio around the current per-rotor thrust estimate.
+        for _ in range(6):
+            inverse = _allocation_inverse(
+                params, rotor_thrust_n=estimate,
+                bemt_base_thrust=bemt_base_thrust,
+                bemt_base_torque=bemt_base_torque,
+                effectiveness=effectiveness,
+            )
+            candidate = inverse @ request
+            estimate = np.clip(candidate, 1e-8, max_thrust)
+        return candidate
 
     # First find a feasible collective-only operating point. This is normally
     # scale 1 for symmetric quad layouts; the fallback handles asymmetric arms.
