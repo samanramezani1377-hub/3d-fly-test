@@ -72,6 +72,8 @@ class AdaptiveDroneEnv(gym.Env):
         self.velocity_command_limits_m_s = np.array([1.5, 1.5, 0.75], dtype=np.float32)
         self.desired_velocity_body = np.zeros(3, dtype=np.float32)
         self._command_steps_remaining = 100  # retain the takeoff/hover bootstrap for 2 seconds
+        self._velocity_command_sequence = None
+        self._velocity_sequence_index = 0
         self.active_randomization = (
             randomization_for_stage(self.randomization, curriculum_stage)
             if curriculum_stage is not None else self.randomization
@@ -176,6 +178,17 @@ class AdaptiveDroneEnv(gym.Env):
         if self._command_steps_remaining > 0:
             self._command_steps_remaining -= 1
             return
+        if self._velocity_command_sequence is not None:
+            if self._velocity_sequence_index < len(self._velocity_command_sequence):
+                item = self._velocity_command_sequence[self._velocity_sequence_index]
+                self.desired_velocity_body = np.asarray(item["velocity_m_s"], dtype=np.float32)
+                self._command_steps_remaining = int(item["duration_steps"])
+                self._velocity_sequence_index += 1
+            else:
+                # Explicit neutral tail evaluates braking and stable stop behavior.
+                self.desired_velocity_body[:] = 0.0
+                self._command_steps_remaining = self.max_steps + 1
+            return
         self.desired_velocity_body = self._sample_velocity_command()
         self._command_steps_remaining = int(self.np_random.integers(50, 151))  # 1-3 seconds at 50 Hz
 
@@ -244,6 +257,26 @@ class AdaptiveDroneEnv(gym.Env):
         self._taken_off = False
         self.desired_velocity_body[:] = 0.0
         self._command_steps_remaining = 100
+        raw_sequence = (options or {}).get("velocity_command_sequence")
+        self._velocity_command_sequence = None
+        self._velocity_sequence_index = 0
+        if raw_sequence is not None:
+            if not self.velocity_control or not isinstance(raw_sequence, (list, tuple)) or not raw_sequence:
+                raise ValueError("velocity_command_sequence requires velocity_control and a non-empty sequence")
+            normalized_sequence = []
+            for item in raw_sequence:
+                velocity = np.asarray(item.get("velocity_m_s"), dtype=np.float32)
+                duration = int(item.get("duration_steps", 0))
+                if velocity.shape != (3,) or not np.all(np.isfinite(velocity)):
+                    raise ValueError("each velocity command must contain three finite values")
+                if np.any(np.abs(velocity) > self.velocity_command_limits_m_s + 1e-6):
+                    raise ValueError("evaluation velocity command exceeds configured per-axis limits")
+                if duration < 1:
+                    raise ValueError("velocity command duration_steps must be positive")
+                normalized_sequence.append({"velocity_m_s": velocity.tolist(), "duration_steps": duration})
+            if 100 + sum(x["duration_steps"] for x in normalized_sequence) > self.max_steps:
+                raise ValueError("velocity command sequence plus hover bootstrap exceeds episode length")
+            self._velocity_command_sequence = normalized_sequence
         self._last_finite_state = state.astype(np.float32).copy()
         self._previous_altitude_potential = float(np.exp(-abs(float(state[2]) - float(self.target[2])) / 0.45))
         self._ground_contact = False
@@ -427,6 +460,9 @@ class AdaptiveDroneEnv(gym.Env):
             "desired_velocity_body_m_s": self.desired_velocity_body.astype(float).tolist(),
             "measured_velocity_body_yaw_m_s": measured_velocity_body.astype(float).tolist(),
             "velocity_tracking_error_m_s": tracking_error_norm,
+            "velocity_command_index": (self._velocity_sequence_index - 1) if self._velocity_command_sequence is not None and self._velocity_sequence_index > 0 and self._command_steps_remaining > 0 else -1,
+            "velocity_command_sequence_length": len(self._velocity_command_sequence) if self._velocity_command_sequence is not None else 0,
+            "velocity_command_sequence_complete": bool(self._velocity_command_sequence is not None and self._velocity_sequence_index >= len(self._velocity_command_sequence) and np.linalg.norm(self.desired_velocity_body) <= 1e-6),
             "attitude_rad": safe_state[6:9].astype(float).tolist(),
             "angular_velocity_rad_s": safe_state[9:12].astype(float).tolist(),
             "state_finite": state_finite,
