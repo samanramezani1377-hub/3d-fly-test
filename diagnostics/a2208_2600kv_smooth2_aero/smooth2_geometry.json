@@ -1,0 +1,13 @@
+{
+  "source_note": "Copied as an immutable diagnostic input from PR #23's pinned Smooth2 CAD snapshot; PR #23 itself is not modified.",
+  "model_scale": 1.414028,
+  "prop_radius_mm": 26.45,
+  "pitch_mm": 53.086,
+  "blades": 2,
+  "airfoil": {"designation": "NACA 4410-style CAD parameterization", "camber_ratio": 0.04, "camber_position": 0.4, "thickness_ratio": 0.1},
+  "stations": [
+    [0.05, 6.96], [0.14, 8.36], [0.23, 9.21], [0.33, 9.43],
+    [0.44, 8.79], [0.56, 7.82], [0.68, 6.86], [0.8, 6.0],
+    [0.9, 5.14], [0.96, 4.71], [1.0, 4.28]
+  ]
+}
