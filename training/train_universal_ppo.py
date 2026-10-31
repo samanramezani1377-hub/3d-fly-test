@@ -172,8 +172,10 @@ class BalancedProfileCallback(BaseCallback):
             try:
                 for ei in range(self.episodes):
                     seed = self.seed + self.n_calls * 100 + pi * 1000 + ei
-                    eval_options = ({"velocity_command_sequence": build_velocity_evaluation_sequence(ei, self.stage)}
-                                    if self.velocity_control else None)
+                    eval_options = ({
+                        "velocity_command_sequence": build_velocity_evaluation_sequence(ei, self.stage),
+                        "target_position": [0.0, 0.0, 2.0 + 0.1 * (ei % 5)],
+                    } if self.velocity_control else None)
                     obs, _ = e.reset(seed=seed, options=eval_options)
                     total, crashed, took_off = 0.0, False, False
                     stable_steps = max_stable_steps = 0
