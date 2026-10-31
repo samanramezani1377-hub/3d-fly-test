@@ -46,7 +46,7 @@ Every 200,000 aggregate transitions, the existing callback evaluates the policy 
 
 Each command is held for 45 scheduler steps (about 0.9 seconds at 50 Hz), followed by a neutral braking interval. The command order and speed scale vary between evaluation episodes while preserving all 26 direction combinations.
 
-Checkpoint selection considers per-profile mission success, crash rate, takeoff success, mean velocity tracking error, motor saturation and return. An episode cannot count as a successful 3D command mission unless it covers all 26 directions and achieves a measured neutral stop within the configured evaluation window.
+Checkpoint selection considers per-profile mission success, crash rate, takeoff success, mean velocity tracking error, motor saturation and return. An episode cannot count as a successful 3D command mission unless it covers all 26 directions, keeps mean tracking error at or below 0.50 m/s, keeps the worst direction's mean error at or below 0.85 m/s, and holds speed below 0.25 m/s for at least 0.5 seconds within 3.5 seconds after the neutral command.
 
 ## Scope and safety
 
