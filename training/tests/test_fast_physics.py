@@ -14,6 +14,7 @@ from fast_physics import AdaptiveDroneEnv, FastQuadrotor, VehicleParameters, loa
 from fast_physics.ppo_action import wrench_to_motor_commands
 from fast_physics.vehicle_family import load_vehicle_profiles, profile_to_parameters
 from fast_physics.velocity_reference import VelocityYawReferenceController
+from fast_physics.dynamics import rotation_matrix, _quaternion_from_euler, _rotation_matrix_from_quaternion
 from evaluate_robust_ppo import summarize_episode
 AIRFRAME = ROOT / "vehicle_models/smooth2_parametric/base_airframe.json"
 CALIBRATION = ROOT / "vehicle_models/smooth2_parametric/physics_calibration.json"
@@ -384,6 +385,36 @@ def test_body_axis_drag_rotates_with_heading_and_opposes_airflow():
     plant.velocity[:] = [0.0, 1.0, 0.0]  # body-forward airspeed at yaw=+90 degrees
     _, telemetry = plant.step(np.zeros(4))
     assert np.allclose(telemetry["drag_world_n"], [0.0, -1.0, 0.0], atol=1e-7)
+
+
+def test_quaternion_rotation_matches_existing_euler_rotation_convention():
+    angles = np.array([0.31, -0.27, 1.12])
+    quaternion = _quaternion_from_euler(angles)
+    assert np.allclose(
+        _rotation_matrix_from_quaternion(quaternion),
+        rotation_matrix(angles), atol=1e-10,
+    )
+
+
+def test_optional_rotor_gyroscopic_coupling_is_applied():
+    params = VehicleParameters(
+        mass_kg=0.6, center_of_mass_m=(0.0, 0.0, 0.0),
+        inertia_kg_m2=(0.004, 0.006, 0.004),
+        rotor_positions_m=((0.082, 0.082, 0.0), (0.082, -0.082, 0.0),
+                           (-0.082, -0.082, 0.0), (-0.082, 0.082, 0.0)),
+        spin_signs=(1.0, -1.0, 1.0, -1.0),
+        max_rotor_speed_rad_s=1100.0,
+        thrust_coefficient_n_per_rad_s2=2.0e-6,
+        torque_to_thrust_m=0.012,
+        rotor_inertia_kg_m2=1.0e-5,
+    )
+    plant = FastQuadrotor(params, dt=0.01)
+    plant.reset(position=(0.0, 0.0, 1.0))
+    plant.motor_omega[:] = [900.0, 800.0, 900.0, 800.0]
+    plant.angular_velocity[:] = [1.0, 0.0, 0.0]
+    commands = plant.motor_omega / params.max_rotor_speed_rad_s
+    _, telemetry = plant.step(commands)
+    assert telemetry["rotor_gyroscopic_torque_nm"][1] > 0.0
 
 
 def test_a2212_catalog_reference_is_recorded_without_claiming_physical_calibration():
