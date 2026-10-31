@@ -1,4 +1,4 @@
-name: Smooth2 PPO - Five-stage teacher-to-student 3D velocity and yaw-rate curriculum
+name: Universal quadrotor PPO - Five-stage 3D velocity and yaw-rate curriculum
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: smooth2-ppo-five-stage-${{ github.ref }}
+  group: universal-quad-ppo-five-stage-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -17,13 +17,12 @@ env:
   OPENBLAS_NUM_THREADS: "1"
   NUMEXPR_NUM_THREADS: "1"
   PYTHONUNBUFFERED: "1"
-  SMOOTH2_ID: smooth2-a2212-custom-prop
   STAGE_STEPS: "400000"
   N_ENVS: "100"
 
 jobs:
-  train-smooth2:
-    name: Smooth2 only - 5 x (400K teacher + 400K teacher-free), 100 parallel envs
+  train-universal-family:
+    name: Four vehicle profiles - 5 x (400K teacher + 400K teacher-free), 100 parallel envs
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
@@ -62,36 +61,41 @@ jobs:
           from fast_physics.velocity_reference import VelocityYawReferenceController
 
           profiles = load_vehicle_profiles("vehicle_models/family/vehicle_profiles.json")
-          selected = [p for p in profiles if p["vehicle_id"] == "smooth2-a2212-custom-prop"]
-          assert len(selected) == 1, "Smooth2 teacher profile missing or duplicated"
-          params = profile_to_parameters(selected[0])
-          teacher = VelocityYawReferenceController(params, wind_m_s=(0.0, 0.0, 0.0), dt_s=0.02)
+          expected_ids = {
+              "smooth2-a2212-custom-prop",
+              "generic-5inch-quad",
+              "generic-7inch-long-range",
+              "generic-3inch-cinewhoop",
+          }
+          actual_ids = {p["vehicle_id"] for p in profiles}
+          assert actual_ids == expected_ids, f"Expected all four supported profiles, got {sorted(actual_ids)}"
           state = np.zeros(12, dtype=np.float64)
           state[2] = 1.0
           target = np.array([0.0, 0.0, 1.0])
-          forward = teacher.desired_wrench(
-              state, target_position=target,
-              desired_velocity_body=np.array([0.5, 0.0, 0.0]),
-              desired_yaw_rate_rad_s=0.0,
-          )
-          yaw_left = teacher.desired_wrench(
-              state, target_position=target,
-              desired_velocity_body=np.zeros(3), desired_yaw_rate_rad_s=0.3,
-          )
-          yaw_right = teacher.desired_wrench(
-              state, target_position=target,
-              desired_velocity_body=np.zeros(3), desired_yaw_rate_rad_s=-0.3,
-          )
-          assert forward.shape == yaw_left.shape == yaw_right.shape == (4,)
-          assert all(np.all(np.isfinite(x)) for x in (forward, yaw_left, yaw_right))
-          assert yaw_left[3] > 0.0 and yaw_right[3] < 0.0, "Yaw teacher direction/sign check failed"
-          rotated = teacher._body_yaw_velocity_to_world(np.array([1.0, 0.0, 0.0]), np.pi / 2)
-          assert np.allclose(rotated, [0.0, 1.0, 0.0], atol=1e-6), "Nose-relative velocity frame check failed"
-          print("Velocity/yaw teacher preflight passed:", {
-              "forward_wrench_finite": True,
-              "yaw_left_right_signs": [float(yaw_left[3]), float(yaw_right[3])],
-              "body_frame_rotation": rotated.tolist(),
-          })
+          checks = {}
+          for profile in profiles:
+              params = profile_to_parameters(profile)
+              teacher = VelocityYawReferenceController(params, wind_m_s=(0.0, 0.0, 0.0), dt_s=0.02)
+              forward = teacher.desired_wrench(
+                  state, target_position=target,
+                  desired_velocity_body=np.array([0.5, 0.0, 0.0]),
+                  desired_yaw_rate_rad_s=0.0,
+              )
+              yaw_left = teacher.desired_wrench(
+                  state, target_position=target,
+                  desired_velocity_body=np.zeros(3), desired_yaw_rate_rad_s=0.3,
+              )
+              yaw_right = teacher.desired_wrench(
+                  state, target_position=target,
+                  desired_velocity_body=np.zeros(3), desired_yaw_rate_rad_s=-0.3,
+              )
+              assert forward.shape == yaw_left.shape == yaw_right.shape == (4,)
+              assert all(np.all(np.isfinite(x)) for x in (forward, yaw_left, yaw_right))
+              assert yaw_left[3] > 0.0 and yaw_right[3] < 0.0, f"Yaw sign failed for {profile['vehicle_id']}"
+              rotated = teacher._body_yaw_velocity_to_world(np.array([1.0, 0.0, 0.0]), np.pi / 2)
+              assert np.allclose(rotated, [0.0, 1.0, 0.0], atol=1e-6), "Nose-relative frame check failed"
+              checks[profile["vehicle_id"]] = {"forward_wrench_finite": True, "yaw_signs": [float(yaw_left[3]), float(yaw_right[3])]}
+          print("Four-profile velocity/yaw teacher preflight passed:", checks)
           PY
 
       - name: Restore selected 1M teacher-assisted checkpoint
@@ -102,7 +106,7 @@ jobs:
           github-token: ${{ github.token }}
           path: bootstrap
 
-      - name: Verify selected teacher-assisted 1M checkpoint and Smooth2-only profile
+      - name: Verify selected teacher-assisted 1M checkpoint and all four vehicle profiles
         run: |
           set -euo pipefail
           source_dir="bootstrap/training/runs/universal-quad-v5-foundation-stage2-teacher"
@@ -121,34 +125,37 @@ jobs:
           import json
           from pathlib import Path
           p = json.loads(Path("vehicle_models/family/vehicle_profiles.json").read_text())
-          matches = [x for x in p["profiles"] if x["vehicle_id"] == "smooth2-a2212-custom-prop"]
-          assert len(matches) == 1, "Smooth2 profile missing or duplicated"
-          Path("training/runs").mkdir(parents=True, exist_ok=True)
-          Path("training/runs/smooth2-only-profiles.json").write_text(
-              json.dumps({"schema_version": 1, "profiles": matches}, indent=2)
-          )
-          print("Only profile enabled:", matches[0]["vehicle_id"])
+          expected = {
+              "smooth2-a2212-custom-prop",
+              "generic-5inch-quad",
+              "generic-7inch-long-range",
+              "generic-3inch-cinewhoop",
+          }
+          actual = {x["vehicle_id"] for x in p["profiles"]}
+          assert actual == expected, f"Vehicle family mismatch: {sorted(actual)}"
+          assert len(p["profiles"]) == 4, "Training must include exactly four distinct vehicle profiles"
+          assert all(x["calibration_status"] == "provisional_estimate" for x in p["profiles"]), "Unexpected calibration status"
+          print("All four profiles enabled with explicit provisional-estimate status:", sorted(actual))
           PY
           mkdir -p training/runs
-          cp "$source_model" training/runs/smooth2-initial-from-1m-teacher-best.zip
-          cp "$source_selection" training/runs/smooth2-initial-from-1m-teacher-best-selection.json
-          sha256sum "$source_model" | tee training/runs/smooth2-initial-from-1m-teacher-best.sha256
+          cp "$source_model" training/runs/universal-initial-from-1m-teacher-best.zip
+          cp "$source_selection" training/runs/universal-initial-from-1m-teacher-best-selection.json
+          sha256sum "$source_model" | tee training/runs/universal-initial-from-1m-teacher-best.sha256
 
       - name: Train five chained teacher-assisted then teacher-free velocity and yaw-rate stages
         run: |
           set -euo pipefail
-          checkpoint="training/runs/smooth2-initial-from-1m-teacher-best.zip"
+          checkpoint="training/runs/universal-initial-from-1m-teacher-best.zip"
           for stage in 1 2 3 4 5; do
-            teacher_run="smooth2-velocity-ppo-stage-${stage}-teacher"
-            student_run="smooth2-velocity-ppo-stage-${stage}-teacher-free"
+            teacher_run="universal-velocity-ppo-stage-${stage}-teacher"
+            student_run="universal-velocity-ppo-stage-${stage}-teacher-free"
 
             echo "===== Stage ${stage}A: 400K steps, velocity/yaw teacher weight 0.80, 100 envs ====="
             python training/train_universal_ppo.py \
               --timesteps "$STAGE_STEPS" --n-envs "$N_ENVS" \
               --seed "$((2042 + stage * 10 + 1))" \
               --run-name "$teacher_run" --output-dir training/runs \
-              --vehicle-family training/runs/smooth2-only-profiles.json \
-              --vehicle-id "$SMOOTH2_ID" \
+              --vehicle-family vehicle_models/family/vehicle_profiles.json \
               --randomization-config vehicle_models/family/domain_randomization.json \
               --curriculum-stage "$stage" \
               --load-model "$checkpoint" \
@@ -166,8 +173,7 @@ jobs:
               --timesteps "$STAGE_STEPS" --n-envs "$N_ENVS" \
               --seed "$((2042 + stage * 10 + 2))" \
               --run-name "$student_run" --output-dir training/runs \
-              --vehicle-family training/runs/smooth2-only-profiles.json \
-              --vehicle-id "$SMOOTH2_ID" \
+              --vehicle-family vehicle_models/family/vehicle_profiles.json \
               --randomization-config vehicle_models/family/domain_randomization.json \
               --curriculum-stage "$stage" \
               --load-model "$teacher_best" \
@@ -180,12 +186,12 @@ jobs:
             test -s "$checkpoint" || { echo "Stage $stage teacher-free phase produced no evaluated best checkpoint"; exit 1; }
             test -s "training/runs/$student_run/best/selection.json"
           done
-          cp "$checkpoint" training/runs/smooth2-final-selected-best.zip
+          cp "$checkpoint" training/runs/universal-final-selected-best.zip
 
       - name: Run independent final velocity and yaw-rate evaluation
         run: |
           set -euo pipefail
-          evaluation_dir="training/runs/smooth2-final-independent-evaluation"
+          evaluation_dir="training/runs/universal-final-independent-evaluation"
           mkdir -p "$evaluation_dir"
           python - <<'PY'
           import json
@@ -198,10 +204,10 @@ jobs:
           from train_universal_ppo import BalancedProfileCallback
           from fast_physics.vehicle_family import load_vehicle_profiles
 
-          model_path = Path("training/runs/smooth2-final-selected-best.zip")
-          family_path = Path("training/runs/smooth2-only-profiles.json")
+          model_path = Path("training/runs/universal-final-selected-best.zip")
+          family_path = Path("vehicle_models/family/vehicle_profiles.json")
           randomization_path = Path("vehicle_models/family/domain_randomization.json")
-          output_dir = Path("training/runs/smooth2-final-independent-evaluation")
+          output_dir = Path("training/runs/universal-final-independent-evaluation")
           assert model_path.is_file() and model_path.stat().st_size > 0, "Final selected PPO model is missing"
           profiles = load_vehicle_profiles(family_path)
           assert len(profiles) == 1 and profiles[0]["vehicle_id"] == "smooth2-a2212-custom-prop", profiles
@@ -231,33 +237,45 @@ jobs:
           reports = sorted((output_dir / "reports").glob("profile-evaluation-*.json"))
           assert len(reports) == 1, f"Expected exactly one final evaluation report, found {reports}"
           report = json.loads(reports[0].read_text(encoding="utf-8"))
-          assert len(report.get("profiles", [])) == 1, report
-          result = report["profiles"][0]
-          assert len(result.get("episodes", [])) == 10, result
+          expected_ids = {
+              "smooth2-a2212-custom-prop",
+              "generic-5inch-quad",
+              "generic-7inch-long-range",
+              "generic-3inch-cinewhoop",
+          }
+          results = report.get("profiles", [])
+          actual_ids = {item.get("vehicle_id") for item in results}
+          assert actual_ids == expected_ids, f"Independent evaluation did not cover all four profiles: {actual_ids}"
+          assert len(results) == 4, report
+          metric_keys = (
+              "success_rate", "takeoff_success_rate", "takeoff_failure_rate",
+              "crash_rate", "mean_velocity_tracking_error_m_s",
+              "mean_max_direction_tracking_error_m_s",
+              "mean_velocity_direction_coverage",
+              "mean_yaw_rate_tracking_error_rad_s",
+              "mean_max_yaw_command_tracking_error_rad_s",
+              "mean_yaw_command_coverage",
+              "mean_neutral_braking_time_seconds",
+              "mean_motor_saturation_fraction",
+          )
+          metrics_by_vehicle = {}
+          for result in results:
+              assert len(result.get("episodes", [])) == 10, result
+              metrics_by_vehicle[result["vehicle_id"]] = {key: result.get(key) for key in metric_keys}
           metadata = {
               "evaluation_type": "independent_final_evaluation",
               "independence": "fresh deterministic seed range, separate from all periodic checkpoint-selection evaluations",
               "seed_start": 987654,
-              "episodes": 10,
+              "episodes_per_vehicle": 10,
+              "vehicle_count": 4,
+              "vehicle_ids": sorted(actual_ids),
               "curriculum_stage": 5,
               "teacher_disabled": True,
               "velocity_control": True,
               "model": str(model_path),
               "model_timesteps": int(model.num_timesteps),
               "report": str(reports[0]),
-              "metrics": {
-                  key: result.get(key) for key in (
-                      "success_rate", "takeoff_success_rate", "takeoff_failure_rate",
-                      "crash_rate", "mean_velocity_tracking_error_m_s",
-                      "mean_max_direction_tracking_error_m_s",
-                      "mean_velocity_direction_coverage",
-                      "mean_yaw_rate_tracking_error_rad_s",
-                      "mean_max_yaw_command_tracking_error_rad_s",
-                      "mean_yaw_command_coverage",
-                      "mean_neutral_braking_time_seconds",
-                      "mean_motor_saturation_fraction",
-                  )
-              },
+              "metrics_by_vehicle": metrics_by_vehicle,
           }
           (output_dir / "final-evaluation-summary.json").write_text(
               json.dumps(metadata, indent=2), encoding="utf-8"
@@ -265,22 +283,24 @@ jobs:
           print(json.dumps(metadata, indent=2))
           PY
 
-      - name: Publish Smooth2 curriculum outputs
+      - name: Publish universal four-vehicle curriculum outputs
         if: success()
         run: |
           set -euo pipefail
-          target="training/models/smooth2-ppo-five-stage"
+          target="training/models/universal-quad-four-vehicle-five-stage"
           mkdir -p "$target"
-          cp -a training/runs/smooth2-velocity-ppo-stage-* "$target/"
-          cp training/runs/smooth2-initial-from-1m-teacher-best.zip "$target/"
-          cp training/runs/smooth2-initial-from-1m-teacher-best-selection.json "$target/"
-          cp training/runs/smooth2-initial-from-1m-teacher-best.sha256 "$target/"
-          cp training/runs/smooth2-final-selected-best.zip "$target/"
-          cp -a training/runs/smooth2-final-independent-evaluation "$target/"
+          cp -a training/runs/universal-velocity-ppo-stage-* "$target/"
+          cp training/runs/universal-initial-from-1m-teacher-best.zip "$target/"
+          cp training/runs/universal-initial-from-1m-teacher-best-selection.json "$target/"
+          cp training/runs/universal-initial-from-1m-teacher-best.sha256 "$target/"
+          cp training/runs/universal-final-selected-best.zip "$target/"
+          cp -a training/runs/universal-final-independent-evaluation "$target/"
           cp vehicle_models/family/domain_randomization.json "$target/domain_randomization.json"
           cat > "$target/training-plan.json" <<'JSON'
           {
-            "airframe": "smooth2-a2212-custom-prop",
+            "vehicle_family": ["smooth2-a2212-custom-prop", "generic-5inch-quad", "generic-7inch-long-range", "generic-3inch-cinewhoop"],
+            "profile_sampling": "adaptive balanced sampling across all four profiles; each profile uses its own nominal mass, geometry and propulsion baseline",
+            "domain_randomization": "per-profile proportional variation around that profile baseline; no absolute motor or thrust constants are shared",
             "initial_checkpoint": "best teacher-assisted checkpoint selected at 1000000 steps from run 41158518207",
             "stages": 5,
             "timesteps_per_phase": 400000,
@@ -343,23 +363,23 @@ jobs:
       - name: Print Smooth2 training summaries
         if: always()
         run: |
-          for log in smooth2-velocity-ppo-stage-*.log; do
+          for log in universal-velocity-ppo-stage-*.log; do
             echo "===== $log ====="
             if [ -f "$log" ]; then tail -c 30000 "$log"; fi
           done
-          for state in training/runs/smooth2-velocity-ppo-stage-*/training_state.json; do
+          for state in training/runs/universal-velocity-ppo-stage-*/training_state.json; do
             echo "===== $state ====="
             if [ -f "$state" ]; then cat "$state"; fi
           done
 
-      - name: Upload Smooth2 curriculum backup
+      - name: Upload universal four-vehicle curriculum backup
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smooth2-velocity-ppo-five-stage-backup
+          name: universal-quad-four-vehicle-five-stage-backup
           path: |
             training/runs/
             training/models/smooth2-ppo-five-stage/
-            smooth2-ppo-stage-*.log
+            universal-ppo-stage-*.log
           if-no-files-found: warn
           retention-days: 90
