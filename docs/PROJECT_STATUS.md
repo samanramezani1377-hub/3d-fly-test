@@ -158,41 +158,19 @@ The pinned upstream physics source documents a world frame with **Y up**, **X ri
 
 **Physical target model remains intentionally deferred.** Do not change the placeholder values in `config/drone.json` or claim they represent the user's aircraft until the real physical model and its measurements are ready.
 
-## 8A. PPO training pipeline status (2026-10-30)
+## 8A. Universal PPO training pipeline status (2026-10-31)
 
-The production CPU training workflow is `.github/workflows/ppo-cpu-two-stage.yml`, which runs the five-stage chain in `training/run_five_stage.py`. The production settings are four parallel environments per training process. Stage 1 compares independent seeds 42 and 40 concurrently (four environments per seed, eight simulator environments total); stages 2–5 each continue from the previous selected checkpoint using four environments. The five-stage workflow does not invoke the standalone 1/4/8-environment benchmark.
+The active manual CPU training workflow is `.github/workflows/universal-ppo-five-stage.yml`. It trains one hardware-conditioned PPO policy across four provisional quadrotor profiles using five sequential curriculum stages. Each stage runs 400,000 aggregate transitions with teacher weight 0.80, followed by 400,000 transitions with the teacher disabled. The complete run therefore adds 4,000,000 transitions using 100 parallel environments.
 
-Evaluation metrics named "during flight" are calculated only from steps after the environment has latched takeoff. A successful-hover episode must take off, avoid a crash, accumulate at least five seconds of stable-hover samples, and have stable-hover samples in at least 80% of its airborne steps. If no takeoff occurs, flight-only error metrics are null rather than misleadingly measuring grounded steps. The checkpoint selector treats unavailable flight metrics as worst-case for ranking, and the standalone parallel-environment quality gate refuses to compare a flight-only metric when either side has no airborne data.
+The policy command interface combines nose-relative 3D velocity (forward, left, world-up) with an independent yaw-rate command. The curriculum raises the yaw-rate limit from 20 to 90 degrees/second. Evaluation explicitly includes pure in-place left/right yaw turns as well as combined translation and rotation. Periodic evaluation is teacher-free, runs 10 episodes per profile every 200,000 aggregate transitions, and checkpoint selection protects the weakest profile. Each stage's best teacher-assisted checkpoint initializes its teacher-free phase; the teacher-free best checkpoint initializes the next stage.
 
-The five-stage workflow artifact list includes both Stage 1 seed folders (42 and 40) and no longer requests the removed benchmark outputs. The standalone benchmark scripts and workflow remain available for explicitly requested experiments; they do not change production settings.
+The initial warm-start checkpoint is the selected 1,000,000-step teacher-assisted artifact from Actions run [41158518207](https://github.com/samanramezani1377-hub/3d-fly-test/actions/runs/41158518207). A separate final evaluation runs 10 episodes on each of the four profiles after stage 5. Published outputs are written to `training/models/universal-quad-four-vehicle-five-stage/`.
 
-These changes improve software measurement and checkpoint selection. They do not establish physical-model accuracy, native/WASM numerical parity, or real-flight readiness. The drone configuration still contains placeholders pending verified aircraft measurements.
+The current domain-randomization file already includes mass, CG, inertia, motor effectiveness/response/max RPM, thrust and torque coefficients, battery-voltage factor, aerodynamic drag, wind and sensor noise. This is useful simulation coverage, but it is not equivalent to a high-fidelity sensor/estimator, aerodynamic or electrical model. The vehicle profiles remain marked `provisional_estimate`; real mass properties and motor/ESC/propeller/battery calibration are still missing.
 
-## 9. Known limitations and risks
+The workflow is started manually from [GitHub Actions](https://github.com/samanramezani1377-hub/3d-fly-test/actions/workflows/universal-ppo-five-stage.yml). Ordinary commits and pull requests do not start this training. Full executable settings, stage handoff, evaluation metrics, output locations and safety limitations are documented in [the five-stage PPO guide](UNIVERSAL_PPO_SINGLE_STAGE_GUIDE.md).
 
-1. **GLB import is visual-only.** It does not turn the mesh into a complete physics model.
-2. **Simplified quad-X physics.** Arbitrary motor/prop layouts, prop guards, ducts, body drag, structural flex, and detailed aerodynamic interactions are not necessarily represented.
-3. **Starter controller is not validated.** It may require changes after checking the actual observation axes and controls.
-4. **Battery model is approximate.** The compatibility header is a deterministic simplified model, not a validated electrochemical battery model.
-5. **No automatic extraction from CAD yet.** Mass, centre of gravity, inertia, rotor locations, and motor properties must be supplied or computed separately.
-6. **No guarantee of physical fidelity.** Simulation outcomes depend on model assumptions and parameter quality.
-7. **No real-flight safety claim.** A successful browser simulation does not certify a real drone as safe to fly.
-
-## 10. Definition of done for the first usable milestone
-
-The first milestone is complete only when all of these are true:
-
-- GitHub Actions finishes successfully.
-- GitHub Pages serves the simulator.
-- The browser loads the physics engine without errors.
-- A baseline flight test can be started and reset.
-- The configured controller actually executes.
-- Changing one supported parameter and pushing a commit changes the deployed build.
-- The user can replace the GLB and see the new visual model.
-- The UI/test result clearly states that the GLB is visual-only and the physics remain simplified.
-
-After that milestone, the next priority is to make the model's physical parameters and test outputs more faithful and measurable.
-
+This training pipeline is a simulation research experiment, not a real-flight controller release. No checkpoint is approved for direct use on a physical aircraft.
 
 ## 8B. Robust/adaptive fast-physics backend (2026-10-30)
 

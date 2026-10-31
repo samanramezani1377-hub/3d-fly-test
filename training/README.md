@@ -28,29 +28,32 @@ Requires Python 3.10+ and a C++ compiler with C++20 support (for example, g++).
     python training/train_ppo.py --timesteps 50000 --seed 42 --run-name ppo-hover-50000 --save-freq 5000 --eval-freq 5000
     python training/evaluate.py --model training/runs/ppo-hover-50000/final_model.zip --episodes 10
 
-## Consolidated GitHub Actions workflow
+## Active GitHub Actions PPO workflow
 
-The repository has exactly one workflow: `.github/workflows/universal-ppo-five-stage.yml`. It combines the necessary automation:
+The active universal training entry point is `.github/workflows/universal-ppo-five-stage.yml`. It is a **manual-only, five-stage CPU workflow** for one shared policy across four provisional quadrotor profiles. It does not run on ordinary pushes or pull requests.
 
-- **Push to main:** runs the existing reward/checkpoint regression and CAD asset-integrity checks. It deploys Flight Lab only when the simulator site, shared fast-physics engine, vehicle profiles, or deployment workflow changes.
-- **Pull request:** runs the existing reward/CAD checks plus the existing universal physics, vehicle-family, and hover-reference regression tests. No PPO training is started.
-- **Manual Run workflow:** runs the universal five-stage PPO curriculum. All five stages remain implemented, but only stage 1 is active.
-
-Current manual training configuration:
+Current workflow configuration (keep this section aligned with the [full operational guide](../docs/UNIVERSAL_PPO_SINGLE_STAGE_GUIDE.md)):
 
 | Setting | Value |
 |---|---:|
-| Active stages | 1 of 5 |
-| Transitions in active stage | 2,000,000 aggregate |
-| Parallel environments | 32 |
+| Active stages | 5 |
+| Phases per stage | 400K teacher-assisted + 400K teacher-free |
+| Total new transitions | 4,000,000 aggregate |
+| Parallel environments | 100 |
 | Rollout length | 500 per environment |
-| Aggregate transitions per rollout | 16,000 |
-| Stage-1 teacher weight | 0.80 |
-| Run prefix | `universal-quad-v5-foundation` |
+| Aggregate transitions per rollout | 50,000 |
+| PPO minibatch size | 250 |
+| Teacher blend | 0.80, then 0.00 |
+| Periodic evaluation | Every 200,000 aggregate transitions |
+| Episodes per profile per evaluation | 10 |
+| Checkpoint interval | 50,000 aggregate transitions |
+| Runtime | CPU-only; 360-minute job timeout |
 
-Stages 2–5 are retained but dormant. The workflow uses `--active-stages 1`; it does not delete or rewrite later curriculum stages. PPO training starts only when **Run workflow** is selected on `main`. Push and pull-request events never start training.
+The workflow restores the selected 1M teacher-assisted bootstrap checkpoint from Actions run [41158518207](https://github.com/samanramezani1377-hub/3d-fly-test/actions/runs/41158518207), then chains each stage's best teacher-assisted checkpoint into its teacher-free phase and each teacher-free best checkpoint into the next stage. It evaluates nose-relative 3D velocity commands, pure in-place yaw turns in both directions, and combined translation/yaw commands. The stage yaw-rate limits are 20, 35, 50, 70 and 90 degrees/second.
 
-The workflow logs aggregate transitions/sec as `[PPO_SPEED]`, stores resumable checkpoints and uploads a 90-day artifact backup. See the [complete single-stage guide](../docs/UNIVERSAL_PPO_SINGLE_STAGE_GUIDE.md) for checkpoint/resume rules, evaluation semantics, and the simulation-only safety boundary.
+The workflow randomizes mass, CG, inertia, motor effectiveness/response/RPM, thrust and torque coefficients, battery voltage factor, drag, wind and sensor noise. The four vehicle profiles are still marked `provisional_estimate`; randomization does not replace measured physical calibration. The workflow publishes its model, stage outputs and final independent per-profile evaluation under `training/models/universal-quad-four-vehicle-five-stage/`.
+
+Launch only once from **Actions → Universal quadrotor PPO - Five-stage 3D velocity and yaw-rate curriculum → Run workflow** on `main`. Do not start duplicate runs. See the [five-stage velocity/yaw guide](../docs/UNIVERSAL_PPO_SINGLE_STAGE_GUIDE.md) for exact stage chaining, evaluation semantics, artifact locations and the simulation-only boundary.
 
 ## Google Colab
 

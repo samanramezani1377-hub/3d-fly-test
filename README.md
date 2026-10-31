@@ -76,7 +76,7 @@ The browser tier runs Python through Pyodide and is intended for classical/light
 
 The `training/` folder contains a native build of the same pinned C++ `DroneCore` source files used for the browser WebAssembly build, a Gymnasium adapter, PPO training/evaluation scripts, tests, and a Google Colab notebook at `notebooks/colab_train_ppo.ipynb`. The native build applies the same project config patch as the browser build and avoids the separate Godot training backend.
 
-**Important:** shared source does not automatically guarantee bit-for-bit native/WASM parity; regression comparisons are still required. The simulation is not validated against the final physical quadcopter. The placeholder values in `config/drone.json` remain unchanged. See [training documentation](training/README.md) before running it.
+**Important:** shared source does not automatically guarantee bit-for-bit native/WASM parity; regression comparisons are still required. The simulation is not validated against the final physical quadcopter. The placeholder values in `config/drone.json` remain unchanged. See [training documentation](training/README.md) and the [active five-stage velocity/yaw PPO guide](docs/UNIVERSAL_PPO_SINGLE_STAGE_GUIDE.md) before running it.
 
 ## Upstream
 
