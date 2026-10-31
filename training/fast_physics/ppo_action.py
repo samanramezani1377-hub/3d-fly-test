@@ -16,6 +16,7 @@ from .hover_reference import HoverReferenceController
 from .velocity_reference import VelocityYawReferenceController
 from .parameters import VehicleParameters
 from .vehicle_family import profile_to_parameters
+from .propeller import BladeElementPropeller
 
 
 REFERENCE_WEIGHT_BY_STAGE = {1: 0.80, 2: 0.60, 3: 0.40, 4: 0.20, 5: 0.0}
@@ -35,7 +36,8 @@ def _allocation_matrix(params: VehicleParameters) -> np.ndarray:
     return matrix
 
 
-@lru_cache(maxsize=32)
+# VehicleParameters may contain a dict-valued BEMT config and is therefore
+# intentionally not hashable. The 4x4 inverse is cheap; do not cache by params.
 def _allocation_inverse(params: VehicleParameters) -> np.ndarray:
     return np.linalg.inv(_allocation_matrix(params))
 
@@ -57,16 +59,41 @@ def policy_action_to_wrench(action, params: VehicleParameters) -> np.ndarray:
     ], dtype=np.float64)
 
 
+@lru_cache(maxsize=16)
+def _bemt_static_lookup(config_json: str, max_omega: float, thrust_scale: float):
+    """Precompute a monotonic static BEMT thrust curve once per Smooth2 setup."""
+    import json
+    model = BladeElementPropeller(json.loads(config_json))
+    omega_grid = np.linspace(0.0, float(max_omega), 129)
+    thrust_grid = np.asarray([model.evaluate(float(w), 0.0)[0] for w in omega_grid]) * float(thrust_scale)
+    if not np.all(np.isfinite(thrust_grid)) or np.any(np.diff(thrust_grid) < -1e-8):
+        raise ValueError("Smooth2 BEMT static thrust lookup is not finite and monotonic")
+    return omega_grid, np.maximum.accumulate(thrust_grid)
+
+
+def _rotor_thrust_limits_and_inverse(params: VehicleParameters):
+    effectiveness = np.asarray(params.motor_effectiveness, dtype=np.float64)
+    max_omega = params.max_rotor_speed_rad_s * params.voltage_factor
+    if params.propeller_bemt:
+        import json
+        reference_kf = float(params.propeller_bemt.get(
+            "reference_thrust_coefficient_n_per_rad_s2", params.thrust_coefficient_n_per_rad_s2
+        ))
+        scale = params.thrust_coefficient_n_per_rad_s2 / reference_kf
+        omega_grid, base_thrust = _bemt_static_lookup(
+            json.dumps(params.propeller_bemt, sort_keys=True, separators=(",", ":")),
+            max_omega, scale,
+        )
+        return base_thrust[-1] * effectiveness, omega_grid, base_thrust, effectiveness
+    return params.thrust_coefficient_n_per_rad_s2 * effectiveness * max_omega ** 2, None, None, effectiveness
+
+
 def wrench_to_motor_commands(wrench, params: VehicleParameters) -> np.ndarray:
-    """Allocate a wrench while preserving collective before sacrificing torque."""
+    """Allocate wrench and invert the same Smooth2 BEMT static thrust curve used by the plant."""
     wrench = np.asarray(wrench, dtype=np.float64)
     if wrench.shape != (4,) or not np.all(np.isfinite(wrench)):
         raise ValueError("body wrench must be a finite four-value vector")
-    max_thrust = (
-        params.thrust_coefficient_n_per_rad_s2
-        * np.asarray(params.motor_effectiveness, dtype=np.float64)
-        * (params.max_rotor_speed_rad_s * params.voltage_factor) ** 2
-    )
+    max_thrust, bemt_omega, bemt_base_thrust, effectiveness = _rotor_thrust_limits_and_inverse(params)
     if np.any(max_thrust <= 0) or not np.all(np.isfinite(max_thrust)):
         raise ValueError("invalid per-rotor thrust authority")
     inverse = _allocation_inverse(params)
@@ -107,11 +134,13 @@ def wrench_to_motor_commands(wrench, params: VehicleParameters) -> np.ndarray:
         else:
             hi = mid
     rotor_thrust = np.clip(allocate(collective_scale, lo), 0.0, max_thrust)
-    omega = np.sqrt(
-        rotor_thrust
-        / (params.thrust_coefficient_n_per_rad_s2
-           * np.asarray(params.motor_effectiveness, dtype=np.float64))
-    )
+    if bemt_omega is not None:
+        omega = np.interp(
+            rotor_thrust / np.maximum(effectiveness, 1e-12),
+            bemt_base_thrust, bemt_omega,
+        )
+    else:
+        omega = np.sqrt(rotor_thrust / (params.thrust_coefficient_n_per_rad_s2 * effectiveness))
     commands = omega / (params.max_rotor_speed_rad_s * params.voltage_factor)
     return np.clip(commands, 0.0, 1.0).astype(np.float32)
 

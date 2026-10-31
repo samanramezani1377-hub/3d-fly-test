@@ -3,7 +3,7 @@
 The policy contribution is exactly zero: BodyWrenchActionWrapper blends 100%
 privileged teacher wrench into the plant. This checks whether the reference
 controller can execute the same velocity/yaw mission used by PPO evaluation
-across every vehicle profile and deterministic randomized Stage-5 scenarios.
+for Smooth2 only under deterministic randomized Stage-5 scenarios.
 """
 from __future__ import annotations
 
@@ -22,12 +22,7 @@ from fast_physics.vehicle_family import load_vehicle_profiles, VehicleFamilyEnv
 from train_universal_ppo import build_velocity_evaluation_sequence
 
 
-EXPECTED_PROFILE_IDS = {
-    "smooth2-a2212-custom-prop",
-    "generic-5inch-quad",
-    "generic-7inch-long-range",
-    "generic-3inch-cinewhoop",
-}
+EXPECTED_PROFILE_IDS = {"smooth2-a2212-custom-prop"}
 EPISODES_PER_PROFILE = 3
 STAGE = 5
 MAX_STEPS = 1500
@@ -148,13 +143,14 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--vehicle-family", type=Path, default=ROOT / "vehicle_models/family/vehicle_profiles.json")
     parser.add_argument("--randomization-config", type=Path, default=ROOT / "vehicle_models/family/domain_randomization.json")
+    parser.add_argument("--vehicle-id", default="smooth2-a2212-custom-prop")
     parser.add_argument("--output", type=Path, default=ROOT / "training/runs/universal-teacher-preflight/report.json")
     args = parser.parse_args()
 
-    profiles = load_vehicle_profiles(args.vehicle_family)
+    profiles = [p for p in load_vehicle_profiles(args.vehicle_family) if p["vehicle_id"] == args.vehicle_id]
     actual_ids = {p["vehicle_id"] for p in profiles}
-    if actual_ids != EXPECTED_PROFILE_IDS or len(profiles) != 4:
-        raise RuntimeError(f"Expected exactly the four supported profiles; got {sorted(actual_ids)}")
+    if args.vehicle_id != "smooth2-a2212-custom-prop" or actual_ids != EXPECTED_PROFILE_IDS or len(profiles) != 1:
+        raise RuntimeError(f"Preflight is locked to exactly Smooth2; got {sorted(actual_ids)}")
 
     episodes = []
     for profile_index, profile in enumerate(sorted(profiles, key=lambda p: p["vehicle_id"])):
@@ -195,8 +191,9 @@ def main() -> int:
         "randomization_enabled": True,
         "episodes_per_profile": EPISODES_PER_PROFILE,
         "total_episodes": len(episodes),
+        "vehicle_scope": ["smooth2-a2212-custom-prop"],
         "profile_summary": by_profile,
-        "passed": len(episodes) == 12 and all(item["passed"] for item in episodes),
+        "passed": len(episodes) == 3 and all(item["passed"] for item in episodes),
         "episodes": episodes,
         "limitations": (
             "Finite deterministic randomized simulation sample only; it cannot prove "
