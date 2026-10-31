@@ -40,11 +40,12 @@ def parse_args(argv=None):
 class BalancedProfileCallback(BaseCallback):
     """Choose the checkpoint that best protects the weakest vehicle profile."""
     def __init__(self, profiles, family_path, randomization_path, history_length,
-                 stage, episodes, frequency, checkpoint_frequency, best_dir, reports_dir, seed):
+                 stage, episodes, frequency, checkpoint_frequency, best_dir, reports_dir, seed, disable_teacher=False):
         super().__init__(verbose=1)
         self.profiles, self.family_path = profiles, family_path
         self.randomization_path, self.history_length = randomization_path, history_length
         self.stage, self.episodes = stage, max(1, int(episodes))
+        self.disable_teacher = bool(disable_teacher)
         self.frequency = max(1, frequency)
         self.checkpoint_frequency = max(1, checkpoint_frequency)
         self.best_dir, self.reports_dir = Path(best_dir), Path(reports_dir)
@@ -124,7 +125,7 @@ class BalancedProfileCallback(BaseCallback):
             e = BodyWrenchActionWrapper(VehicleFamilyEnv(vehicle_family_path=self.family_path,
                 randomization_path=self.randomization_path, history_length=self.history_length,
                 randomize=True, curriculum_stage=self.stage, vehicle_id=profile["vehicle_id"]),
-                disable_teacher=args.no_teacher)
+                disable_teacher=self.disable_teacher)
             plant_env = e.env
             episodes = []
             try:
@@ -304,7 +305,7 @@ def main(argv=None):
     eval_callback = BalancedProfileCallback(profiles, family_path, args.randomization_config,
         args.history_length, args.curriculum_stage, args.eval_episodes,
         aggregate_eval_frequency, args.checkpoint_frequency, run_dir / "best",
-        run_dir / "profile-evaluations", args.seed + 500000)
+        run_dir / "profile-evaluations", args.seed + 500000, disable_teacher=args.no_teacher)
     try:
         if args.load_model:
             model = PPO.load(str(args.load_model), env=env, device="cpu")
