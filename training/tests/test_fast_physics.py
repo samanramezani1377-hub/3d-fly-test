@@ -308,8 +308,8 @@ def test_rotor_mixer_produces_correct_longitudinal_lateral_and_yaw_reactions():
     assert pitch_telemetry["body_torque_nm"][1] > 0.0
     assert roll_telemetry["body_torque_nm"][0] > 0.0
     assert yaw_telemetry["body_torque_nm"][2] > 0.0
-    assert pitch_states[-1, 4] > 0.0  # positive pitch moves nose-forward (+body X)
-    assert roll_states[-1, 3] < 0.0   # positive roll accelerates toward body-right (-Y)
+    assert pitch_states[-1, 3] > 0.0  # positive pitch moves nose-forward (+body X)
+    assert roll_states[-1, 4] < 0.0   # positive roll accelerates toward body-right (-Y)
     assert yaw_states[-1, 11] > 0.0
 
 
