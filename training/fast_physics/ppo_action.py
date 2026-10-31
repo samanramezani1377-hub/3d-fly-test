@@ -36,7 +36,8 @@ def _allocation_matrix(params: VehicleParameters) -> np.ndarray:
     return matrix
 
 
-@lru_cache(maxsize=32)
+# VehicleParameters may contain a dict-valued BEMT config and is therefore
+# intentionally not hashable. The 4x4 inverse is cheap; do not cache by params.
 def _allocation_inverse(params: VehicleParameters) -> np.ndarray:
     return np.linalg.inv(_allocation_matrix(params))
 
