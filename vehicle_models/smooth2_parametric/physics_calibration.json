@@ -59,9 +59,9 @@
     "esc_model": null,
     "propeller_geometry_source": "3D repository kilo branch at 38d4820fc5f7e2208e6ce502ca6b54a83989196a; cad/parametric/model.params.json and output/smooth2-parametric/assembly-manifest.json. Four-blade parametric propeller; geometry is not a measured thrust/torque curve.",
     "battery_model": null,
-    "max_rotor_speed_rad_s": 1088.3,
-    "thrust_coefficient_n_per_rad_s2": 0.0000039133,
-    "torque_to_thrust_m": 0.01112,
+    "max_rotor_speed_rad_s": 1051.8,
+    "thrust_coefficient_n_per_rad_s2": 0.00000553666,
+    "torque_to_thrust_m": 0.01294,
     "motor_time_constant_s": 0.045,
     "rotor_inertia_kg_m2": 0.00002,
     "thrust_curve_source": "CAD blade-element/momentum screening calculation using cad/parametric/model.params.json prop_blade_stations, 4 blades, 158.999 mm diameter, 98.004 mm nominal pitch represented by the exported station twist, rho=1.225 kg/m3, Prandtl tip loss, generic A2212 motor model (1000KV, 0.12 ohm, 0.5A no-load), 3S 11.1V. Not a bench measurement.",
@@ -131,62 +131,65 @@
         "no_load_current_a": 0.5,
         "battery_voltage_v": 11.1,
         "battery_cells": 3,
-        "prandtl_tip_loss": true
+        "prandtl_tip_loss": true,
+        "airfoil_camber_fraction": 0.04,
+        "airfoil_camber_position_fraction": 0.4,
+        "thin_airfoil_zero_lift_angle_deg": -4.15448
       },
       "full_throttle_operating_point": {
-        "rpm": 10392.47,
-        "omega_rad_s": 1088.3,
-        "thrust_per_rotor_N": 4.6349,
-        "torque_per_rotor_Nm": 0.05153,
-        "shaft_power_per_rotor_W": 56.08,
-        "current_per_motor_A": 5.9
+        "rpm": 10043.84,
+        "omega_rad_s": 1051.79,
+        "thrust_per_rotor_N": 6.125,
+        "torque_per_rotor_Nm": 0.07927,
+        "shaft_power_per_rotor_W": 83.38,
+        "current_per_motor_A": 8.8
       },
       "fitted_coefficients": {
-        "thrust_coefficient_n_per_rad_s2": 0.0000039133,
-        "torque_coefficient_nm_per_rad_s2": 4.351e-8,
-        "torque_to_thrust_m": 0.01112
+        "thrust_coefficient_n_per_rad_s2": 0.00000553666,
+        "torque_coefficient_nm_per_rad_s2": 7.16577e-8,
+        "torque_to_thrust_m": 0.01294
       },
       "static_thrust_curve": [
         {
           "rpm": 4000,
-          "thrust_N": 0.6866,
-          "torque_Nm": 0.00763
+          "thrust_N": 0.9715,
+          "torque_Nm": 0.01257
         },
         {
           "rpm": 5000,
-          "thrust_N": 1.0729,
-          "torque_Nm": 0.01193
+          "thrust_N": 1.5179,
+          "torque_Nm": 0.01965
         },
         {
           "rpm": 6000,
-          "thrust_N": 1.5449,
-          "torque_Nm": 0.01718
+          "thrust_N": 2.1858,
+          "torque_Nm": 0.02829
         },
         {
           "rpm": 7000,
-          "thrust_N": 2.1028,
-          "torque_Nm": 0.02338
+          "thrust_N": 2.9751,
+          "torque_Nm": 0.0385
         },
         {
           "rpm": 8000,
-          "thrust_N": 2.7465,
-          "torque_Nm": 0.03053
+          "thrust_N": 3.8858,
+          "torque_Nm": 0.05029
         },
         {
           "rpm": 9000,
-          "thrust_N": 3.4761,
-          "torque_Nm": 0.03865
+          "thrust_N": 4.918,
+          "torque_Nm": 0.06365
         },
         {
-          "rpm": 10392,
-          "thrust_N": 4.6349,
-          "torque_Nm": 0.05153
+          "rpm": 10044,
+          "thrust_N": 6.125,
+          "torque_Nm": 0.07927
         }
       ],
       "vehicle_level": {
-        "total_static_thrust_N": 18.5396,
+        "total_static_thrust_N": 24.4999,
         "nominal_mass_kg": 0.6,
-        "estimated_thrust_to_weight": 3.15
+        "estimated_thrust_to_weight": 4.16
       },
       "uncertainty": {
         "thrust_coefficient_fractional": [
@@ -202,7 +205,7 @@
           0.3
         ]
       },
-      "warning": "BEMT screening estimate, sensitive to station interpretation, airfoil polar assumptions, Reynolds number, blade flexibility, inflow, guard interference and motor vendor variation. Do not use as a verified real-flight limit."
+      "warning": "BEMT screening estimate includes the CAD airfoil camber zero-lift correction (-4.1545 deg), but remains sensitive to airfoil polar approximation, Reynolds number, blade flexibility, inflow, guard interference and motor vendor variation. Do not use as a verified real-flight limit."
     }
   },
   "synthetic_software_test_values": {
