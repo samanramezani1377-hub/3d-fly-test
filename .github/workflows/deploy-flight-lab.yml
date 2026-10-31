@@ -28,6 +28,12 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
+      - name: Install GLB export dependency
+        run: python -m pip install --disable-pip-version-check trimesh
+
+      - name: Validate pinned Smooth2 CAD and simulator geometry
+        run: python scripts/validate_smooth2_model_sync.py
+
       - name: Assemble shared-engine Flight Lab
         run: |
           mkdir -p _site/training _site/vehicle_models/family
@@ -44,6 +50,11 @@ jobs:
           test -s _site/training/fast_physics/env.py
           test -s _site/vehicle_models/family/vehicle_profiles.json
           test -s _site/vehicle_models/family/domain_randomization.json
+
+      - name: Generate browser-ready GLB from the committed CAD parts
+        run: |
+          python scripts/export_smooth2_glb.py --output _site/models/current/drone.glb
+          test -s _site/models/current/drone.glb
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
