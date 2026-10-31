@@ -201,4 +201,4 @@ def test_production_velocity_workflow_trains_and_evaluates_all_four_profiles():
     assert '"episodes_per_vehicle": 10' in workflow
     assert '"metrics_by_vehicle": metrics_by_vehicle' in workflow
     assert "universal-quad-four-vehicle-five-stage" in workflow
-    assert "physical_flight_eligible": false in workflow.lower()
+    assert '"physical_flight_eligible": false' in workflow.lower()
