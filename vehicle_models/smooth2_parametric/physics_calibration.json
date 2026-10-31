@@ -3,6 +3,7 @@
   "vehicle_id": "smooth2-parametric-v1",
   "status": "uncalibrated",
   "physical_properties": {
+    "coordinate_frame": "CAD_EXPORT_Z_UP",
     "takeoff_mass_kg": null,
     "center_of_mass_m": null,
     "inertia_tensor_kg_m2": null,
