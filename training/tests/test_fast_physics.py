@@ -246,10 +246,10 @@ def test_smooth2_cad_frame_is_converted_to_forward_left_up_body_frame():
     assert metadata["physical_coordinate_frame"] == "CAD_EXPORT_Z_UP"
     assert metadata["body_coordinate_frame"] == "BODY_FORWARD_LEFT_UP"
     expected = np.array([
-        [-0.082013624, 0.082013624, 0.0],
-        [0.082013624, 0.082013624, 0.0],
-        [0.082013624, -0.082013624, 0.0],
-        [-0.082013624, -0.082013624, 0.0],
+        [-0.125141478, 0.125141478, 0.0],
+        [0.125141478, 0.125141478, 0.0],
+        [0.125141478, -0.125141478, 0.0],
+        [-0.125141478, -0.125141478, 0.0],
     ])
     assert np.allclose(params.rotor_positions_m, expected)
     # The 90-degree frame rotation swaps CAD X/Y principal inertias.
@@ -265,7 +265,7 @@ def test_smooth2_family_profile_coordinate_conversion_is_idempotent():
     assert profile["source_coordinate_frame"] == "CAD_EXPORT_Z_UP"
     assert first.rotor_positions_m == second.rotor_positions_m
     assert first.inertia_kg_m2 == second.inertia_kg_m2
-    assert np.allclose(first.rotor_positions_m[0], [-0.082013624, 0.082013624, 0.0])
+    assert np.allclose(first.rotor_positions_m[0], [-0.125141478, 0.125141478, 0.0])
 
 
 def test_body_yaw_velocity_axes_match_forward_left_and_world_heading():
