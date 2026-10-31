@@ -39,12 +39,14 @@ def parse_args(argv=None):
 
 
 
-def build_velocity_evaluation_sequence(episode_index: int, limits_m_s=(1.5, 1.5, 0.75)):
+def build_velocity_evaluation_sequence(episode_index: int, stage: int, limits_m_s=(1.5, 1.5, 0.75)):
     """Cover 6 cardinal, 12 two-axis and 8 three-axis directions, including reversals."""
     limits = np.asarray(limits_m_s, dtype=np.float64)
     if limits.shape != (3,) or np.any(limits <= 0):
         raise ValueError("velocity evaluation limits must be three positive values")
-    speed_scale = 0.55 + 0.05 * (int(episode_index) % 10)
+    stage_bands = {1: (0.25, 0.02), 2: (0.35, 0.03), 3: (0.45, 0.035), 4: (0.50, 0.04), 5: (0.55, 0.05)}
+    base_scale, episode_increment = stage_bands.get(int(stage), stage_bands[5])
+    speed_scale = base_scale + episode_increment * (int(episode_index) % 10)
     direction_pairs = []
     # Three cardinal axes; each is immediately followed by its reverse.
     for axis in range(3):
@@ -170,7 +172,7 @@ class BalancedProfileCallback(BaseCallback):
             try:
                 for ei in range(self.episodes):
                     seed = self.seed + self.n_calls * 100 + pi * 1000 + ei
-                    eval_options = ({"velocity_command_sequence": build_velocity_evaluation_sequence(ei)}
+                    eval_options = ({"velocity_command_sequence": build_velocity_evaluation_sequence(ei, self.stage)}
                                     if self.velocity_control else None)
                     obs, _ = e.reset(seed=seed, options=eval_options)
                     total, crashed, took_off = 0.0, False, False
