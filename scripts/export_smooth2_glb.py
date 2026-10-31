@@ -64,11 +64,26 @@ def main() -> None:
         dtype=np.float64,
     )
     scene = trimesh.Scene()
+    motor_x_mm = float(params["motor_x"]) * scale
+    motor_z_mm = float(params["motor_z"]) * scale
+    prop_stations = {
+        "prop_1": (motor_x_mm, motor_z_mm),
+        "prop_2": (motor_x_mm, -motor_z_mm),
+        "prop_3": (-motor_x_mm, motor_z_mm),
+        "prop_4": (-motor_x_mm, -motor_z_mm),
+    }
     for name in names:
         mesh = loaded[name].copy()
         vertices = (np.asarray(mesh.vertices, dtype=np.float64) @ cad_to_three.T) * 0.001
         vertices[:, 1] -= rotor_plane_z_mm * 0.001
-        centre = (vertices.min(axis=0) + vertices.max(axis=0)) * 0.5
+        if name in prop_stations:
+            station_x_mm, station_z_mm = prop_stations[name]
+            cad_pivot = np.array([station_x_mm, -station_z_mm, rotor_plane_z_mm])
+            if np.any(cad_pivot < mesh.bounds[0] - 0.5) or np.any(cad_pivot > mesh.bounds[1] + 0.5):
+                raise SystemExit(f"{name} CAD hub axis does not match its parametric motor station")
+            centre = np.array([station_x_mm * 0.001, 0.0, station_z_mm * 0.001])
+        else:
+            centre = (vertices.min(axis=0) + vertices.max(axis=0)) * 0.5
         mesh.vertices = vertices - centre
         color = PART_COLORS.get(
             name,
