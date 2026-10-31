@@ -273,6 +273,12 @@ class AdaptiveDroneEnv(gym.Env):
         action = np.clip(action, 0.0, 1.0)
         self._update_velocity_command()
         if self.velocity_control:
+            # Keep the virtual path inside a conservative altitude envelope;
+            # a downward/upward request is neutralized at the corresponding limit.
+            if self.target[2] <= 0.60 and self.desired_velocity_body[2] < 0.0:
+                self.desired_velocity_body[2] = 0.0
+            if self.target[2] >= 8.0 and self.desired_velocity_body[2] > 0.0:
+                self.desired_velocity_body[2] = 0.0
             # Forward/left rotate with the nose; vertical remains world-up.
             reference_velocity_world = self._body_yaw_velocity_to_world(
                 self.desired_velocity_body, float(self.plant.attitude[2])
