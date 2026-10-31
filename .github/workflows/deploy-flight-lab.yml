@@ -2,16 +2,6 @@ name: Publish Flight Lab to GitHub Pages
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "site/**"
-      - "training/fast_physics/**"
-      - "vehicle_models/family/vehicle_profiles.json"
-      - "vehicle_models/family/domain_randomization.json"
-      - "scripts/export_smooth2_glb.py"
-      - "scripts/validate_smooth2_model_sync.py"
-      - ".github/workflows/deploy-flight-lab.yml"
 
 permissions:
   contents: read
