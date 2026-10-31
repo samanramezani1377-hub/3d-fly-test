@@ -33,6 +33,7 @@ def parse_args(argv=None):
     p.add_argument("--vehicle-id", action="append", default=None, help="Optional profile allow-list; repeat IDs.")
     p.add_argument("--no-randomization", action="store_true")
     p.add_argument("--no-teacher", action="store_true", help="Disable privileged reference guidance while retaining the selected physics curriculum.")
+    p.add_argument("--teacher-weight", type=float, default=None, help="Override the curriculum reference-teacher blend weight (0.0 to 1.0).")
     return p.parse_args(argv)
 
 
@@ -40,12 +41,13 @@ def parse_args(argv=None):
 class BalancedProfileCallback(BaseCallback):
     """Choose the checkpoint that best protects the weakest vehicle profile."""
     def __init__(self, profiles, family_path, randomization_path, history_length,
-                 stage, episodes, frequency, checkpoint_frequency, best_dir, reports_dir, seed, disable_teacher=False):
+                 stage, episodes, frequency, checkpoint_frequency, best_dir, reports_dir, seed, disable_teacher=False, teacher_weight=None):
         super().__init__(verbose=1)
         self.profiles, self.family_path = profiles, family_path
         self.randomization_path, self.history_length = randomization_path, history_length
         self.stage, self.episodes = stage, max(1, int(episodes))
         self.disable_teacher = bool(disable_teacher)
+        self.teacher_weight = teacher_weight
         self.frequency = max(1, frequency)
         self.checkpoint_frequency = max(1, checkpoint_frequency)
         self.best_dir, self.reports_dir = Path(best_dir), Path(reports_dir)
@@ -125,7 +127,7 @@ class BalancedProfileCallback(BaseCallback):
             e = BodyWrenchActionWrapper(VehicleFamilyEnv(vehicle_family_path=self.family_path,
                 randomization_path=self.randomization_path, history_length=self.history_length,
                 randomize=True, curriculum_stage=self.stage, vehicle_id=profile["vehicle_id"]),
-                disable_teacher=self.disable_teacher)
+                disable_teacher=self.disable_teacher, reference_weight_override=self.teacher_weight)
             plant_env = e.env
             episodes = []
             try:
@@ -250,6 +252,10 @@ class BalancedProfileCallback(BaseCallback):
 
 def main(argv=None):
     args = parse_args(argv)
+    if args.teacher_weight is not None and not 0.0 <= args.teacher_weight <= 1.0:
+        raise SystemExit("--teacher-weight must be between 0.0 and 1.0")
+    if args.no_teacher and args.teacher_weight not in (None, 0.0):
+        raise SystemExit("--no-teacher cannot be combined with a nonzero --teacher-weight")
     if args.timesteps <= 0 or args.n_envs <= 0 or args.eval_frequency <= 0 or args.checkpoint_frequency <= 0 or args.eval_episodes <= 0:
         raise SystemExit("--timesteps, --n-envs, --eval-frequency, --checkpoint-frequency and --eval-episodes must be positive")
     if args.resume and not args.load_model:
@@ -297,7 +303,8 @@ def main(argv=None):
                 curriculum_stage=args.curriculum_stage,
                 sampling_weights_path=sampling_weights_path,
             )
-            return BodyWrenchActionWrapper(base_env, disable_teacher=args.no_teacher)
+            return BodyWrenchActionWrapper(base_env, disable_teacher=args.no_teacher,
+                reference_weight_override=args.teacher_weight)
         return _init
 
     env = SubprocVecEnv([make_env(i) for i in range(args.n_envs)])
@@ -305,7 +312,8 @@ def main(argv=None):
     eval_callback = BalancedProfileCallback(profiles, family_path, args.randomization_config,
         args.history_length, args.curriculum_stage, args.eval_episodes,
         aggregate_eval_frequency, args.checkpoint_frequency, run_dir / "best",
-        run_dir / "profile-evaluations", args.seed + 500000, disable_teacher=args.no_teacher)
+        run_dir / "profile-evaluations", args.seed + 500000, disable_teacher=args.no_teacher,
+        teacher_weight=args.teacher_weight)
     try:
         if args.load_model:
             model = PPO.load(str(args.load_model), env=env, device="cpu")
@@ -372,6 +380,7 @@ def main(argv=None):
             "profile_sampling": "adaptive weakness-weighted sampling; smoothed updates from balanced profile evaluation",
             "reference_teacher_schedule": {"stage_1": 0.80, "stage_2": 0.60, "stage_3": 0.40, "stage_4": 0.20, "stage_5": 0.0},
             "reference_teacher_disabled_for_this_run": args.no_teacher,
+            "reference_teacher_weight_override": args.teacher_weight,
             "evaluation_metrics": ["takeoff_success", "five_second_sustained_hover", "crash_rate", "stable_hover_duration", "motor_saturation_fraction", "mean_return"],
             "sb3_diagnostics": ["train/approx_kl", "train/explained_variance", "train/entropy_loss", "train/value_loss", "train/policy_gradient_loss"],
             "episode_randomization_ground_truth_is_hidden": True,
