@@ -197,9 +197,12 @@ def vehicle_feature_vector(profile: dict[str, Any]) -> np.ndarray:
     positions = np.asarray([r["position_m"] for r in p["rotors"]], dtype=np.float64)
     arm_radius = float(np.mean(np.linalg.norm(positions[:, :2], axis=1)))
     derived_fraction = len(p.get("derived_estimates", [])) / 6.0
-    status_confidence = {"provisional_estimate": 0.25, "user_supplied": 0.60, "measured": 1.0}[
-        p["calibration_status"]
-    ]
+    status_confidence = {
+        "provisional_estimate": 0.25,
+        "cad_bemt_estimate": 0.40,
+        "user_supplied": 0.60,
+        "measured": 1.0,
+    }[p["calibration_status"]]
     values = np.asarray([
         float(ph["mass_kg"]) / 2.0,
         arm_radius / 0.25,
