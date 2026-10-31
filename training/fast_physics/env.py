@@ -79,6 +79,7 @@ class AdaptiveDroneEnv(gym.Env):
         self.dt = float(dt)
         self.max_steps = int(max_steps)
         self.target = np.asarray(target_position, dtype=np.float64)
+        self.initial_target = self.target.copy()
         self.history_length = int(history_length)
         self.randomize = bool(randomize)
         if self.dt <= 0 or self.max_steps <= 0 or self.history_length < 1:
@@ -191,6 +192,7 @@ class AdaptiveDroneEnv(gym.Env):
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
+        self.target = self.initial_target.copy()
         if self.randomize:
             episode_params, self._scenario_details = sample_scenario(
                 self.base_params, self.np_random, self.active_randomization
