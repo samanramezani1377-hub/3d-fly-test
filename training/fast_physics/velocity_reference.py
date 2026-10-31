@@ -11,6 +11,7 @@ import numpy as np
 
 from .dynamics import rotation_matrix
 from .parameters import VehicleParameters
+from .propeller import BladeElementPropeller
 
 
 class VelocityYawReferenceController:
@@ -27,6 +28,22 @@ class VelocityYawReferenceController:
         params.validate()
         self.params = params
         self.wind = np.asarray(wind_m_s, dtype=np.float64)
+        if params.propeller_bemt:
+            model = BladeElementPropeller(params.propeller_bemt)
+            reference_kf = float(params.propeller_bemt.get(
+                "reference_thrust_coefficient_n_per_rad_s2",
+                params.thrust_coefficient_n_per_rad_s2,
+            ))
+            scale = params.thrust_coefficient_n_per_rad_s2 / reference_kf
+            self.max_collective_thrust_n = 4.0 * model.evaluate(
+                params.max_rotor_speed_rad_s * params.voltage_factor, 0.0
+            )[0] * scale * float(np.sum(params.motor_effectiveness))
+        else:
+            self.max_collective_thrust_n = (
+                4.0 * params.thrust_coefficient_n_per_rad_s2
+                * (params.max_rotor_speed_rad_s * params.voltage_factor) ** 2
+                * max(params.motor_effectiveness)
+            )
         self.dt = float(dt_s)
         self.velocity_kp = np.asarray(velocity_kp, dtype=np.float64)
         self.position_kp = np.asarray(position_kp, dtype=np.float64)
@@ -153,8 +170,6 @@ class VelocityYawReferenceController:
         collective = p.mass_kg * (9.80665 + accel_world[2]) / vertical_cosine
         collective = float(np.clip(
             collective, 0.0,
-            4.0 * p.thrust_coefficient_n_per_rad_s2
-            * (p.max_rotor_speed_rad_s * p.voltage_factor) ** 2
-            * max(p.motor_effectiveness),
+            self.max_collective_thrust_n,
         ))
         return np.array([collective, torque[0], torque[1], torque[2]], dtype=np.float64)

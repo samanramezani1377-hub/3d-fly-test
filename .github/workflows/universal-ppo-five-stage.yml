@@ -1,4 +1,4 @@
-name: Universal quadrotor PPO - Five-stage 3D velocity and yaw-rate curriculum
+name: Smooth2-only PPO - Five-stage 3D velocity and yaw-rate curriculum
 
 on:
   workflow_dispatch:
@@ -22,7 +22,7 @@ env:
 
 jobs:
   train-universal-family:
-    name: Four vehicle profiles - 5 x (400K teacher + 400K teacher-free), 100 parallel envs
+    name: Smooth2 only - 5 x (400K teacher + 400K teacher-free), 100 parallel envs
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
@@ -56,6 +56,7 @@ jobs:
             training/preflight_velocity_teacher.py
           python training/preflight_velocity_teacher.py \
             --vehicle-family vehicle_models/family/vehicle_profiles.json \
+            --vehicle-id smooth2-a2212-custom-prop \
             --randomization-config vehicle_models/family/domain_randomization.json \
             --output training/runs/universal-teacher-preflight/report.json
 
@@ -76,7 +77,7 @@ jobs:
           github-token: ${{ github.token }}
           path: bootstrap
 
-      - name: Verify selected teacher-assisted 1M checkpoint and all four vehicle profiles
+      - name: Verify selected teacher-assisted 1M bootstrap checkpoint and Smooth2 physics profile
         run: |
           set -euo pipefail
           source_dir="bootstrap/training/runs/universal-quad-v5-foundation-stage2-teacher"
@@ -95,23 +96,23 @@ jobs:
           import json
           from pathlib import Path
           p = json.loads(Path("vehicle_models/family/vehicle_profiles.json").read_text())
-          expected = {
-              "smooth2-a2212-custom-prop",
-              "generic-5inch-quad",
-              "generic-7inch-long-range",
-              "generic-3inch-cinewhoop",
-          }
+          expected = {"smooth2-a2212-custom-prop"}
           actual = {x["vehicle_id"] for x in p["profiles"]}
-          assert actual == expected, f"Vehicle family mismatch: {sorted(actual)}"
-          assert len(p["profiles"]) == 4, "Training must include exactly four distinct vehicle profiles"
-          status_by_id = {x["vehicle_id"]: x["calibration_status"] for x in p["profiles"]}
+          assert expected.issubset(actual), f"Smooth2 profile missing: {sorted(actual)}"
+          smooth2_profiles = [x for x in p["profiles"] if x["vehicle_id"] in expected]
+          assert len(smooth2_profiles) == 1, smooth2_profiles
+          status_by_id = {x["vehicle_id"]: x["calibration_status"] for x in smooth2_profiles}
           assert status_by_id["smooth2-a2212-custom-prop"] == "cad_bemt_estimate", status_by_id
-          assert all(status_by_id[x] == "provisional_estimate" for x in expected - {"smooth2-a2212-custom-prop"}), status_by_id
           smooth2 = next(x for x in p["profiles"] if x["vehicle_id"] == "smooth2-a2212-custom-prop")
           assert abs(smooth2["propulsion"]["thrust_coefficient_n_per_rad_s2"] - 5.53666e-6) < 1e-10
           assert abs(smooth2["propulsion"]["max_rotor_speed_rad_s"] - 1051.8) < 0.2
-          print("Smooth2 CAD/BEMT estimate is active in the PPO family profile; other generic profiles remain provisional:", status_by_id)
-          print("All four profiles enabled; Smooth2 uses CAD/BEMT screening estimates and the other three remain provisional:", sorted(actual))
+          bemt = smooth2["propulsion"]["propeller_bemt"]
+          assert bemt["model"] == "cad_station_blade_element_momentum", bemt.get("model")
+          assert len(bemt["stations"]) >= 3 and bemt["integration_sections"] >= 8
+          mass = smooth2["physical"]["mass_properties_estimate"]
+          assert mass["status"] == "provisional_not_mesh_integrated", mass
+          assert len(smooth2["physical"]["inertia_kg_m2"]) == 3
+          print("Smooth2 CAD/BEMT profile and provisional mass/inertia estimates selected:", status_by_id)
           PY
           mkdir -p training/runs
           cp "$source_model" training/runs/universal-initial-from-1m-teacher-best.zip
@@ -132,6 +133,7 @@ jobs:
               --seed "$((2042 + stage * 10 + 1))" \
               --run-name "$teacher_run" --output-dir training/runs \
               --vehicle-family vehicle_models/family/vehicle_profiles.json \
+              --vehicle-id smooth2-a2212-custom-prop \
               --randomization-config vehicle_models/family/domain_randomization.json \
               --curriculum-stage "$stage" \
               --load-model "$checkpoint" \
@@ -150,6 +152,7 @@ jobs:
               --seed "$((2042 + stage * 10 + 2))" \
               --run-name "$student_run" --output-dir training/runs \
               --vehicle-family vehicle_models/family/vehicle_profiles.json \
+              --vehicle-id smooth2-a2212-custom-prop \
               --randomization-config vehicle_models/family/domain_randomization.json \
               --curriculum-stage "$stage" \
               --load-model "$teacher_best" \
@@ -186,14 +189,10 @@ jobs:
           output_dir = Path("training/runs/universal-final-independent-evaluation")
           assert model_path.is_file() and model_path.stat().st_size > 0, "Final selected PPO model is missing"
           profiles = load_vehicle_profiles(family_path)
-          expected_profile_ids = {
-              "smooth2-a2212-custom-prop",
-              "generic-5inch-quad",
-              "generic-7inch-long-range",
-              "generic-3inch-cinewhoop",
-          }
+          expected_profile_ids = {"smooth2-a2212-custom-prop"}
+          profiles = [p for p in profiles if p["vehicle_id"] in expected_profile_ids]
           assert {p["vehicle_id"] for p in profiles} == expected_profile_ids, profiles
-          assert len(profiles) == 4, profiles
+          assert len(profiles) == 1, profiles
 
           model = PPO.load(str(model_path), device="cpu")
           callback = BalancedProfileCallback(
@@ -220,16 +219,11 @@ jobs:
           reports = sorted((output_dir / "reports").glob("profile-evaluation-*.json"))
           assert len(reports) == 1, f"Expected exactly one final evaluation report, found {reports}"
           report = json.loads(reports[0].read_text(encoding="utf-8"))
-          expected_ids = {
-              "smooth2-a2212-custom-prop",
-              "generic-5inch-quad",
-              "generic-7inch-long-range",
-              "generic-3inch-cinewhoop",
-          }
+          expected_ids = {"smooth2-a2212-custom-prop"}
           results = report.get("profiles", [])
           actual_ids = {item.get("vehicle_id") for item in results}
-          assert actual_ids == expected_ids, f"Independent evaluation did not cover all four profiles: {actual_ids}"
-          assert len(results) == 4, report
+          assert actual_ids == expected_ids, f"Independent evaluation did not cover Smooth2 only: {actual_ids}"
+          assert len(results) == 1, report
           metric_keys = (
               "success_rate", "takeoff_success_rate", "takeoff_failure_rate",
               "crash_rate", "mean_velocity_tracking_error_m_s",
@@ -254,7 +248,7 @@ jobs:
               "independence": "fresh deterministic seed range, separate from all periodic checkpoint-selection evaluations",
               "seed_start": 987654,
               "episodes_per_vehicle": 10,
-              "vehicle_count": 4,
+              "vehicle_count": 1,
               "vehicle_ids": sorted(actual_ids),
               "curriculum_stage": 5,
               "teacher_disabled": True,
@@ -270,11 +264,11 @@ jobs:
           print(json.dumps(metadata, indent=2))
           PY
 
-      - name: Publish universal four-vehicle curriculum outputs
+      - name: Publish Smooth2-only curriculum outputs
         if: success()
         run: |
           set -euo pipefail
-          target="training/models/universal-quad-four-vehicle-five-stage"
+          target="training/models/smooth2-only-five-stage"
           mkdir -p "$target"
           cp -a training/runs/universal-velocity-ppo-stage-* "$target/"
           cp training/runs/universal-initial-from-1m-teacher-best.zip "$target/"
@@ -286,10 +280,10 @@ jobs:
           cp training/runs/universal-teacher-preflight/report.json "$target/teacher-preflight-report.json"
           cat > "$target/training-plan.json" <<'JSON'
           {
-            "vehicle_family": ["smooth2-a2212-custom-prop", "generic-5inch-quad", "generic-7inch-long-range", "generic-3inch-cinewhoop"],
-            "profile_sampling": "adaptive balanced sampling across all four profiles; each profile uses its own nominal mass, geometry and propulsion baseline",
-            "domain_randomization": "per-profile proportional variation around that profile baseline; no absolute motor or thrust constants are shared",
-            "initial_checkpoint": "best teacher-assisted checkpoint selected at 1000000 steps from run 41158518207",
+            "vehicle_family": ["smooth2-a2212-custom-prop"],
+            "profile_sampling": "pinned Smooth2-only sampling; no other vehicle profile is eligible",
+            "domain_randomization": "Smooth2-only proportional randomization around CAD/BEMT and mass-property engineering estimates; bounds are simulation priors",
+            "initial_checkpoint": "best teacher-assisted checkpoint selected at 1000000 steps from run 41158518207; legacy physics checkpoint used only as a policy warm start and retrained/evaluated in current Smooth2 BEMT physics",
             "stages": 5,
             "timesteps_per_phase": 400000,
             "phases_per_stage": 2,
@@ -327,14 +321,17 @@ jobs:
             "evaluation_neutral_speed_sustained_seconds": 0.5,
             "checkpoint_frequency": 50000,
             "parallel_environments": 100,
-            "geometry_and_rotor_positions": "profile-specific geometry and rotor positions; Smooth2 uses its pinned CAD-derived geometry",
+            "geometry_and_rotor_positions": "Smooth2 pinned CAD-derived geometry and rotor positions only",
             "minimum_worst_case_thrust_to_weight_ratio": 1.05,
-            "thrust_margin_calculation": "includes mass, battery voltage squared, motor effectiveness, maximum rotor speed squared and thrust coefficient",
+            "thrust_margin_calculation": "Smooth2 BEMT static thrust envelope with motor effectiveness and voltage-scaled rotor speed",
             "randomized_parameters": ["mass", "center_of_mass", "inertia_tensor", "motor_effectiveness", "motor_response_time", "maximum_rotor_speed", "thrust_coefficient", "torque_to_thrust_ratio", "battery_voltage_factor", "aerodynamic_drag", "wind", "sensor_noise"],
             "episode_randomization_ground_truth_hidden": true,
             "checkpoint_migration": "preserve compatible hover weights; zero-initialize four command inputs; remap legacy roll/pitch action outputs for CAD_EXPORT_Z_UP to BODY_FORWARD_LEFT_UP; initialize a fresh optimizer",
             "stage_chaining": "each stage teacher phase starts from previous stage best; its best checkpoint initializes the same-stage teacher-free phase; the teacher-free best checkpoint initializes the next stage",
             "teacher_controller": "privileged cascaded velocity/position-to-attitude controller with body-yaw-frame horizontal velocity tracking, world-up vertical velocity and independent world-vertical yaw-rate feedback; uses true randomized plant parameters and wind only inside the oracle action wrapper",
+            "propeller_physics": "runtime CAD-station BEMT with axial inflow; allocator uses cached static BEMT thrust-to-RPM inverse; yaw mixer uses nominal torque-to-thrust proxy",
+            "mass_properties": "Smooth2 CAD-envelope mass, CG and inertia estimates with stated uncertainty; not measured",
+            "aerodynamics": "anisotropic body-axis linear/quadratic drag estimate; not CFD or wind-tunnel calibrated",
             "simulation_only": true,
             "physical_flight_eligible": false
           }
@@ -344,11 +341,11 @@ jobs:
           git add "$target"
           if ! git diff --cached --quiet; then
             find "$target" -type f -size +90M -print -quit | grep -q . && { echo "Checkpoint exceeds 90 MB."; exit 1; } || true
-            git commit -m "Train universal quad PPO through five four-profile velocity stages"
+            git commit -m "Train universal quad PPO through five Smooth2-only velocity stages"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
-      - name: Print universal four-profile training summaries
+      - name: Print Smooth2-only training summaries
         if: always()
         run: |
           for log in universal-velocity-ppo-stage-*.log; do
@@ -360,14 +357,14 @@ jobs:
             if [ -f "$state" ]; then cat "$state"; fi
           done
 
-      - name: Upload universal four-vehicle curriculum backup
+      - name: Upload Smooth2-only curriculum backup
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: universal-quad-four-vehicle-five-stage-backup
+          name: smooth2-only-five-stage-backup
           path: |
             training/runs/
-            training/models/smooth2-ppo-five-stage/
+            training/models/smooth2-only-five-stage/
             universal-ppo-stage-*.log
           if-no-files-found: warn
           retention-days: 90
