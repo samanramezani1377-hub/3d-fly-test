@@ -163,13 +163,13 @@ jobs:
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
-      - name: Print training manifest and log tail
+      - name: Print teacher-free training summary and log tail
         if: always()
         run: |
-          echo '===== FIVE-STAGE CURRICULUM MANIFEST ====='
-          if [ -f training/runs/universal-quad-v5-foundation-curriculum-manifest.json ]; then cat training/runs/universal-quad-v5-foundation-curriculum-manifest.json; else echo 'Manifest not produced'; fi
-          echo '===== TRAINING LOG TAIL ====='
-          if [ -f single-stage-training.log ]; then tail -c 50000 single-stage-training.log; else echo 'Training log not produced'; fi
+          echo '===== TEACHER-FREE EVALUATION SUMMARY ====='
+          if [ -f training/runs/universal-quad-v5-foundation-stage1-independent/independent-evaluation-summary.json ]; then cat training/runs/universal-quad-v5-foundation-stage1-independent/independent-evaluation-summary.json; else echo 'Final evaluation summary not produced'; fi
+          echo '===== TEACHER-FREE TRAINING LOG TAIL ====='
+          if [ -f teacher-free-training.log ]; then tail -c 50000 teacher-free-training.log; else echo 'Training log not produced'; fi
 
       - name: Upload training backup
         if: always()
