@@ -38,14 +38,29 @@ def synthetic_params():
     )
 
 
-def test_unknown_calibration_is_not_silently_filled():
+def _write_incomplete_calibration(tmp_path):
+    calibration = json.loads(CALIBRATION.read_text(encoding="utf-8"))
+    physical = calibration["physical_properties"]
+    motor = calibration["motor_propeller"]
+    for key in ("takeoff_mass_kg", "center_of_mass_m", "inertia_tensor_kg_m2"):
+        physical[key] = None
+    for key in ("max_rotor_speed_rad_s", "thrust_coefficient_n_per_rad_s2", "torque_to_thrust_m"):
+        motor[key] = None
+    path = tmp_path / "incomplete-calibration.json"
+    path.write_text(json.dumps(calibration), encoding="utf-8")
+    return path
+
+
+def test_unknown_calibration_is_not_silently_filled(tmp_path):
+    incomplete = _write_incomplete_calibration(tmp_path)
     with pytest.raises(ValueError, match="Physical calibration is incomplete"):
-        load_vehicle_parameters(AIRFRAME, CALIBRATION)
+        load_vehicle_parameters(AIRFRAME, incomplete)
 
 
-def test_synthetic_calibration_requires_explicit_opt_in():
+def test_synthetic_calibration_requires_explicit_opt_in(tmp_path):
+    incomplete = _write_incomplete_calibration(tmp_path)
     params, metadata = load_vehicle_parameters(
-        AIRFRAME, CALIBRATION, allow_synthetic_calibration=True
+        AIRFRAME, incomplete, allow_synthetic_calibration=True
     )
     assert metadata["synthetic_calibration_used"] is True
     assert params.mass_kg == pytest.approx(0.6)
@@ -253,7 +268,7 @@ def test_smooth2_cad_frame_is_converted_to_forward_left_up_body_frame():
     ])
     assert np.allclose(params.rotor_positions_m, expected)
     # The 90-degree frame rotation swaps CAD X/Y principal inertias.
-    assert np.allclose(params.inertia_matrix, np.diag([0.006, 0.004, 0.004]))
+    assert np.allclose(params.inertia_matrix, np.diag([0.0038, 0.0038, 0.0075]))
 
 
 def test_smooth2_family_profile_coordinate_conversion_is_idempotent():
@@ -433,12 +448,13 @@ def test_a2212_catalog_reference_is_recorded_without_claiming_physical_calibrati
     assert motor["confirmed_or_repeated_catalog_values"]["internal_resistance_ohm_catalog"] == pytest.approx(0.09)
     assert len(motor["published_static_test_points"]) >= 2
     assert calibration["motor_propeller"]["kv_rpm_per_volt"] == 1000
-    assert calibration["motor_propeller"]["max_rotor_speed_rad_s"] is None
-    assert calibration["motor_propeller"]["thrust_coefficient_n_per_rad_s2"] is None
-    assert calibration["motor_propeller"]["torque_to_thrust_m"] is None
-    assert calibration["motor_propeller"]["motor_time_constant_s"] is None
-    with pytest.raises(ValueError, match="Physical calibration is incomplete"):
-        load_vehicle_parameters(AIRFRAME, CALIBRATION)
+    assert calibration["motor_propeller"]["max_rotor_speed_rad_s"] == pytest.approx(1051.8)
+    assert calibration["motor_propeller"]["thrust_coefficient_n_per_rad_s2"] == pytest.approx(5.53666e-6)
+    assert calibration["motor_propeller"]["torque_to_thrust_m"] == pytest.approx(0.01294)
+    assert calibration["motor_propeller"]["motor_time_constant_s"] == pytest.approx(0.045)
+    assert calibration["motor_propeller"]["electrical_model_status"] == "bemt_and_generic_motor_screening_estimate_not_bench_calibrated"
+    params, metadata = load_vehicle_parameters(AIRFRAME, CALIBRATION)
+    assert metadata["synthetic_calibration_used"] is False
 
 
 def test_electrical_telemetry_estimates_current_and_battery_consumption_without_claiming_voltage_sag():
