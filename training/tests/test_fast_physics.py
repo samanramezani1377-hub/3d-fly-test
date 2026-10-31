@@ -49,6 +49,8 @@ def test_synthetic_calibration_requires_explicit_opt_in():
     )
     assert metadata["synthetic_calibration_used"] is True
     assert params.mass_kg == pytest.approx(0.6)
+    assert params.battery_nominal_voltage_v == pytest.approx(11.1)
+    assert params.battery_capacity_ah == pytest.approx(2.2)
 
 
 def test_airframe_geometry_is_fixed_and_four_rotors_are_present():
