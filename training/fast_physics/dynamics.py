@@ -139,9 +139,18 @@ class FastQuadrotor:
                 )
                 for i, omega in enumerate(self.motor_omega)
             ]
-            thrusts = np.asarray([item[0] for item in bemt_results], dtype=np.float64)
-            rotor_shaft_torque_nm = np.asarray([item[1] for item in bemt_results], dtype=np.float64)
-            thrust_model_status = "runtime_CAD_station_BEMT_with_axial_inflow_screening"
+            motor_scale = np.asarray(p.motor_effectiveness, dtype=np.float64)
+            thrust_scale = (
+                p.thrust_coefficient_n_per_rad_s2
+                / float(p.propeller_bemt.get("reference_thrust_coefficient_n_per_rad_s2", p.thrust_coefficient_n_per_rad_s2))
+            )
+            torque_scale = (
+                p.torque_to_thrust_m
+                / float(p.propeller_bemt.get("reference_torque_to_thrust_m", p.torque_to_thrust_m))
+            )
+            thrusts = np.asarray([item[0] for item in bemt_results], dtype=np.float64) * thrust_scale * motor_scale
+            rotor_shaft_torque_nm = np.asarray([item[1] for item in bemt_results], dtype=np.float64) * torque_scale * motor_scale
+            thrust_model_status = "runtime_CAD_station_BEMT_with_axial_inflow_and_randomized_effectiveness"
         else:
             thrusts = (
                 p.thrust_coefficient_n_per_rad_s2
