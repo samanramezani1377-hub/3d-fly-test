@@ -27,6 +27,12 @@ def randomization_for_stage(config: dict, stage_number: int) -> dict:
         )
     result["inertia"]["scale"] = stage["inertia_scale"]
     result["motor"]["effectiveness"] = stage["motor_effectiveness"]
+    # Stage-specific propulsion uncertainty: all scales are relative to the
+    # fixed Smooth2 nominal calibration and never alter CAD rotor geometry.
+    result["motor"]["max_rotor_speed_scale"] = stage.get("max_rotor_speed_scale", [1.0, 1.0])
+    result["motor"]["time_constant_scale"] = stage.get("motor_time_constant_scale", [1.0, 1.0])
+    result["motor"]["torque_to_thrust_scale"] = stage.get("torque_to_thrust_scale", [1.0, 1.0])
+    result.setdefault("thrust", {})["coefficient_scale"] = stage.get("thrust_coefficient_scale", [1.0, 1.0])
     result["battery"]["voltage_factor"] = stage.get("battery_voltage_factor", [1.0, 1.0])
     result["aerodynamics"]["drag_scale"] = stage.get("drag_scale", [1.0, 1.0])
     result["environment"]["wind_component_m_s"] = stage["wind_m_s"]
