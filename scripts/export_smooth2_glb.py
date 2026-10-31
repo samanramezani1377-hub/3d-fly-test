@@ -41,18 +41,21 @@ def main() -> None:
     if len(names) != 26 or len(set(names)) != len(names):
         raise SystemExit(f"Expected 26 unique CAD parts; found {len(names)}")
 
-    prop_centres = []
+    params = json.loads((ROOT / "cad" / "parametric" / "model.params.json").read_text(encoding="utf-8"))
+    scale = float(params["model_scale"])
+    rotor_plane_z_mm = (float(params["prop_y"]) + float(params["prop_thickness"]) * 0.5) * scale
+    prop_bounds = []
     loaded = {}
     for name in names:
         mesh = load_part(name)
         loaded[name] = mesh
         if name.startswith("prop_"):
-            prop_centres.append(float((mesh.bounds[0, 2] + mesh.bounds[1, 2]) * 0.5))
-    if len(prop_centres) != 4:
+            prop_bounds.append(mesh.bounds[:, 2])
+    if len(prop_bounds) != 4:
         raise SystemExit("The current CAD assembly must contain four separate propeller meshes")
-    rotor_plane_z_mm = float(np.mean(prop_centres))
-    if max(abs(value - rotor_plane_z_mm) for value in prop_centres) > 0.5:
-        raise SystemExit("The four CAD propellers do not share a common rotor plane")
+    for index, bounds in enumerate(prop_bounds, 1):
+        if not float(bounds[0]) - 0.5 <= rotor_plane_z_mm <= float(bounds[1]) + 0.5:
+            raise SystemExit(f"CAD propeller {index} does not cross the parametric rotor plane")
 
     # CAD export is X/Y/Z-up. The Flight Lab scene uses X/right, Y/up, Z/depth.
     # This is a proper +90-degree X rotation: (x, y, z) -> (x, z, -y).
@@ -92,7 +95,7 @@ def main() -> None:
     if len(exported_nodes) != len(names):
         raise SystemExit(f"GLB node count mismatch: expected {len(names)}, got {len(exported_nodes)}")
     print(f"Generated {args.output} ({args.output.stat().st_size} bytes)")
-    print(f"  {len(exported_nodes)} named components; rotor plane centered at {rotor_plane_z_mm:.3f} mm")
+    print(f"  {len(exported_nodes)} named components; parametric rotor plane at {rotor_plane_z_mm:.3f} mm")
     print("  units: metres; up axis: +Y; front: +Z; propellers remain separate and animatable")
 
 
