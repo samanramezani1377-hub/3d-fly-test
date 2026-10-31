@@ -35,9 +35,11 @@ class VelocityYawReferenceController:
                 params.thrust_coefficient_n_per_rad_s2,
             ))
             scale = params.thrust_coefficient_n_per_rad_s2 / reference_kf
-            self.max_collective_thrust_n = 4.0 * model.evaluate(
-                params.max_rotor_speed_rad_s * params.voltage_factor, 0.0
-            )[0] * scale * float(np.sum(params.motor_effectiveness))
+            self.max_collective_thrust_n = float(
+                model.evaluate(
+                    params.max_rotor_speed_rad_s * params.voltage_factor, 0.0
+                )[0] * scale * np.sum(params.motor_effectiveness)
+            )
         else:
             self.max_collective_thrust_n = (
                 4.0 * params.thrust_coefficient_n_per_rad_s2
