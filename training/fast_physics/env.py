@@ -48,6 +48,7 @@ class AdaptiveDroneEnv(gym.Env):
         history_length: int = 4,
         randomize: bool = True,
         curriculum_stage: int | None = None,
+        velocity_control: bool = False,
     ):
         super().__init__()
         if params is None:
@@ -66,6 +67,11 @@ class AdaptiveDroneEnv(gym.Env):
         self.base_params = params
         self.randomization = json.loads(Path(randomization_path).read_text(encoding="utf-8"))
         self.curriculum_stage = curriculum_stage
+        self.velocity_control = bool(velocity_control)
+        # Conservative software-training envelope; not a claim of flight-tested limits.
+        self.velocity_command_limits_m_s = np.array([1.5, 1.5, 0.75], dtype=np.float32)
+        self.desired_velocity_body = np.zeros(3, dtype=np.float32)
+        self._command_steps_remaining = 100  # retain the takeoff/hover bootstrap for 2 seconds
         self.active_randomization = (
             randomization_for_stage(self.randomization, curriculum_stage)
             if curriculum_stage is not None else self.randomization
@@ -83,7 +89,7 @@ class AdaptiveDroneEnv(gym.Env):
         # Each history frame contains 12 state values and 4 previous motor commands.
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf,
-            shape=(self.history_length * 16 + 2,), dtype=np.float32,
+            shape=(self.history_length * 16 + 2 + (3 if self.velocity_control else 0),), dtype=np.float32,
         )
         self.plant = FastQuadrotor(self.base_params, dt=self.dt)
         self.estimator = OnlineThrustEstimator()
@@ -91,6 +97,8 @@ class AdaptiveDroneEnv(gym.Env):
         self._last_action = np.zeros(4, dtype=np.float32)
         self._steps = 0
         self._taken_off = False
+        self.desired_velocity_body[:] = 0.0
+        self._command_steps_remaining = 100
         self._scenario_details: dict = {}
         self._last_finite_state = np.zeros(12, dtype=np.float32)
         self._previous_altitude_potential = 0.0
@@ -126,11 +134,57 @@ class AdaptiveDroneEnv(gym.Env):
             (relative, velocity, attitude, angular_rate, previous_motor_commands)
         ).astype(np.float32)
 
+    @staticmethod
+    def _world_velocity_to_body_yaw(velocity_world: np.ndarray, yaw: float) -> np.ndarray:
+        # ENU world axes; command frame is nose-forward, nose-left, world-up.
+        cy, sy = np.cos(float(yaw)), np.sin(float(yaw))
+        vx, vy, vz = np.asarray(velocity_world, dtype=np.float64)
+        return np.array([cy * vx + sy * vy, -sy * vx + cy * vy, vz], dtype=np.float32)
+
+    @staticmethod
+    def _body_yaw_velocity_to_world(velocity_body: np.ndarray, yaw: float) -> np.ndarray:
+        cy, sy = np.cos(float(yaw)), np.sin(float(yaw))
+        forward, left, up = np.asarray(velocity_body, dtype=np.float64)
+        return np.array([cy * forward - sy * left, sy * forward + cy * left, up], dtype=np.float64)
+
+    def _sample_velocity_command(self) -> np.ndarray:
+        stage = int((self.active_randomization.get("active_curriculum_stage") or {}).get("stage", 1))
+        limits = self.velocity_command_limits_m_s.astype(np.float64)
+        if stage <= 1:
+            axes, magnitude = 1, float(self.np_random.uniform(0.15, 0.35))
+        elif stage == 2:
+            axes, magnitude = 1, float(self.np_random.uniform(0.30, 0.60))
+        elif stage == 3:
+            axes, magnitude = 2, float(self.np_random.uniform(0.25, 0.55))
+        elif stage == 4:
+            axes, magnitude = int(self.np_random.choice([2, 3])), float(self.np_random.uniform(0.35, 0.75))
+        else:
+            direction = self.np_random.normal(size=3)
+            direction /= max(float(np.linalg.norm(direction)), 1e-9)
+            magnitude = float(self.np_random.uniform(0.20, 1.0))
+            return (direction * magnitude * limits).astype(np.float32)
+        selected = self.np_random.choice(3, size=axes, replace=False)
+        command = np.zeros(3, dtype=np.float64)
+        command[selected] = self.np_random.choice([-1.0, 1.0], size=axes) * magnitude * limits[selected]
+        return command.astype(np.float32)
+
+    def _update_velocity_command(self) -> None:
+        if not self.velocity_control:
+            return
+        if self._command_steps_remaining > 0:
+            self._command_steps_remaining -= 1
+            return
+        self.desired_velocity_body = self._sample_velocity_command()
+        self._command_steps_remaining = int(self.np_random.integers(50, 151))  # 1-3 seconds at 50 Hz
+
     def _observation(self) -> np.ndarray:
         if not self._history:
             state = self.plant.state()
             self._history.extend([self._policy_frame(state)] * self.history_length)
-        return np.concatenate((*tuple(self._history), self.estimator.context())).astype(np.float32)
+        parts = [*tuple(self._history), self.estimator.context()]
+        if self.velocity_control:
+            parts.append(self.desired_velocity_body / self.velocity_command_limits_m_s)
+        return np.concatenate(parts).astype(np.float32)
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
@@ -208,6 +262,13 @@ class AdaptiveDroneEnv(gym.Env):
         if not np.all(np.isfinite(action)):
             action = np.nan_to_num(action, nan=0.0, posinf=1.0, neginf=0.0)
         action = np.clip(action, 0.0, 1.0)
+        self._update_velocity_command()
+        if self.velocity_control:
+            # Forward/left rotate with the nose; vertical remains world-up.
+            reference_velocity_world = self._body_yaw_velocity_to_world(
+                self.desired_velocity_body, float(self.plant.attitude[2])
+            )
+            self.target += reference_velocity_world * self.dt
         state, telemetry = self.plant.step(action)
         self._steps += 1
 
@@ -247,16 +308,32 @@ class AdaptiveDroneEnv(gym.Env):
 
         # Dense objective: position/altitude tracking, low translational and
         # angular motion, level attitude, and smooth motor commands.
-        base_reward = (
-            2.0 * np.exp(-altitude_error / 0.45)
-            + 1.0 * np.exp(-horizontal_error / 0.65)
-            - 0.10 * speed ** 2
-            - 0.08 * float(safe_state[5]) ** 2
-            - 0.22 * float(np.dot(attitude[:2], attitude[:2]))
-            - 0.025 * float(np.dot(rates, rates))
-            - 0.015 * float(np.dot(action - self._last_action, action - self._last_action))
-            - 0.01 * float(np.dot(action, action))
-        )
+        measured_velocity_body = self._world_velocity_to_body_yaw(safe_state[3:6], float(safe_state[8]))
+        if self.velocity_control:
+            velocity_tracking_error = measured_velocity_body - self.desired_velocity_body
+            tracking_error_norm = float(np.linalg.norm(velocity_tracking_error))
+            base_reward = (
+                2.0 * np.exp(-altitude_error / 0.45)
+                + 1.0 * np.exp(-horizontal_error / 0.65)
+                + 1.5 * np.exp(-tracking_error_norm / 0.50)
+                - 0.22 * float(np.dot(attitude[:2], attitude[:2]))
+                - 0.025 * float(np.dot(rates, rates))
+                - 0.015 * float(np.dot(action - self._last_action, action - self._last_action))
+                - 0.01 * float(np.dot(action, action))
+            )
+        else:
+            velocity_tracking_error = np.zeros(3, dtype=np.float32)
+            tracking_error_norm = 0.0
+            base_reward = (
+                2.0 * np.exp(-altitude_error / 0.45)
+                + 1.0 * np.exp(-horizontal_error / 0.65)
+                - 0.10 * speed ** 2
+                - 0.08 * float(safe_state[5]) ** 2
+                - 0.22 * float(np.dot(attitude[:2], attitude[:2]))
+                - 0.025 * float(np.dot(rates, rates))
+                - 0.015 * float(np.dot(action - self._last_action, action - self._last_action))
+                - 0.01 * float(np.dot(action, action))
+            )
         # Potential-based altitude progress shaping. It rewards progress toward
         # target altitude, not merely remaining airborne or accumulating time.
         altitude_potential = float(np.exp(-altitude_error / 0.45))
@@ -267,7 +344,8 @@ class AdaptiveDroneEnv(gym.Env):
         if self._taken_off and not was_taken_off:
             reward += 1.0
         stable_hover_now = bool(
-            self._taken_off
+            (not self.velocity_control or float(np.linalg.norm(self.desired_velocity_body)) <= 0.10)
+            and self._taken_off
             and altitude_error <= 0.15
             and horizontal_error <= 0.20
             and speed <= 0.35
@@ -330,6 +408,10 @@ class AdaptiveDroneEnv(gym.Env):
             "scenario": dict(self._scenario_details),
             "online_estimator": self.estimator.diagnostics(),
             "state_velocity_m_s": safe_state[3:6].astype(float).tolist(),
+            "velocity_control_enabled": self.velocity_control,
+            "desired_velocity_body_m_s": self.desired_velocity_body.astype(float).tolist(),
+            "measured_velocity_body_yaw_m_s": measured_velocity_body.astype(float).tolist(),
+            "velocity_tracking_error_m_s": tracking_error_norm,
             "attitude_rad": safe_state[6:9].astype(float).tolist(),
             "angular_velocity_rad_s": safe_state[9:12].astype(float).tolist(),
             "state_finite": state_finite,
