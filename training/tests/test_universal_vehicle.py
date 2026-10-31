@@ -12,6 +12,8 @@ sys.path.insert(0, str(ROOT / "training"))
 
 from fast_physics.curriculum import randomization_for_stage
 from fast_physics.dynamics import FastQuadrotor
+from fast_physics.env import AdaptiveDroneEnv
+from train_universal_ppo import build_velocity_evaluation_sequence
 from fast_physics.vehicle_family import (
     DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv, load_vehicle_profiles,
     profile_to_parameters, vehicle_feature_vector,
@@ -96,6 +98,33 @@ def test_family_env_selects_profiles_reproducibly_and_adds_config_to_observation
         assert info_a["policy_observation_excludes_episode_randomization_ground_truth"] is True
     finally:
         env.close()
+
+    # The movement policy adds exactly four inputs after the unchanged 12
+    # nominal hardware features: forward, left, world-up and yaw rate.
+    velocity_env = VehicleFamilyEnv(
+        vehicle_family_path=DEFAULT_VEHICLE_FAMILY, max_steps=1500,
+        curriculum_stage=2, velocity_control=True,
+    )
+    try:
+        sequence = build_velocity_evaluation_sequence(episode_index=0, stage=2)
+        assert len(sequence) == 30
+        assert 100 + sum(item["duration_steps"] for item in sequence) <= 1500
+        velocity_obs, _ = velocity_env.reset(seed=123, options={"velocity_command_sequence": sequence})
+        assert velocity_obs.shape == (82,)
+        assert np.allclose(velocity_obs[-4:], 0.0)
+    finally:
+        velocity_env.close()
+
+    # At 90 degrees yaw, nose-forward points world-left and nose-left points
+    # world-backward in the ENU convention used by the plant.
+    forward_world = AdaptiveDroneEnv._body_yaw_velocity_to_world(
+        np.array([1.0, 0.0, 0.0]), np.pi / 2
+    )
+    left_world = AdaptiveDroneEnv._body_yaw_velocity_to_world(
+        np.array([0.0, 1.0, 0.0]), np.pi / 2
+    )
+    assert np.allclose(forward_world, [0.0, 1.0, 0.0], atol=1e-6)
+    assert np.allclose(left_world, [-1.0, 0.0, 0.0], atol=1e-6)
 
 
 def test_environment_can_be_pinned_to_one_vehicle():
