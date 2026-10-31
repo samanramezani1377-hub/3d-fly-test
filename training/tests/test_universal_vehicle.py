@@ -197,6 +197,7 @@ def test_production_velocity_workflow_trains_and_evaluates_all_four_profiles():
     assert all(vehicle_id in workflow for vehicle_id in expected_ids)
     assert "--vehicle-family vehicle_models/family/vehicle_profiles.json" in workflow
     assert "--vehicle-id" not in workflow
+    assert "assert len(profiles) == 4" in workflow
     assert "assert len(results) == 4" in workflow
     assert '"episodes_per_vehicle": 10' in workflow
     assert '"metrics_by_vehicle": metrics_by_vehicle' in workflow
