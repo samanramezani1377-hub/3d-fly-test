@@ -34,6 +34,7 @@ def parse_args(argv=None):
     p.add_argument("--no-randomization", action="store_true")
     p.add_argument("--no-teacher", action="store_true", help="Disable privileged reference guidance while retaining the selected physics curriculum.")
     p.add_argument("--teacher-weight", type=float, default=None, help="Override the curriculum reference-teacher blend weight (0.0 to 1.0).")
+    p.add_argument("--velocity-control", action="store_true", help="Train nose-relative forward/left plus world-up velocity tracking.")
     return p.parse_args(argv)
 
 
@@ -41,13 +42,14 @@ def parse_args(argv=None):
 class BalancedProfileCallback(BaseCallback):
     """Choose the checkpoint that best protects the weakest vehicle profile."""
     def __init__(self, profiles, family_path, randomization_path, history_length,
-                 stage, episodes, frequency, checkpoint_frequency, best_dir, reports_dir, seed, disable_teacher=False, teacher_weight=None):
+                 stage, episodes, frequency, checkpoint_frequency, best_dir, reports_dir, seed, disable_teacher=False, teacher_weight=None, velocity_control=False):
         super().__init__(verbose=1)
         self.profiles, self.family_path = profiles, family_path
         self.randomization_path, self.history_length = randomization_path, history_length
         self.stage, self.episodes = stage, max(1, int(episodes))
         self.disable_teacher = bool(disable_teacher)
         self.teacher_weight = teacher_weight
+        self.velocity_control = bool(velocity_control)
         self.frequency = max(1, frequency)
         self.checkpoint_frequency = max(1, checkpoint_frequency)
         self.best_dir, self.reports_dir = Path(best_dir), Path(reports_dir)
@@ -128,7 +130,8 @@ class BalancedProfileCallback(BaseCallback):
             # may guide training, but is always disabled in every periodic evaluation.
             e = BodyWrenchActionWrapper(VehicleFamilyEnv(vehicle_family_path=self.family_path,
                 randomization_path=self.randomization_path, history_length=self.history_length,
-                randomize=True, curriculum_stage=self.stage, vehicle_id=profile["vehicle_id"]),
+                randomize=True, curriculum_stage=self.stage, vehicle_id=profile["vehicle_id"],
+                velocity_control=self.velocity_control),
                 disable_teacher=True, reference_weight_override=0.0)
             plant_env = e.env
             episodes = []
@@ -140,6 +143,7 @@ class BalancedProfileCallback(BaseCallback):
                     stable_steps = max_stable_steps = 0
                     saturation_samples = []
                     zero_command_samples = []
+            velocity_tracking_errors = []
                     while True:
                         policy_action, _ = self.model.predict(obs, deterministic=True)
                         obs, reward, terminated, truncated, info = e.step(policy_action)
@@ -148,6 +152,8 @@ class BalancedProfileCallback(BaseCallback):
                         took_off = took_off or bool(info.get("has_taken_off", False))
                         saturation_samples.append(float(info.get("motor_saturation_fraction", 0.0)))
                         zero_command_samples.append(float(info.get("motor_zero_command_fraction", 0.0)))
+                        if self.velocity_control:
+                            velocity_tracking_errors.append(float(info.get("velocity_tracking_error_m_s", float("inf"))))
                         velocity = info.get("state_velocity_m_s", [float("inf")] * 3)
                         attitude = info.get("attitude_rad", [float("inf")] * 3)
                         angular_rate = info.get("angular_velocity_rad_s", [float("inf")] * 3)
@@ -155,13 +161,21 @@ class BalancedProfileCallback(BaseCallback):
                             speed_sq = sum(float(v) ** 2 for v in velocity)
                             tilt = max(abs(float(attitude[0])), abs(float(attitude[1])))
                             angular_rate_sq = sum(float(v) ** 2 for v in angular_rate)
-                            stable = bool(info.get("has_taken_off", False)
-                                and not info.get("crashed", False)
-                                and info.get("state_finite", True)
-                                and float(info.get("altitude_error_m", 999)) <= 0.15
-                                and float(info.get("horizontal_error_m", 999)) <= 0.20
-                                and speed_sq <= 0.35 ** 2 and tilt <= 0.25
-                                and angular_rate_sq <= 0.5 ** 2)
+                            if self.velocity_control:
+                                stable = bool(info.get("has_taken_off", False)
+                                    and not info.get("crashed", False)
+                                    and info.get("state_finite", True)
+                                    and float(info.get("velocity_tracking_error_m_s", 999)) <= 0.35
+                                    and float(info.get("altitude_error_m", 999)) <= 0.25
+                                    and tilt <= 0.25 and angular_rate_sq <= 0.5 ** 2)
+                            else:
+                                stable = bool(info.get("has_taken_off", False)
+                                    and not info.get("crashed", False)
+                                    and info.get("state_finite", True)
+                                    and float(info.get("altitude_error_m", 999)) <= 0.15
+                                    and float(info.get("horizontal_error_m", 999)) <= 0.20
+                                    and speed_sq <= 0.35 ** 2 and tilt <= 0.25
+                                    and angular_rate_sq <= 0.5 ** 2)
                         except (TypeError, ValueError, IndexError):
                             stable = False
                         if stable:
@@ -172,11 +186,14 @@ class BalancedProfileCallback(BaseCallback):
                         if terminated or truncated:
                             break
                     stable_seconds = max_stable_steps * plant_env.inner.dt
-                    success = bool(not crashed and stable_seconds >= 5.0)
+                    mean_tracking_error = (sum(velocity_tracking_errors) / max(len(velocity_tracking_errors), 1)) if self.velocity_control else 0.0
+                    success = bool(not crashed and (mean_tracking_error <= 0.50 if self.velocity_control else stable_seconds >= 5.0))
                     episodes.append({"seed": seed, "success": success,
                         "takeoff_success": took_off, "takeoff_failed": bool(not took_off and truncated),
                         "crashed": crashed, "steps": plant_env.inner._steps,
-                        "stable_hover_seconds_max": stable_seconds, "return": total,
+                        "stable_hover_seconds_max": stable_seconds,
+                        "mean_velocity_tracking_error_m_s": mean_tracking_error,
+                        "return": total,
                         "mean_motor_saturation_fraction": sum(saturation_samples) / max(len(saturation_samples), 1),
                         "mean_motor_zero_command_fraction": sum(zero_command_samples) / max(len(zero_command_samples), 1),
                         "altitude_error_m": info.get("altitude_error_m"),
@@ -192,6 +209,7 @@ class BalancedProfileCallback(BaseCallback):
                 "takeoff_failure_rate": sum(x["takeoff_failed"] for x in episodes) / count,
                 "crash_rate": sum(x["crashed"] for x in episodes) / count,
                 "mean_stable_hover_seconds": sum(x["stable_hover_seconds_max"] for x in episodes) / count,
+                "mean_velocity_tracking_error_m_s": sum(x["mean_velocity_tracking_error_m_s"] for x in episodes) / count,
                 "mean_motor_saturation_fraction": sum(x["mean_motor_saturation_fraction"] for x in episodes) / count,
                 "mean_motor_zero_command_fraction": sum(x["mean_motor_zero_command_fraction"] for x in episodes) / count,
                 "mean_return": sum(x["return"] for x in episodes) / count,
@@ -199,14 +217,14 @@ class BalancedProfileCallback(BaseCallback):
         score = (min(x["success_rate"] for x in profile_reports),
             -max(x["crash_rate"] for x in profile_reports),
             min(x["takeoff_success_rate"] for x in profile_reports),
-            sum(x["mean_stable_hover_seconds"] for x in profile_reports) / len(profile_reports),
+            -sum(x["mean_velocity_tracking_error_m_s"] for x in profile_reports) / len(profile_reports) if self.velocity_control else sum(x["mean_stable_hover_seconds"] for x in profile_reports) / len(profile_reports),
             -sum(x["mean_motor_saturation_fraction"] for x in profile_reports) / len(profile_reports),
             sum(x["mean_return"] for x in profile_reports) / len(profile_reports))
         report = {"timesteps": int(self.num_timesteps), "selection_score": list(score),
-            "selection_rule": ["maximize minimum per-profile five-second sustained-hover success",
+            "selection_rule": ["maximize minimum per-profile mission success",
                 "minimize worst-profile crash rate", "maximize minimum per-profile takeoff rate",
-                "maximize mean stable-hover duration", "minimize motor saturation",
-                "maximize mean return as final tie-breaker"], "profiles": profile_reports}
+                ("minimize mean velocity tracking error" if self.velocity_control else "maximize mean stable-hover duration"),
+                "minimize motor saturation", "maximize mean return as final tie-breaker"], "profiles": profile_reports}
         self.reports_dir.mkdir(parents=True, exist_ok=True)
         report_path = self.reports_dir / f"profile-evaluation-{self.num_timesteps}.json"
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -304,6 +322,7 @@ def main(argv=None):
                 history_length=args.history_length, randomize=not args.no_randomization,
                 curriculum_stage=args.curriculum_stage,
                 sampling_weights_path=sampling_weights_path,
+                velocity_control=args.velocity_control,
             )
             return BodyWrenchActionWrapper(base_env, disable_teacher=args.no_teacher,
                 reference_weight_override=args.teacher_weight)
@@ -315,7 +334,7 @@ def main(argv=None):
         args.history_length, args.curriculum_stage, args.eval_episodes,
         aggregate_eval_frequency, args.checkpoint_frequency, run_dir / "best",
         run_dir / "profile-evaluations", args.seed + 500000, disable_teacher=args.no_teacher,
-        teacher_weight=args.teacher_weight)
+        teacher_weight=args.teacher_weight, velocity_control=args.velocity_control)
     try:
         if args.load_model:
             model = PPO.load(str(args.load_model), env=env, device="cpu")
