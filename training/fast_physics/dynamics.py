@@ -170,9 +170,11 @@ class FastQuadrotor:
         old_body_rates = self.angular_velocity.copy()
         angular_momentum = inertia @ self.angular_velocity
         spin_signs = np.asarray(p.spin_signs, dtype=np.float64)
-        rotor_spin_momentum = p.rotor_inertia_kg_m2 * float(np.dot(spin_signs, self.motor_omega))
+        # spin_signs encode the BODY reaction-torque sign used by Q_i=s_i*kQ*T_i;
+        # the physical rotor angular momentum points in the opposite direction.
+        rotor_spin_momentum = -p.rotor_inertia_kg_m2 * float(np.dot(spin_signs, self.motor_omega))
         rotor_angular_momentum = np.array([0.0, 0.0, rotor_spin_momentum])
-        rotor_angular_acceleration = p.rotor_inertia_kg_m2 * float(np.dot(spin_signs, motor_omega_dot))
+        rotor_angular_acceleration = -p.rotor_inertia_kg_m2 * float(np.dot(spin_signs, motor_omega_dot))
         rotor_gyro_torque = (
             -np.cross(self.angular_velocity, rotor_angular_momentum)
             - np.array([0.0, 0.0, rotor_angular_acceleration])
