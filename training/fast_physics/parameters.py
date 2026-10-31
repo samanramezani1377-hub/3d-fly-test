@@ -14,6 +14,28 @@ from typing import Any
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
+
+# CAD export axes are X=lateral, Y=longitudinal (nose is -Y), Z=up.
+# The rigid-body equations use the conventional body frame X=forward,
+# Y=left, Z=up. This proper +90 degree rotation preserves handedness.
+CAD_EXPORT_TO_BODY_FLU = np.array(
+    [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+    dtype=np.float64,
+)
+
+
+def cad_export_vector_to_body_flu(vector) -> np.ndarray:
+    value = np.asarray(vector, dtype=np.float64)
+    if value.shape != (3,):
+        raise ValueError("coordinate vector must contain three values")
+    return CAD_EXPORT_TO_BODY_FLU @ value
+
+
+def cad_export_inertia_to_body_flu(inertia) -> np.ndarray:
+    value = np.asarray(inertia, dtype=np.float64)
+    matrix = np.diag(value) if value.shape == (3,) else value.reshape(3, 3)
+    return CAD_EXPORT_TO_BODY_FLU @ matrix @ CAD_EXPORT_TO_BODY_FLU.T
+
 DEFAULT_AIRFRAME = ROOT / "vehicle_models" / "smooth2_parametric" / "base_airframe.json"
 DEFAULT_CALIBRATION = ROOT / "vehicle_models" / "smooth2_parametric" / "physics_calibration.json"
 
@@ -34,6 +56,9 @@ class VehicleParameters:
     angular_damping_nms: float = 0.002
     voltage_factor: float = 1.0
     motor_effectiveness: tuple[float, ...] = (1.0, 1.0, 1.0, 1.0)
+    linear_drag_body_kg_s: tuple[float, float, float] | None = None
+    quadratic_drag_body_kg_m: tuple[float, float, float] | None = None
+    rotor_inertia_kg_m2: float = 0.0
 
     def validate(self) -> None:
         if not np.isfinite(self.mass_kg) or self.mass_kg <= 0:
@@ -57,6 +82,12 @@ class VehicleParameters:
             raise ValueError("motor_effectiveness must contain four positive values")
         if not 0 < self.voltage_factor <= 1.2:
             raise ValueError("voltage_factor must be in (0, 1.2]")
+        for name in ("linear_drag_body_kg_s", "quadratic_drag_body_kg_m"):
+            values = getattr(self, name)
+            if values is not None and (len(values) != 3 or not np.all(np.isfinite(values)) or np.any(np.asarray(values) < 0)):
+                raise ValueError(f"{name} must be three finite non-negative body-axis coefficients")
+        if not np.isfinite(self.rotor_inertia_kg_m2) or self.rotor_inertia_kg_m2 < 0:
+            raise ValueError("rotor_inertia_kg_m2 must be finite and non-negative")
 
     @property
     def inertia_matrix(self) -> np.ndarray:
@@ -118,11 +149,21 @@ def load_vehicle_parameters(
         inertia = np.asarray(inertia, dtype=np.float64).reshape(-1).tolist()
     rotor_data = airframe["rotors"]
     scale = float(airframe["geometry"]["model_scale"])
-    positions = tuple(tuple(float(x) for x in r["position_m"]) for r in rotor_data)
+    source_frame = airframe.get("coordinate_frame", {}).get("frame", "BODY_FORWARD_LEFT_UP")
+    positions_array = np.asarray([r["position_m"] for r in rotor_data], dtype=np.float64)
+    cg_array = np.asarray(cg if cg is not None else synthetic["center_of_mass_m"], dtype=np.float64)
+    inertia_array = np.asarray(inertia if inertia is not None else synthetic["inertia_kg_m2"], dtype=np.float64)
+    if source_frame == "CAD_EXPORT_Z_UP":
+        positions_array = (CAD_EXPORT_TO_BODY_FLU @ positions_array.T).T
+        cg_array = cad_export_vector_to_body_flu(cg_array)
+        inertia_array = cad_export_inertia_to_body_flu(inertia_array)
+    elif source_frame != "BODY_FORWARD_LEFT_UP":
+        raise ValueError(f"unsupported airframe coordinate frame: {source_frame}")
+    positions = tuple(tuple(float(x) for x in row) for row in positions_array)
     params = VehicleParameters(
         mass_kg=float(mass if mass is not None else synthetic["mass_kg"]),
-        center_of_mass_m=tuple(float(x) for x in (cg if cg is not None else synthetic["center_of_mass_m"])),
-        inertia_kg_m2=tuple(float(x) for x in (inertia if inertia is not None else synthetic["inertia_kg_m2"])),
+        center_of_mass_m=tuple(float(x) for x in cg_array),
+        inertia_kg_m2=tuple(float(x) for x in inertia_array.reshape(-1)),
         rotor_positions_m=positions,
         spin_signs=tuple(float(r["spin_sign"]) for r in rotor_data),
         max_rotor_speed_rad_s=float(motor.get("max_rotor_speed_rad_s") or synthetic["max_rotor_speed_rad_s"]),
@@ -142,6 +183,8 @@ def load_vehicle_parameters(
         "synthetic_calibration_used": bool(missing),
         "missing_fields": missing,
         "units": "SI",
+        "source_coordinate_frame": source_frame,
+        "body_coordinate_frame": "BODY_FORWARD_LEFT_UP",
     }
     return params, metadata
 
