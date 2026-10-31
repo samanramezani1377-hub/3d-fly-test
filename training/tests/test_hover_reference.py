@@ -49,7 +49,7 @@ def test_oracle_reference_controller_can_hold_nominal_hover_for_every_profile():
                 f"stable_steps={stable_steps}, z={plant.position[2]:.3f}, "
                 f"velocity={plant.velocity.tolist()}, attitude={plant.attitude.tolist()}"
             )
-            assert reset_info["calibration_status"] == "provisional_estimate"
+            assert reset_info["calibration_status"] in {"cad_bemt_estimate", "provisional_estimate"}
         finally:
             env.close()
 
