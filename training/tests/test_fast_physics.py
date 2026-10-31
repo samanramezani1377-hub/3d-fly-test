@@ -493,7 +493,8 @@ def test_vehicle_profiles_expose_nominal_battery_capacity_for_telemetry():
         assert params.battery_nominal_voltage_v == pytest.approx(profile["propulsion"]["nominal_battery_voltage_v"])
         assert params.battery_capacity_ah == pytest.approx(profile["propulsion"]["battery_capacity_ah"])
         assert profile["propulsion"]["battery_internal_resistance_ohm"] is None
-        assert profile["propulsion"]["esc_current_limit_a_per_motor"] is None
+        assert profile["propulsion"]["esc_current_limit_a_per_motor"] == 9
+        assert profile["propulsion"]["electrical_model_status"] == "bemt_and_generic_motor_screening_estimate_not_bench_calibrated"
 
 
 def test_first_order_motor_time_constant_can_be_identified_from_rpm_step_log():
