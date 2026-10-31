@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "description": "Family-wide simulation domain randomization. Bounds are research simulation settings, not measured operating limits or flight-safety limits.",
+  "description": "Smooth2-only staged domain randomization. CAD rotor geometry and propeller layout remain fixed; only bounded physical/propulsion/environment parameters vary per episode. Simulation research bounds, not flight-safety limits.",
   "mass": {
     "scale": [
       0.8,
-      1.2
+      1.1
     ]
   },
   "center_of_mass": {
@@ -20,6 +20,18 @@
     "effectiveness": [
       0.85,
       1.1
+    ],
+    "max_rotor_speed_scale": [
+      0.85,
+      1.1
+    ],
+    "time_constant_scale": [
+      0.75,
+      1.25
+    ],
+    "torque_to_thrust_scale": [
+      0.8,
+      1.2
     ]
   },
   "battery": {
@@ -49,48 +61,64 @@
   "curriculum": [
     {
       "stage": 1,
-      "name": "nominal-family",
+      "name": "small-physical-variation",
       "mass_scale": [
-        1,
-        1
+        0.98,
+        1.02
       ],
-      "cg_offset_arm_fraction": 0,
+      "cg_offset_arm_fraction": 0.01,
       "inertia_scale": [
-        1,
-        1
+        0.97,
+        1.03
       ],
       "motor_effectiveness": [
-        1,
-        1
+        0.98,
+        1.02
       ],
       "battery_voltage_factor": [
-        1,
+        0.99,
         1
       ],
       "drag_scale": [
-        1,
-        1
+        0.98,
+        1.02
       ],
       "wind_m_s": [
-        0,
-        0
+        -0.1,
+        0.1
+      ],
+      "max_rotor_speed_scale": [
+        0.99,
+        1.01
+      ],
+      "motor_time_constant_scale": [
+        0.98,
+        1.02
+      ],
+      "torque_to_thrust_scale": [
+        0.98,
+        1.02
+      ],
+      "thrust_coefficient_scale": [
+        0.98,
+        1.02
       ]
     },
     {
       "stage": 2,
-      "name": "mass-cg-inertia",
+      "name": "light-mass-cg-inertia-propulsion",
       "mass_scale": [
-        0.92,
+        0.94,
         1.04
       ],
-      "cg_offset_arm_fraction": 0.04,
+      "cg_offset_arm_fraction": 0.03,
       "inertia_scale": [
         0.9,
         1.1
       ],
       "motor_effectiveness": [
-        1,
-        1
+        0.96,
+        1.04
       ],
       "battery_voltage_factor": [
         0.97,
@@ -103,23 +131,39 @@
       "wind_m_s": [
         -0.4,
         0.4
+      ],
+      "max_rotor_speed_scale": [
+        0.97,
+        1.03
+      ],
+      "motor_time_constant_scale": [
+        0.9,
+        1.1
+      ],
+      "torque_to_thrust_scale": [
+        0.95,
+        1.05
+      ],
+      "thrust_coefficient_scale": [
+        0.95,
+        1.05
       ]
     },
     {
       "stage": 3,
-      "name": "propulsion-variation",
+      "name": "moderate-propulsion-variation",
       "mass_scale": [
-        0.88,
+        0.9,
         1.06
       ],
-      "cg_offset_arm_fraction": 0.06,
+      "cg_offset_arm_fraction": 0.05,
       "inertia_scale": [
-        0.82,
-        1.18
+        0.85,
+        1.15
       ],
       "motor_effectiveness": [
-        0.94,
-        1.08
+        0.93,
+        1.07
       ],
       "battery_voltage_factor": [
         0.95,
@@ -132,26 +176,42 @@
       "wind_m_s": [
         -0.8,
         0.8
+      ],
+      "max_rotor_speed_scale": [
+        0.95,
+        1.05
+      ],
+      "motor_time_constant_scale": [
+        0.85,
+        1.15
+      ],
+      "torque_to_thrust_scale": [
+        0.9,
+        1.1
+      ],
+      "thrust_coefficient_scale": [
+        0.9,
+        1.1
       ]
     },
     {
       "stage": 4,
-      "name": "combined-environment",
+      "name": "wide-combined-variation",
       "mass_scale": [
-        0.82,
+        0.85,
         1.08
       ],
-      "cg_offset_arm_fraction": 0.08,
+      "cg_offset_arm_fraction": 0.07,
       "inertia_scale": [
-        0.75,
-        1.3
+        0.8,
+        1.25
       ],
       "motor_effectiveness": [
         0.9,
         1.1
       ],
       "battery_voltage_factor": [
-        0.94,
+        0.92,
         1
       ],
       "drag_scale": [
@@ -161,6 +221,22 @@
       "wind_m_s": [
         -1.5,
         1.5
+      ],
+      "max_rotor_speed_scale": [
+        0.9,
+        1.1
+      ],
+      "motor_time_constant_scale": [
+        0.8,
+        1.2
+      ],
+      "torque_to_thrust_scale": [
+        0.85,
+        1.15
+      ],
+      "thrust_coefficient_scale": [
+        0.85,
+        1.15
       ]
     },
     {
@@ -180,7 +256,7 @@
         1.1
       ],
       "battery_voltage_factor": [
-        0.93,
+        0.88,
         1
       ],
       "drag_scale": [
@@ -190,7 +266,29 @@
       "wind_m_s": [
         -2,
         2
+      ],
+      "max_rotor_speed_scale": [
+        0.85,
+        1.1
+      ],
+      "motor_time_constant_scale": [
+        0.75,
+        1.25
+      ],
+      "torque_to_thrust_scale": [
+        0.8,
+        1.2
+      ],
+      "thrust_coefficient_scale": [
+        0.8,
+        1.2
       ]
     }
-  ]
+  ],
+  "thrust": {
+    "coefficient_scale": [
+      0.8,
+      1.2
+    ]
+  }
 }
