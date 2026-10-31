@@ -316,7 +316,7 @@ class AdaptiveDroneEnv(gym.Env):
         self._ground_contact = False
         info = {
             "vehicle_id": self.model_metadata["vehicle_id"],
-            "ground_contact_model": "CAD_lowest_point_vertical_clearance_level_attitude_approximation",
+            "ground_contact_model": "CAD_support_points_6dof_sequential_impulse",
             "ground_clearance_m": float(ground_clearance_m),
             "initial_lowest_point_height_m": float(state[2] - ground_clearance_m),
             "calibration_status": self.model_metadata["calibration_status"],
@@ -372,15 +372,18 @@ class AdaptiveDroneEnv(gym.Env):
         ground_clearance_m = self._ground_clearance_m()
         self._taken_off = self._taken_off or bool(z - ground_clearance_m > 0.18)
         measured = self._measure_state(safe_state)
-        ground_penetration_m = max(0.0, ground_clearance_m - z) if state_finite else 0.0
-        ground_contact = bool(state_finite and z <= ground_clearance_m)
+        ground_penetration_m = float(telemetry.get("ground_penetration_before_solve_m", 0.0)) if state_finite else 0.0
+        ground_contact = bool(
+            state_finite
+            and (
+                int(telemetry.get("ground_contact_active_points", 0)) > 0
+                or ground_penetration_m > 0.0
+            )
+        )
         if ground_contact:
-            self.plant.position[2] = ground_clearance_m
-            if self.plant.velocity[2] < 0.0:
-                self.plant.velocity[2] = 0.0
             safe_state = self.plant.state()
             self._last_finite_state = safe_state.copy()
-            z = ground_clearance_m
+            z = float(safe_state[2])
             measured = self._measure_state(safe_state)
         if state_finite:
             self.estimator.update(action, float(measured[5]), self.dt)
@@ -493,8 +496,8 @@ class AdaptiveDroneEnv(gym.Env):
             "takeoff_failed": takeoff_failed,
             "ground_contact": ground_contact,
             "ground_clearance_m": float(ground_clearance_m),
-            "ground_penetration_before_clamp_m": float(ground_penetration_m),
-            "lowest_point_height_m": float(z - ground_clearance_m),
+            "ground_penetration_before_solve_m": float(ground_penetration_m),
+            "lowest_point_height_m": float(min(telemetry.get("ground_support_point_heights_m", [z - ground_clearance_m]))),
             "altitude_m": float(z),
             "position_xyz_m": safe_state[:3].astype(float).tolist(),
             "position_error_m": float(np.linalg.norm(position_error)),
