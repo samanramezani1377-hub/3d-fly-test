@@ -80,7 +80,7 @@ jobs:
             --run-name universal-quad-v5-foundation-stage2-teacher \
             --output-dir training/runs --curriculum-stage 2 \
             --load-model training/runs/stage2-initial-from-previous-latest_model.zip \
-            --eval-episodes 10 --eval-frequency 100000 \
+            --eval-episodes 10 --eval-frequency 200000 \
             --checkpoint-frequency 20000 \
             2>&1 | tee stage2-teacher-training.log
 
@@ -94,7 +94,7 @@ jobs:
             --run-name universal-quad-v5-foundation-stage2-teacher-free \
             --output-dir training/runs --curriculum-stage 2 --no-teacher \
             --load-model "$teacher_final" \
-            --eval-episodes 10 --eval-frequency 100000 \
+            --eval-episodes 10 --eval-frequency 200000 \
             --checkpoint-frequency 20000 \
             2>&1 | tee stage2-teacher-free-training.log
 
