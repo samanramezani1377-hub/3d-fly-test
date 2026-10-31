@@ -103,7 +103,7 @@ T_i = k_f omega_i^2 eta_i
 Q_i = s_i k_Q T_i
 ]
 
-where (k_f), (k_Q), rotor spin sign (s_i), and motor effectiveness (eta_i) are explicit model parameters. This is a compact fitted/parametric rotor model, not a BEMT solver. It must be fitted to the exact motor + propeller + voltage test data before physical interpretation.
+where (k_f), (k_Q), the body reaction-torque sign (s_i), and motor effectiveness (eta_i) are explicit model parameters. Rotor angular momentum uses the opposite sign to the body reaction torque. This is a compact fitted/parametric rotor model, not a BEMT solver. It must be fitted to the exact motor + propeller + voltage test data before physical interpretation.
 
 The propeller geometry is preserved as metadata for later BEMT integration; geometry alone does not determine a reliable thrust curve.
 
