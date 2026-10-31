@@ -62,6 +62,7 @@ class VehicleParameters:
     battery_nominal_voltage_v: float | None = None
     battery_capacity_ah: float | None = None
     motor_efficiency_upper_bound: float = 0.8
+    propeller_bemt: dict[str, Any] | None = None
 
     def validate(self) -> None:
         if not np.isfinite(self.mass_kg) or self.mass_kg <= 0:
