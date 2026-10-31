@@ -167,8 +167,13 @@ def sample_scenario(
         cg_offset = rng.uniform(float(cg_bounds[0]), float(cg_bounds[1]), size=3)
     inertia_bounds = randomization.get("inertia", {}).get("scale", [0.70, 1.40])
     inertia_scale = rng.uniform(float(inertia_bounds[0]), float(inertia_bounds[1]), size=3)
-    motor_bounds = randomization.get("motor", {}).get("effectiveness", [0.90, 1.10])
+    motor_cfg = randomization.get("motor", {})
+    motor_bounds = motor_cfg.get("effectiveness", [0.90, 1.10])
     motor_effectiveness = rng.uniform(float(motor_bounds[0]), float(motor_bounds[1]), size=4)
+    motor_response_scale = uniform("motor", "time_constant_scale", (1.0, 1.0))
+    max_rotor_speed_scale = uniform("motor", "max_rotor_speed_scale", (1.0, 1.0))
+    thrust_coefficient_scale = uniform("thrust", "coefficient_scale", (1.0, 1.0))
+    torque_to_thrust_scale = uniform("motor", "torque_to_thrust_scale", (1.0, 1.0))
     voltage_factor = uniform("battery", "voltage_factor", (0.82, 1.0))
     drag_scale = uniform("aerodynamics", "drag_scale", (0.70, 1.40))
 
@@ -187,6 +192,10 @@ def sample_scenario(
         ),
         motor_effectiveness=tuple(float(v) for v in motor_effectiveness),
         voltage_factor=voltage_factor,
+        max_rotor_speed_rad_s=base.max_rotor_speed_rad_s * max_rotor_speed_scale,
+        thrust_coefficient_n_per_rad_s2=base.thrust_coefficient_n_per_rad_s2 * thrust_coefficient_scale,
+        torque_to_thrust_m=base.torque_to_thrust_m * torque_to_thrust_scale,
+        motor_time_constant_s=base.motor_time_constant_s * motor_response_scale,
         linear_drag_kg_s=base.linear_drag_kg_s * drag_scale,
         quadratic_drag_kg_m=base.quadratic_drag_kg_m * drag_scale,
     )
@@ -196,6 +205,10 @@ def sample_scenario(
         "center_of_mass_offset_m": cg_offset.tolist(),
         "inertia_scale_xyz": inertia_scale.tolist(),
         "motor_effectiveness": motor_effectiveness.tolist(),
+        "motor_response_scale": motor_response_scale,
+        "max_rotor_speed_scale": max_rotor_speed_scale,
+        "thrust_coefficient_scale": thrust_coefficient_scale,
+        "torque_to_thrust_scale": torque_to_thrust_scale,
         "voltage_factor": voltage_factor,
         "drag_scale": drag_scale,
     }
