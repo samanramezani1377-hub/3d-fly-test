@@ -238,6 +238,7 @@ def test_smooth2_cad_frame_is_converted_to_forward_left_up_body_frame():
         AIRFRAME, CALIBRATION, allow_synthetic_calibration=True
     )
     assert metadata["source_coordinate_frame"] == "CAD_EXPORT_Z_UP"
+    assert metadata["physical_coordinate_frame"] == "CAD_EXPORT_Z_UP"
     assert metadata["body_coordinate_frame"] == "BODY_FORWARD_LEFT_UP"
     expected = np.array([
         [-0.082013624, 0.082013624, 0.0],
