@@ -86,8 +86,7 @@ The plant is implemented in `training/fast_physics/dynamics.py`.
 Each normalized command is clipped to [0, 1]. The first-order motor response is discretized exactly over each simulation step:
 
 [
-omega_{k+1} = omega_k + alpha(omega_{cmd}-omega_k),quad
-alpha = min(Delta t/	au_m,1)
+omega_{k+1} = omega_k + (1-e^{-\Delta t/\tau_m})(omega_{cmd}-omega_k)
 ]
 
 The command speed includes the configured voltage factor and maximum rotor speed.
@@ -117,7 +116,7 @@ F_d^b = -C_1 v_{air}^b - C_2 (|v_{air}^b| \odot v_{air}^b),\quad F_d^w=R F_d^b
 ]
 
 [
-dot v = (R F_{rotor}+F_d)/m + [0,0,-g]
+dot v = (R F_{rotor}+F_d^w)/m + [0,0,-g]
 ]
 
 ### Rigid-body rotation
@@ -128,10 +127,10 @@ Rotor moment is computed from each rotor position relative to the episode centre
 	au = sum_i (r_i-r_{CG})	imes F_i + 	au_{reaction}
 ]
 
-Angular motion uses the full rigid-body equation, with optional rotor angular-momentum coupling when rotor polar inertia is calibrated:
+Angular motion uses the rigid-body equation, including optional rotor angular-momentum coupling when rotor polar inertia is calibrated:
 
 [
-Idotomega = 	au - omega	imes(Iomega) - D_omegaomega
+I\dot{\omega} = \tau - \omega\times(I\omega+H_r) - \dot H_r - D_\omega\omega
 ]
 
 Attitude is integrated with a normalized body-to-world quaternion using the midpoint body rate; Euler angles are derived only for the existing policy/state interface. This removes the Euler-rate singularity from the plant integration. The public policy state still uses Euler angles, so near-inverted flight and extreme manoeuvres need additional observation/controller work.
