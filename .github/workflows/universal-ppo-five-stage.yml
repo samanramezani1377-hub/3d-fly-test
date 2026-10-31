@@ -1,4 +1,4 @@
-name: Smooth2 PPO - Five-stage teacher curriculum
+name: Smooth2 PPO - Five-stage body-relative velocity curriculum
 
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ env:
 
 jobs:
   train-smooth2:
-    name: Smooth2 only - 5 x 400K progressive stages
+    name: Smooth2 only - 5 x 400K 3D velocity stages
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
@@ -91,11 +91,11 @@ jobs:
         run: |
           set -euo pipefail
           checkpoint="training/runs/smooth2-initial-from-1m-teacher-best.zip"
-          teacher_weights=(0.8 0.6 0.4 0.2 0.0)
+          teacher_weight="0.0"
           for stage in 1 2 3 4 5; do
-            teacher="${teacher_weights[$((stage-1))]}"
+            teacher="$teacher_weight"
             run_name="smooth2-ppo-stage-${stage}"
-            echo "===== Smooth2 stage $stage: 400K steps, teacher=$teacher ====="
+            echo "===== Smooth2 velocity stage $stage: 400K steps, teacher disabled ====="
             python training/train_universal_ppo.py \
               --timesteps "$STAGE_STEPS" --n-envs "$N_ENVS" \
               --seed "$((2042 + stage))" \
@@ -105,7 +105,7 @@ jobs:
               --randomization-config vehicle_models/family/domain_randomization.json \
               --curriculum-stage "$stage" \
               --load-model "$checkpoint" \
-              --teacher-weight "$teacher" \
+              --no-teacher --teacher-weight "$teacher" --velocity-control \
               --eval-episodes 10 --eval-frequency 200000 \
               --checkpoint-frequency 20000 \
               2>&1 | tee "$run_name.log"
@@ -136,15 +136,27 @@ jobs:
             "stages": 5,
             "timesteps_per_stage": 400000,
             "total_additional_timesteps": 2000000,
-            "teacher_training_weights": [0.8, 0.6, 0.4, 0.2, 0.0],
+            "training_mode": "nose-relative 3D velocity tracking with hover warm-start",
+            "velocity_command_frame": "yaw-aligned nose-forward/nose-left plus world-up",
+            "velocity_command_limits_m_s": [1.5, 1.5, 0.75],
+            "velocity_command_curriculum": {
+              "stage_1": "single-axis low speed",
+              "stage_2": "single-axis medium speed",
+              "stage_3": "two-axis combinations",
+              "stage_4": "two/three-axis combinations",
+              "stage_5": "continuous random 3D commands"
+            },
+            "teacher_training_weights": [0.0, 0.0, 0.0, 0.0, 0.0],
             "periodic_evaluation_teacher_weight": 0.0,
             "evaluation_frequency": 200000,
             "evaluation_episodes": 10,
+            "evaluation_objective": "teacher-free 3D velocity tracking, altitude/path tracking, crash and motor-saturation rates",
             "checkpoint_frequency": 20000,
             "parallel_environments": 20,
             "geometry_and_rotor_positions": "fixed Smooth2 CAD geometry",
             "randomized_parameters": ["mass", "center_of_mass", "inertia_tensor", "motor_effectiveness", "motor_response_time", "maximum_rotor_speed", "thrust_coefficient", "torque_to_thrust_ratio", "battery_voltage_factor", "aerodynamic_drag", "wind", "sensor_noise"],
             "episode_randomization_ground_truth_hidden": true,
+            "checkpoint_migration": "copy compatible hover policy weights; zero-initialize the three new velocity-command input columns; initialize a fresh optimizer",
             "simulation_only": true,
             "physical_flight_eligible": false
           }
