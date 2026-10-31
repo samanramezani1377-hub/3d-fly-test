@@ -66,10 +66,15 @@ class VehicleParameters:
     # CAD-export Z of the lowest assembled solid, relative to the CAD origin.
     # The plant origin is the calibrated CG, so clearance also depends on CG Z.
     airframe_lowest_point_z_m: float = -0.0059737
+    ground_contact_points_m: tuple[tuple[float, float, float], ...] = ()
 
     def validate(self) -> None:
         if not np.isfinite(self.mass_kg) or self.mass_kg <= 0:
             raise ValueError("mass_kg must be finite and positive")
+        if self.ground_contact_points_m:
+            points = np.asarray(self.ground_contact_points_m, dtype=np.float64)
+            if points.ndim != 2 or points.shape[1] != 3 or len(points) < 4 or not np.all(np.isfinite(points)):
+                raise ValueError("ground_contact_points_m must be a finite Nx3 support-point array")
         if len(self.center_of_mass_m) != 3 or not np.all(np.isfinite(self.center_of_mass_m)):
             raise ValueError("center_of_mass_m must contain three finite values")
         rotor_positions = np.asarray(self.rotor_positions_m, dtype=np.float64)
@@ -191,6 +196,24 @@ def load_vehicle_parameters(
     elif physical_frame != "BODY_FORWARD_LEFT_UP":
         raise ValueError(f"unsupported physical calibration coordinate frame: {physical_frame}")
     positions = tuple(tuple(float(x) for x in row) for row in positions_array)
+    geometry = airframe.get("geometry", {})
+    # CAD-derived conservative support samples: four body underside corners
+    # and four arm-end underside points. Coordinates are CAD-export XYZ.
+    contact_points_cad = geometry.get("ground_contact_points_cad_m", [
+        [-0.0671663, -0.1231237, -0.0059737],
+        [-0.0671663,  0.0919118, -0.0059737],
+        [ 0.0671663, -0.1231237, -0.0059737],
+        [ 0.0671663,  0.0919118, -0.0059737],
+        [-0.2220772, -0.2220471, -0.0000062],
+        [-0.2220772,  0.2220499, -0.0000062],
+        [ 0.2220798, -0.2220693, -0.0000062],
+        [ 0.2220798,  0.2220468, -0.0000062],
+    ])
+    contact_points_array = np.asarray(contact_points_cad, dtype=np.float64)
+    if source_frame == "CAD_EXPORT_Z_UP":
+        contact_points_array = (CAD_EXPORT_TO_BODY_FLU @ contact_points_array.T).T
+    contact_points_array -= cg_array[None, :]
+    contact_points = tuple(tuple(float(x) for x in row) for row in contact_points_array)
     params = VehicleParameters(
         mass_kg=float(mass if mass is not None else synthetic["mass_kg"]),
         center_of_mass_m=tuple(float(x) for x in cg_array),
@@ -217,7 +240,8 @@ def load_vehicle_parameters(
         ),
         motor_efficiency_upper_bound=float(calibration.get("electrical_model", {}).get("motor_reference", {}).get("efficiency_upper_bound_fraction", 0.8)),
         propeller_bemt=motor.get("propeller_bemt"),
-        airframe_lowest_point_z_m=float(airframe.get("geometry", {}).get("lowest_assembled_point_z_m", -0.0059737)),
+        airframe_lowest_point_z_m=float(geometry.get("lowest_assembled_point_z_m", -0.0059737)),
+        ground_contact_points_m=contact_points,
     )
     params.validate()
     metadata = {
