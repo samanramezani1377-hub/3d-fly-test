@@ -1,1 +1,123 @@
-{"vehicle_id":"smooth2-a2212-custom-prop","status":"analytical_estimate_not_measured","source_blob_sha":"cc77601fb0e4837ca1f7d9c40024c2bc942462","propeller_diameter_m":0.0748020812,"blade_count":2,"motor_kv":1000,"battery_voltage_v":11.1,"estimated_operating_rpm":8880,"bemt_ct_estimate":0.188553,"bemt_kf_estimate_n_per_rad_s2":1.831743e-7,"active_profile_kf":2e-6,"active_profile_modified":false}
+{
+  "schema_version": 2,
+  "vehicle_id": "smooth2-a2212-custom-prop",
+  "calibration_status": "analytical_estimate_not_measured",
+  "source": {
+    "repository": "samanramezani1377-hub/3D",
+    "branch": "kilo",
+    "file": "cad/parametric/model.params.json",
+    "blob_sha": "cc77601fb0e4837ca1f7d9c40024c2bc942462",
+    "source_repository_modified": false
+  },
+  "propeller": {
+    "blades": 2,
+    "radius_m": 0.0374010406,
+    "diameter_m": 0.0748020812,
+    "pitch_mm": 53.086,
+    "pitch_diameter_ratio": 0.70968,
+    "airfoil": {
+      "designation_style": "NACA 4410 parameterization",
+      "camber_ratio": 0.04,
+      "maximum_camber_position_chord": 0.4,
+      "thickness_ratio": 0.1,
+      "twist_law": "atan(P/(2*pi*r)), capped at 42 degrees, matching CAD builder",
+      "radial_stations": 11
+    }
+  },
+  "motor_reference": {
+    "name": "A2212/13T 1000KV reference",
+    "KV_rpm_per_volt": 1000,
+    "battery_voltage_V_nominal": 11.1,
+    "battery_cells": 3,
+    "capacity_Ah": 2.2,
+    "ideal_no_load_rpm": 11100,
+    "profile_max_omega_rad_s": 1100,
+    "analysis_rpm_cap": 10504.225,
+    "rpm_cap_basis": "minimum of ideal KV*nominal-voltage no-load RPM and configured simulation rotor-speed cap",
+    "loaded_operating_rpm_known": false
+  },
+  "BEMT_model": {
+    "method": "annular actuator-disk momentum balance coupled to blade-element lift/drag",
+    "air_density_kg_m3": 1.225,
+    "dynamic_viscosity_Pa_s": 0.0000181,
+    "lift_model": "2*pi*alpha per radian, clipped to +/-1.2",
+    "drag_model": "CD = 0.012 + 0.01*CL^2",
+    "rpm_sweep_fraction_of_cap": [
+      0.5,
+      0.65,
+      0.8,
+      0.95
+    ],
+    "rpm_cases": [
+      {
+        "rpm": 5252.113,
+        "omega_rad_s": 550,
+        "thrust_N_per_rotor": 0.0554102,
+        "torque_Nm_per_rotor": 0.000264282,
+        "CT": 0.188553,
+        "CQ": 0.0120226,
+        "thrust_coefficient_N_per_rad_s2": 1.83174e-7,
+        "torque_coefficient_Nm_per_rad_s2": 8.7366e-10,
+        "Reynolds_min": 1653,
+        "Reynolds_max": 9478
+      },
+      {
+        "rpm": 6827.747,
+        "omega_rad_s": 715,
+        "thrust_N_per_rotor": 0.0936433,
+        "torque_Nm_per_rotor": 0.000446637,
+        "CT": 0.188553,
+        "CQ": 0.0120226,
+        "thrust_coefficient_N_per_rad_s2": 1.83174e-7,
+        "torque_coefficient_Nm_per_rad_s2": 8.7366e-10,
+        "Reynolds_min": 2149,
+        "Reynolds_max": 12321
+      },
+      {
+        "rpm": 8403.381,
+        "omega_rad_s": 880,
+        "thrust_N_per_rotor": 0.1418502,
+        "torque_Nm_per_rotor": 0.000676562,
+        "CT": 0.188553,
+        "CQ": 0.0120226,
+        "thrust_coefficient_N_per_rad_s2": 1.83174e-7,
+        "torque_coefficient_Nm_per_rad_s2": 8.7366e-10,
+        "Reynolds_min": 2645,
+        "Reynolds_max": 15164
+      },
+      {
+        "rpm": 9979.015,
+        "omega_rad_s": 1045,
+        "thrust_N_per_rotor": 0.2000309,
+        "torque_Nm_per_rotor": 0.000954058,
+        "CT": 0.188553,
+        "CQ": 0.0120226,
+        "thrust_coefficient_N_per_rad_s2": 1.83174e-7,
+        "torque_coefficient_Nm_per_rad_s2": 8.7366e-10,
+        "Reynolds_min": 3141,
+        "Reynolds_max": 18008
+      }
+    ],
+    "maximum_case_four_rotor_thrust_N": 0.800124
+  },
+  "hover_sanity_check": {
+    "vehicle_mass_kg_from_profile": 0.6,
+    "rotor_count": 4,
+    "required_hover_thrust_N_per_rotor": 1.471,
+    "estimated_max_case_thrust_N_per_rotor": 0.2000309,
+    "estimated_max_case_to_hover_requirement_ratio": 0.136,
+    "not_a_certified_flight_performance_result": true
+  },
+  "limitations": [
+    "The CAD calls the section NACA 4410-style, but supplies geometry only; it does not contain measured airfoil polars.",
+    "The calculated Reynolds range is very low; thin-airfoil lift slope and the assumed drag polar are not reliable substitutes for measured low-Reynolds-number data.",
+    "No Prandtl tip/root-loss correction, induced-swirl solution, blade/guard interference, ground effect, or forward-flight model.",
+    "The 50/65/80/95 percent RPM values are analysis points, not predicted loaded motor operating points.",
+    "Motor winding resistance, current limits, ESC, propeller load curve, torque-speed curve, and motor temperature are unknown.",
+    "CAD motor dimensions are simplified envelopes; no measured motor mass or inertia is available.",
+    "No measured airframe mass, thrust-stand data, or flight validation is available."
+  ],
+  "interpretation": "This is a screening estimate only. A low predicted thrust-to-hover ratio is a reason to validate the motor/propeller pairing, not proof that the CAD propeller is defective.",
+  "active_vehicle_profile_modified": false,
+  "physical_flight_eligible": false
+}
