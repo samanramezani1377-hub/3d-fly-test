@@ -203,3 +203,19 @@ def test_production_velocity_workflow_trains_and_evaluates_all_four_profiles():
     assert '"metrics_by_vehicle": metrics_by_vehicle' in workflow
     assert "universal-quad-four-vehicle-five-stage" in workflow
     assert '"physical_flight_eligible": false' in workflow.lower()
+
+
+def test_universal_evaluation_publishes_battery_diagnostics_without_using_them_for_checkpoint_selection():
+    source = (ROOT / "training" / "train_universal_ppo.py").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "universal-ppo-five-stage.yml").read_text(encoding="utf-8")
+    for key in (
+        "mean_estimated_battery_current_a",
+        "mean_estimated_battery_energy_consumed_wh",
+        "mean_estimated_battery_consumed_ah",
+        "mean_final_battery_state_of_charge_estimate",
+    ):
+        assert key in source
+        assert key in workflow
+    # Electrical diagnostics are report-only and are not added to policy observations.
+    assert "battery_state_of_charge_estimate" not in source[source.index("def build_velocity_evaluation_sequence"):source.index("class BalancedProfileCallback")]
+    assert "battery_state_of_charge_estimate" not in source[source.index("score = ("):source.index("def __init__", source.index("score = ("))] if "def __init__" in source[source.index("score = ("):] else True
