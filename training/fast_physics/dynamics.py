@@ -326,6 +326,9 @@ class FastQuadrotor:
         self.attitude = _euler_from_quaternion(quaternion)
         self.attitude = (self.attitude + np.pi) % (2.0 * np.pi) - np.pi
         contact_count, penetration_m, normal_impulse_ns = self._resolve_ground_contact()
+        final_rotation = _rotation_matrix_from_quaternion(_quaternion_from_euler(self.attitude))
+        support_offsets = (final_rotation @ np.asarray(p.ground_contact_points_m, dtype=np.float64).T).T
+        support_heights = (self.position[2] + support_offsets[:, 2]).astype(float).tolist()
         self.time += self.dt
 
         return self.state(), {
@@ -333,6 +336,7 @@ class FastQuadrotor:
             "ground_contact_active_points": int(contact_count),
             "ground_penetration_before_solve_m": float(penetration_m),
             "ground_normal_impulse_ns": float(normal_impulse_ns),
+            "ground_support_point_heights_m": support_heights,
             "rotor_thrust_n": thrusts.astype(float).tolist(),
             "rotor_axial_inflow_m_s": (-local_air_velocity[:, 2]).astype(float).tolist(),
             "motor_effectiveness": np.asarray(p.motor_effectiveness, dtype=np.float64).astype(float).tolist(),
