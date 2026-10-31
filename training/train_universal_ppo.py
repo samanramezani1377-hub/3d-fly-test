@@ -199,9 +199,9 @@ class BalancedProfileCallback(BaseCallback):
                         saturation_samples.append(float(info.get("motor_saturation_fraction", 0.0)))
                         zero_command_samples.append(float(info.get("motor_zero_command_fraction", 0.0)))
                         if self.velocity_control:
-                            velocity_tracking_errors.append(float(info.get("velocity_tracking_error_m_s", float("inf"))))
                             command_index = int(info.get("velocity_command_index", -1))
                             if command_index >= 0:
+                                velocity_tracking_errors.append(float(info.get("velocity_tracking_error_m_s", float("inf"))))
                                 if command_index < 26:
                                     velocity_command_errors.setdefault(command_index, []).append(
                                         float(info.get("velocity_tracking_error_m_s", float("inf")))
