@@ -130,7 +130,7 @@ class VelocityYawReferenceController:
             np.arctan2(accel_body_x, 9.80665), -self.max_tilt, self.max_tilt
         ))
         desired_roll = float(np.clip(
-            np.arctan2(accel_body_y, 9.80665), -self.max_tilt, self.max_tilt
+            -np.arctan2(accel_body_y, 9.80665), -self.max_tilt, self.max_tilt
         ))
 
         # Roll/pitch stabilization plus independent world-vertical yaw-rate control.
