@@ -280,7 +280,7 @@
         1.3
       ],
       "thrust_coefficient_scale": [
-        0.75,
+        0.85,
         1.3
       ]
     }
