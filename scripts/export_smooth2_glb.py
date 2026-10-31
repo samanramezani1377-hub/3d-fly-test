@@ -91,7 +91,9 @@ def main() -> None:
             else [119, 153, 164, 255] if name.startswith("prop_")
             else [105, 113, 119, 255],
         )
-        mesh.visual.face_colors = np.tile(np.asarray(color, dtype=np.uint8), (len(mesh.faces), 1))
+        mesh.visual = trimesh.visual.TextureVisuals(
+            material=trimesh.visual.material.PBRMaterial(baseColorFactor=color)
+        )
         transform = np.eye(4, dtype=np.float64)
         transform[:3, 3] = centre
         scene.add_geometry(mesh, geom_name=name, node_name=name, transform=transform)
