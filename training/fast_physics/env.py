@@ -183,7 +183,7 @@ class AdaptiveDroneEnv(gym.Env):
             if self._velocity_sequence_index < len(self._velocity_command_sequence):
                 item = self._velocity_command_sequence[self._velocity_sequence_index]
                 self.desired_velocity_body = np.asarray(item["velocity_m_s"], dtype=np.float32)
-                self._command_steps_remaining = int(item["duration_steps"])
+                self._command_steps_remaining = max(int(item["duration_steps"]) - 1, 0)
                 self._velocity_sequence_index += 1
             else:
                 # Explicit neutral tail evaluates braking and stable stop behavior.
@@ -191,7 +191,7 @@ class AdaptiveDroneEnv(gym.Env):
                 self._command_steps_remaining = self.max_steps + 1
             return
         self.desired_velocity_body = self._sample_velocity_command()
-        self._command_steps_remaining = int(self.np_random.integers(50, 151))  # 1-3 seconds at 50 Hz
+        self._command_steps_remaining = int(self.np_random.integers(50, 151)) - 1  # 1-3 seconds at 50 Hz
 
     def _observation(self) -> np.ndarray:
         if not self._history:
