@@ -436,13 +436,22 @@ def load_ppo_checkpoint(PPO, checkpoint, env, args, run_dir):
     action_bias = old_state.get("action_net.bias")
     if action_weight is None or action_bias is None or action_weight.shape[0] != 4 or action_bias.shape[0] != 4:
         raise RuntimeError("Legacy checkpoint does not expose the expected four-axis action head.")
-    new_state["action_net.weight"][1].copy_(-action_weight[2])
-    new_state["action_net.weight"][2].copy_(action_weight[1])
-    new_state["action_net.bias"][1].copy_(-action_bias[2])
-    new_state["action_net.bias"][2].copy_(action_bias[1])
+    old_roll_weight, old_pitch_weight = action_weight[1].clone(), action_weight[2].clone()
+    old_roll_bias, old_pitch_bias = action_bias[1].clone(), action_bias[2].clone()
+    remapped_weight = new_state["action_net.weight"].clone()
+    remapped_bias = new_state["action_net.bias"].clone()
+    remapped_weight[1].copy_(-old_pitch_weight)
+    remapped_weight[2].copy_(old_roll_weight)
+    remapped_bias[1].copy_(-old_pitch_bias)
+    remapped_bias[2].copy_(old_roll_bias)
+    new_state["action_net.weight"] = remapped_weight
+    new_state["action_net.bias"] = remapped_bias
     if "log_std" in old_state and tuple(old_state["log_std"].shape) == (4,):
-        new_state["log_std"][1].copy_(old_state["log_std"][2])
-        new_state["log_std"][2].copy_(old_state["log_std"][1])
+        remapped_log_std = new_state["log_std"].clone()
+        old_log_std = old_state["log_std"].clone()
+        remapped_log_std[1] = old_log_std[2]
+        remapped_log_std[2] = old_log_std[1]
+        new_state["log_std"] = remapped_log_std
 
     model.policy.load_state_dict(new_state)
     print(
