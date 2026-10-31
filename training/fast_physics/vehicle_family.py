@@ -219,16 +219,16 @@ class VehicleFamilyEnv(gym.Env):
         self.action_space = spaces.Box(0.0, 1.0, shape=(4,), dtype=np.float32)
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf,
-            shape=(self.history_length * 16 + 2 + (3 if self.velocity_control else 0) + VEHICLE_FEATURE_SIZE,), dtype=np.float32,
+            shape=(self.history_length * 16 + 2 + (4 if self.velocity_control else 0) + VEHICLE_FEATURE_SIZE,), dtype=np.float32,
         )
 
     def _combine_observation(self, observation: np.ndarray) -> np.ndarray:
         # Keep the complete legacy observation byte-for-byte at the front.
-        # This lets checkpoint migration append three zero-initialized command
+        # This lets checkpoint migration append four zero-initialized command
         # inputs without shifting the twelve hardware-conditioning features.
         if self.velocity_control:
-            legacy_state = observation[:-3]
-            command = observation[-3:]
+            legacy_state = observation[:-4]
+            command = observation[-4:]
             return np.concatenate((legacy_state, self.active_features, command)).astype(np.float32)
         return np.concatenate((observation, self.active_features)).astype(np.float32)
 
