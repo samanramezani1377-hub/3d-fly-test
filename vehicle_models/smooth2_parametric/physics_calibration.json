@@ -103,5 +103,27 @@
     "identify exact motor, ESC, battery and propeller combination",
     "obtain or measure thrust, torque, RPM, voltage and current data over the operating range",
     "verify rotor spin directions and motor numbering"
-  ]
+  ],
+  "electrical_model": {
+    "status": "provisional_estimate_only",
+    "battery_reference": {
+      "cell_count": 3,
+      "nominal_voltage_v": 11.1,
+      "capacity_ah": 2.2,
+      "exact_pack_identity": null,
+      "internal_resistance_ohm": null
+    },
+    "motor_reference": {
+      "efficiency_upper_bound_fraction": 0.8,
+      "no_load_current_a": null,
+      "catalog_no_load_current_a_at_10v": 0.5,
+      "note": "Catalog no-load current is available for a generic A2212 vendor reference, but exact motor identity is not verified; it is intentionally not injected into the simulation."
+    },
+    "esc": {
+      "model": null,
+      "continuous_current_limit_a": null,
+      "thermal_limit": null
+    },
+    "simulation_policy": "Estimate shaft-power-derived current/energy telemetry only. Do not apply battery voltage sag or current limiting until exact pack resistance and ESC limits are measured."
+  }
 }
