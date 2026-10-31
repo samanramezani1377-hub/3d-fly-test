@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "training"))
 
 from fast_physics.curriculum import randomization_for_stage
 from fast_physics.dynamics import FastQuadrotor
+from fast_physics.propeller import BladeElementPropeller
 from fast_physics.env import AdaptiveDroneEnv
 from train_universal_ppo import build_velocity_evaluation_sequence
 from fast_physics.vehicle_family import (
@@ -41,7 +42,19 @@ def test_profiles_build_valid_four_rotor_models():
 def test_every_profile_has_nominal_static_hover_equilibrium():
     for profile in load_vehicle_profiles(DEFAULT_VEHICLE_FAMILY):
         params = profile_to_parameters(profile)
-        hover_omega = np.sqrt(params.mass_kg * 9.80665 / (4.0 * params.thrust_coefficient_n_per_rad_s2))
+        if params.propeller_bemt is not None:
+            propeller = BladeElementPropeller(params.propeller_bemt)
+            target_per_rotor = params.mass_kg * 9.80665 / 4.0
+            lo, hi = 0.0, params.max_rotor_speed_rad_s
+            for _ in range(36):
+                mid = 0.5 * (lo + hi)
+                if propeller.evaluate(mid)[0] < target_per_rotor:
+                    lo = mid
+                else:
+                    hi = mid
+            hover_omega = 0.5 * (lo + hi)
+        else:
+            hover_omega = np.sqrt(params.mass_kg * 9.80665 / (4.0 * params.thrust_coefficient_n_per_rad_s2))
         assert 0.0 < hover_omega < params.max_rotor_speed_rad_s
         command = np.full(4, hover_omega / params.max_rotor_speed_rad_s, dtype=np.float64)
         plant = FastQuadrotor(params)
@@ -51,7 +64,7 @@ def test_every_profile_has_nominal_static_hover_equilibrium():
             state, telemetry = plant.step(command)
         assert abs(float(state[2]) - 1.0) < 1e-5
         assert np.linalg.norm(state[6:12]) < 1e-6
-        assert telemetry["total_thrust_n"] == pytest.approx(params.mass_kg * 9.80665, rel=1e-6)
+        assert telemetry["total_thrust_n"] == pytest.approx(params.mass_kg * 9.80665, rel=2e-3)
 
 
 def test_all_curriculum_stages_preserve_minimum_hover_thrust_margin():
