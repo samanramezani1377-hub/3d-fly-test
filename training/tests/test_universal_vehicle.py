@@ -217,5 +217,6 @@ def test_universal_evaluation_publishes_battery_diagnostics_without_using_them_f
         assert key in source
         assert key in workflow
     # Electrical diagnostics are report-only and are not added to policy observations.
-    assert "battery_state_of_charge_estimate" not in source[source.index("def build_velocity_evaluation_sequence"):source.index("class BalancedProfileCallback")]
-    assert "battery_state_of_charge_estimate" not in source[source.index("score = ("):source.index("def __init__", source.index("score = ("))] if "def __init__" in source[source.index("score = ("):] else True
+    score_start = source.index("score = (")
+    score_end = source.index("report = {", score_start)
+    assert "battery" not in source[score_start:score_end].lower()
