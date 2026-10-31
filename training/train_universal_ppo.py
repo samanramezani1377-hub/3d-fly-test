@@ -143,7 +143,7 @@ class BalancedProfileCallback(BaseCallback):
                     stable_steps = max_stable_steps = 0
                     saturation_samples = []
                     zero_command_samples = []
-            velocity_tracking_errors = []
+                    velocity_tracking_errors = []
                     while True:
                         policy_action, _ = self.model.predict(obs, deterministic=True)
                         obs, reward, terminated, truncated, info = e.step(policy_action)
