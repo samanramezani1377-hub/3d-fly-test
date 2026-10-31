@@ -327,7 +327,8 @@ class FastQuadrotor:
         self.attitude = (self.attitude + np.pi) % (2.0 * np.pi) - np.pi
         contact_count, penetration_m, normal_impulse_ns = self._resolve_ground_contact()
         final_rotation = _rotation_matrix_from_quaternion(_quaternion_from_euler(self.attitude))
-        support_offsets = (final_rotation @ np.asarray(p.ground_contact_points_m, dtype=np.float64).T).T
+        support_points = np.asarray(p.ground_contact_points_m, dtype=np.float64).reshape((-1, 3))
+        support_offsets = (final_rotation @ support_points.T).T
         support_heights = (self.position[2] + support_offsets[:, 2]).astype(float).tolist()
         self.time += self.dt
 
