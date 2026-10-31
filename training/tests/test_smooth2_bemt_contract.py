@@ -122,7 +122,8 @@ def test_smooth2_velocity_teacher_roll_and_pitch_signs_match_world_acceleration(
         desired_yaw_rate_rad_s=0.0,
     )
 
-    assert left_wrench[1] > 0.0 and right_wrench[1] < 0.0
+    # Positive body-Y acceleration (left) requires negative roll in this plant convention.
+    assert left_wrench[1] < 0.0 and right_wrench[1] > 0.0
     assert forward_wrench[2] > 0.0 and backward_wrench[2] < 0.0
 
 
