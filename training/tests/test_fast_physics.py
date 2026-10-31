@@ -365,6 +365,27 @@ def test_quaternion_plant_integration_stays_finite_under_combined_body_rates():
         assert np.isclose(np.linalg.norm(telemetry["attitude_quaternion_wxyz"]), 1.0, atol=1e-8)
 
 
+def test_body_axis_drag_rotates_with_heading_and_opposes_airflow():
+    params = VehicleParameters(
+        mass_kg=0.6, center_of_mass_m=(0.0, 0.0, 0.0),
+        inertia_kg_m2=(0.004, 0.006, 0.004),
+        rotor_positions_m=((0.082, 0.082, 0.0), (0.082, -0.082, 0.0),
+                           (-0.082, -0.082, 0.0), (-0.082, 0.082, 0.0)),
+        spin_signs=(1.0, -1.0, 1.0, -1.0),
+        max_rotor_speed_rad_s=1100.0,
+        thrust_coefficient_n_per_rad_s2=2.0e-6,
+        torque_to_thrust_m=0.012,
+        linear_drag_body_kg_s=(1.0, 2.0, 3.0),
+        quadratic_drag_body_kg_m=(0.0, 0.0, 0.0),
+    )
+    plant = FastQuadrotor(params, dt=0.01)
+    plant.reset(position=(0.0, 0.0, 1.0))
+    plant.attitude[2] = np.pi / 2
+    plant.velocity[:] = [0.0, 1.0, 0.0]  # body-forward airspeed at yaw=+90 degrees
+    _, telemetry = plant.step(np.zeros(4))
+    assert np.allclose(telemetry["drag_world_n"], [0.0, -1.0, 0.0], atol=1e-7)
+
+
 def test_a2212_catalog_reference_is_recorded_without_claiming_physical_calibration():
     motor = json.loads(
         (ROOT / "vehicle_models/components/a2212_1000kv_motor.json").read_text(encoding="utf-8")
