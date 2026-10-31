@@ -20,7 +20,7 @@ env:
 
 jobs:
   train-stage2-ppo:
-    name: Stage 2 (1M teacher + 1M teacher-free)
+    name: Stage 2 (700K teacher-free warm start, 1M at 0.8 teacher + 1M teacher-free)
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
@@ -44,47 +44,49 @@ jobs:
           python -m pip install -r training/requirements.txt
           python -c "import torch; assert torch.version.cuda is None; print('CPU-only PyTorch:', torch.__version__)"
 
-      - name: Restore the latest checkpoint from the previous run of this workflow
+      - name: Restore the selected 700K teacher-free checkpoint from the previous run
         uses: actions/download-artifact@v4
         with:
-          name: universal-ppo-five-stage-backup
-          run-id: 41149494807
+          name: universal-ppo-stage2-teacher-to-teacher-free-backup
+          run-id: 41153598860
           github-token: ${{ github.token }}
           path: bootstrap
 
-      - name: Verify and preserve the previous run's latest model
+      - name: Verify and preserve the selected 700K teacher-free checkpoint
         run: |
           set -euo pipefail
-          source_model="bootstrap/training/runs/universal-quad-v5-foundation-stage1-independent/latest_model.zip"
-          source_state="bootstrap/training/runs/universal-quad-v5-foundation-stage1-independent/training_state.json"
-          test -s "$source_model" || { echo "Latest checkpoint from run 41149494807 is missing."; exit 1; }
-          test -s "$source_state" || { echo "Previous training state is missing."; exit 1; }
-          python - "$source_state" <<'PY'
+          source_dir="bootstrap/training/runs/universal-quad-v5-foundation-stage2-teacher-free"
+          source_model="$source_dir/best/best_model.zip"
+          source_selection="$source_dir/best/selection.json"
+          test -s "$source_model" || { echo "Selected teacher-free best_model.zip is missing."; exit 1; }
+          test -s "$source_selection" || { echo "Teacher-free checkpoint selection metadata is missing."; exit 1; }
+          python - "$source_selection" <<'PY'
           import json, sys
           from pathlib import Path
-          state = json.loads(Path(sys.argv[1]).read_text())
-          assert state.get("completed") is True, f"Previous stage-1 run is not complete: {state}"
-          assert state.get("stage") == 1, f"Expected previous stage 1: {state}"
-          assert state.get("num_timesteps") == 2_000_000, f"Unexpected previous step count: {state}"
-          print("Verified source checkpoint:", state)
+          selection = json.loads(Path(sys.argv[1]).read_text())
+          assert selection.get("timesteps") == 700000, f"Expected selected 700K checkpoint: {selection}"
+          assert selection.get("report") == "profile-evaluation-700000.json", f"Unexpected selected report: {selection}"
+          print("Verified selected teacher-free checkpoint:", selection)
           PY
           mkdir -p training/runs
-          cp "$source_model" training/runs/stage2-initial-from-previous-latest_model.zip
-          sha256sum "$source_model" | tee training/runs/stage2-initial-checkpoint.sha256
+          cp "$source_model" training/runs/stage2-initial-from-700k-teacher-free.zip
+          cp "$source_selection" training/runs/stage2-initial-from-700k-teacher-free-selection.json
+          sha256sum "$source_model" | tee training/runs/stage2-initial-from-700k-teacher-free.sha256
 
-      - name: Stage 2 - train 1M steps with the stage-2 reference teacher
+      - name: Stage 2 - train 1M steps with 80% reference teacher
         run: |
           set -euo pipefail
           python training/train_universal_ppo.py \
             --timesteps 1000000 --n-envs 20 --seed 2042 \
             --run-name universal-quad-v5-foundation-stage2-teacher \
             --output-dir training/runs --curriculum-stage 2 \
-            --load-model training/runs/stage2-initial-from-previous-latest_model.zip \
+            --load-model training/runs/stage2-initial-from-700k-teacher-free.zip \
+            --teacher-weight 0.8 \
             --eval-episodes 10 --eval-frequency 200000 \
             --checkpoint-frequency 20000 \
             2>&1 | tee stage2-teacher-training.log
 
-      - name: Stage 2 - continue for 1M steps with the teacher disabled
+      - name: Stage 2 - continue for 1M steps with the teacher disabled (0%)
         run: |
           set -euo pipefail
           teacher_final="training/runs/universal-quad-v5-foundation-stage2-teacher/final_model.zip"
@@ -113,18 +115,20 @@ jobs:
           mkdir -p "$target"
           cp -a "$source/$teacher" "$target/"
           cp -a "$source/$teacher_free" "$target/"
-          cp "$source/stage2-initial-from-previous-latest_model.zip" "$target/"
-          cp "$source/stage2-initial-checkpoint.sha256" "$target/"
+          cp "$source/stage2-initial-from-700k-teacher-free.zip" "$target/"
+          cp "$source/stage2-initial-from-700k-teacher-free-selection.json" "$target/"
+          cp "$source/stage2-initial-from-700k-teacher-free.sha256" "$target/"
           cat > "$target/training-plan.json" <<'JSON'
           {
             "active_curriculum_stage": 2,
             "stage_1_training": false,
-            "initial_checkpoint_source": "latest_model.zip from workflow run 41149494807, completed stage 1",
+            "initial_checkpoint_source": "best/best_model.zip from run 41153598860, stage-2 teacher-free, selected at 700000 steps",
             "stage_2_teacher_segment_timesteps": 1000000,
-            "stage_2_teacher_weight": 0.6,
+            "stage_2_teacher_weight": 0.8,
             "stage_2_teacher_free_segment_timesteps": 1000000,
             "stage_2_teacher_free_weight": 0.0,
-            "second_segment_initial_checkpoint": "stage-2 teacher segment final_model.zip",
+            "first_segment_initial_checkpoint": "selected 700K teacher-free best_model.zip from run 41153598860",
+            "second_segment_initial_checkpoint": "stage-2 teacher-trained final_model.zip",
             "parallel_environments": 20,
             "total_stage_2_timesteps": 2000000,
             "simulation_only": true,
@@ -136,7 +140,7 @@ jobs:
           git add "$target"
           if ! git diff --cached --quiet; then
             find "$target" -type f -size +90M -print -quit | grep -q . && { echo "Checkpoint exceeds 90 MB."; exit 1; } || true
-            git commit -m "Train universal PPO stage 2 with teacher then teacher-free"
+            git commit -m "Train universal PPO from 700K teacher-free checkpoint with 80% teacher then teacher-free"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
