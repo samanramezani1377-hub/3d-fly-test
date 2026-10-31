@@ -139,3 +139,38 @@ def test_smooth2_wrench_allocator_returns_bounded_finite_motor_commands():
         assert commands.shape == (4,)
         assert np.all(np.isfinite(commands))
         assert np.all(commands >= 0.0) and np.all(commands <= 1.0)
+
+
+def test_smooth2_rotor_indexing_and_reaction_spin_signs_match_mirrored_cad_props():
+    profile = smooth2_profile()
+    # CAD stations() order: (+x,+z), (+x,-z), (-x,+z), (-x,-z).
+    # CAD export is (x,-z,y), then export->body is (-Y,X,Z).
+    # Profile order therefore maps to CAD props [2, 1, 3, 4].
+    cad_spin = np.asarray([-1, 1, -1, 1], dtype=int)  # mapped physical spin
+    reaction_sign = np.asarray([r["spin_sign"] for r in profile["rotors"]], dtype=int)
+    assert np.array_equal(reaction_sign, -cad_spin)
+    params = profile_to_parameters(profile)
+    body_positions = np.asarray(params.rotor_positions_m)
+    expected = np.asarray([
+        [-0.125141478,  0.125141478, 0.0],  # rear-left
+        [ 0.125141478,  0.125141478, 0.0],  # front-left
+        [ 0.125141478, -0.125141478, 0.0],  # front-right
+        [-0.125141478, -0.125141478, 0.0],  # rear-right
+    ])
+    assert np.allclose(body_positions, expected, atol=1e-9)
+
+
+def test_smooth2_equal_motor_command_has_equal_static_thrust_and_zero_body_torque():
+    profile = smooth2_profile()
+    params = profile_to_parameters(profile)
+    plant = FastQuadrotor(params, dt=0.02)
+    plant.reset(position=(0.0, 0.0, 1.0))
+    command = np.full(4, 0.55, dtype=np.float64)
+    for _ in range(30):
+        _, info = plant.step(command)
+    thrusts = np.asarray(info["rotor_thrust_n"], dtype=np.float64)
+    torques = np.asarray(info["body_torque_nm"], dtype=np.float64)
+    assert np.allclose(thrusts, thrusts[0], rtol=1e-10, atol=1e-10)
+    assert np.allclose(torques, np.zeros(3), atol=1e-9)
+    assert np.allclose(info["rotor_reaction_torque_sign"], params.spin_signs)
+    assert np.allclose(info["motor_effectiveness"], np.ones(4))
