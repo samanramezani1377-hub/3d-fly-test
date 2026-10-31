@@ -34,7 +34,7 @@ The reference path integrates the requested forward/left velocity using current 
 
 ## Evaluation and checkpoint selection
 
-Every 200,000 aggregate transitions, ten teacher-free episodes are evaluated. Each episode covers all 26 directional combinations: 6 cardinal, 12 two-axis and 8 three-axis commands. Every direction is immediately followed by its reverse. Each command is held for 45 simulation steps (0.9 seconds at 50 Hz), followed by a neutral interval to measure braking. Evaluation speed scales increase with the curriculum stage.
+Every 200,000 aggregate transitions, ten teacher-free episodes are evaluated. Each episode covers all 26 directional combinations: 6 cardinal, 12 two-axis and 8 three-axis commands. Every direction is immediately followed by its reverse. Each command is held for 45 simulation steps (0.9 seconds at 50 Hz), followed by a neutral interval to measure braking. Evaluation speed scales increase with the curriculum stage, and evaluation target altitude varies from 2.0 m to 2.4 m so full downward commands are not prematurely clipped by the low-altitude reference bound.
 
 An episode counts as a successful 3D command mission only when all 26 directions are covered, takeoff succeeds, the mean velocity-tracking error is at most 0.50 m/s, the worst direction's mean error is at most 0.85 m/s, and speed remains below 0.25 m/s for at least 0.5 seconds within 3.5 seconds after the neutral command. Checkpoint selection prioritizes per-profile mission success, crash rate, takeoff success, mean 3D velocity-tracking error, motor saturation and return. The five-stage workflow remains the existing manually dispatched workflow; no additional test workflow is introduced.
 
