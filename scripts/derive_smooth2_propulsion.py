@@ -1,5 +1,7 @@
-"""Smooth2 CAD geometry and approximate static BEMT estimate (not measured)."""
-import argparse, json, math
+"""Reproducible geometry extraction and explicitly approximate static BEMT envelope."""
+import argparse
+import json
+import math
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -7,71 +9,190 @@ CAD = ROOT / "cad/source/smooth2_model_params.json"
 PROFILE = ROOT / "vehicle_models/family/vehicle_profiles.json"
 OUT = ROOT / "vehicle_models/family/smooth2_cad_propulsion_estimate.json"
 CAD_BLOB_SHA = "cc77601fb0e4837ca1f7d9c40024c2bc942462"
+RHO = 1.225
+MU = 1.81e-5
+CL_MAX = 1.2
+CD0 = 0.012
+CD2 = 0.01
+
+
+def _static_bemt(rpm, stations, radius_local_m, scale, pitch_m):
+    """Simple annular momentum + blade-element estimate; not a validated low-Re polar."""
+    omega = rpm * 2.0 * math.pi / 60.0
+    radii = [float(row[0]) * radius_local_m for row in stations]
+    chords = [float(row[1]) * scale / 1000.0 for row in stations]
+    thrust = torque = 0.0
+    reynolds = []
+    for i in range(len(radii) - 1):
+        r_local = 0.5 * (radii[i] + radii[i + 1])
+        r = r_local * scale
+        dr = (radii[i + 1] - radii[i]) * scale
+        chord = 0.5 * (chords[i] + chords[i + 1])
+        # Match the CAD generator: pitch is converted back to local model units.
+        beta = min(math.atan((pitch_m / scale) / (2.0 * math.pi * r_local)),
+                   math.radians(42.0))
+
+        def section(axial_velocity):
+            tangential_velocity = omega * r
+            relative_speed = math.hypot(tangential_velocity, axial_velocity)
+            inflow_angle = math.atan2(axial_velocity, tangential_velocity)
+            cl = max(-CL_MAX, min(CL_MAX, 2.0 * math.pi * (beta - inflow_angle)))
+            cd = CD0 + CD2 * cl * cl
+            q = 0.5 * RHO * relative_speed * relative_speed
+            d_t = q * 2 * chord * (
+                cl * math.cos(inflow_angle) - cd * math.sin(inflow_angle)
+            )
+            d_q = q * 2 * chord * r * (
+                cd * math.cos(inflow_angle) + cl * math.sin(inflow_angle)
+            )
+            # Annular actuator-disk momentum balance, per unit radial span.
+            momentum_t = 4.0 * math.pi * RHO * r * axial_velocity**2
+            return d_t - momentum_t, d_t, d_q, relative_speed
+
+        lo, hi = 0.0, 80.0
+        for _ in range(72):
+            mid = 0.5 * (lo + hi)
+            if section(mid)[0] > 0:
+                lo = mid
+            else:
+                hi = mid
+        _, d_t, d_q, relative_speed = section(0.5 * (lo + hi))
+        thrust += d_t * dr
+        torque += d_q * dr
+        reynolds.append(RHO * relative_speed * chord / MU)
+
+    diameter = 2.0 * radius_local_m * scale
+    rev_per_sec = rpm / 60.0
+    ct = thrust / (RHO * rev_per_sec**2 * diameter**4)
+    cq = torque / (RHO * rev_per_sec**2 * diameter**5)
+    return {
+        "rpm": rpm,
+        "omega_rad_s": omega,
+        "thrust_N_per_rotor": thrust,
+        "torque_Nm_per_rotor": torque,
+        "CT": ct,
+        "CQ": cq,
+        "thrust_coefficient_N_per_rad_s2": thrust / omega**2,
+        "torque_coefficient_Nm_per_rad_s2": torque / omega**2,
+        "Reynolds_min": min(reynolds),
+        "Reynolds_max": max(reynolds),
+    }
 
 
 def derive():
-    p = json.loads(CAD.read_text())
+    params = json.loads(CAD.read_text())
     family = json.loads(PROFILE.read_text())
-    v = next(x for x in family["profiles"] if x["vehicle_id"] == "smooth2-a2212-custom-prop")
-    m, pr = float(p["model_scale"]), v["propulsion"]
-    rho, blades = 1.225, 2
-    R0 = float(p["prop_radius"]) / 1000
-    R, D = R0*m, 2*R
-    pitch = float(p["prop_pitch_mm"]) / 1000
-    rpm = float(pr["kv_rpm_per_volt"]) * float(pr["nominal_battery_voltage_v"]) * .8
-    omega = rpm*2*math.pi/60
-    stations = p["prop_blade_stations"]
-    rs = [float(s[0])*R0 for s in stations]
-    cs = [float(s[1])*m/1000 for s in stations]
-    T = Q = 0.0
-    for i in range(len(rs)-1):
-        r, dr = (rs[i]+rs[i+1])/2*m, (rs[i+1]-rs[i])*m
-        c = (cs[i]+cs[i+1])/2
-        beta = min(math.atan((pitch/m)/(2*math.pi*(r/m))), math.radians(42))
-        def section(vi):
-            vt=omega*r; W=math.hypot(vt,vi); phi=math.atan2(vi,vt)
-            cl=max(-1.2,min(1.2,2*math.pi*(beta-phi)))
-            cd=.012+.01*cl*cl
-            dt=.5*rho*W*W*blades*c*(cl*math.cos(phi)-cd*math.sin(phi))
-            dq=.5*rho*W*W*blades*c*r*(cd*math.cos(phi)+cl*math.sin(phi))
-            return dt-4*math.pi*rho*r*vi*vi,dt,dq
-        lo,hi=0.,80.
-        for _ in range(64):
-            mid=(lo+hi)/2
-            if section(mid)[0]>0: lo=mid
-            else: hi=mid
-        _,dt,dq=section((lo+hi)/2); T+=dt*dr; Q+=dq*dr
-    n=rpm/60
-    CT=T/(rho*n*n*D**4); CQ=Q/(rho*n*n*D**5)
-    kf, kq=T/omega**2, Q/omega**2
-    total=4*T; mass=float(v["physical"]["mass_kg"])
+    vehicle = next(x for x in family["profiles"]
+                   if x["vehicle_id"] == "smooth2-a2212-custom-prop")
+    propulsion = vehicle["propulsion"]
+    scale = float(params["model_scale"])
+    radius_local_m = float(params["prop_radius"]) / 1000.0
+    radius_m = radius_local_m * scale
+    diameter_m = 2.0 * radius_m
+    pitch_m = float(params["prop_pitch_mm"]) / 1000.0
+    no_load_rpm = float(propulsion["kv_rpm_per_volt"]) * float(
+        propulsion["nominal_battery_voltage_v"])
+    max_profile_rpm = float(propulsion["max_rotor_speed_rad_s"]) * 60.0 / (2.0 * math.pi)
+    rpm_cap = min(no_load_rpm, max_profile_rpm)
+    rpm_cases = [0.50, 0.65, 0.80, 0.95]
+    envelope = [_static_bemt(rpm_cap * fraction, params["prop_blade_stations"],
+                             radius_local_m, scale, pitch_m)
+                for fraction in rpm_cases]
+    max_case = envelope[-1]
+    mass = float(vehicle["physical"]["mass_kg"])
+    rotor_count = int(vehicle["geometry"]["rotor_count"])
+    required_hover_per_rotor = mass * 9.80665 / rotor_count
+    chord_stations = [
+        {"radius_fraction": float(row[0]), "chord_mm_final": float(row[1]) * scale}
+        for row in params["prop_blade_stations"]
+    ]
     return {
-      "schema_version":1,"vehicle_id":v["vehicle_id"],"calibration_status":"analytical_estimate_not_measured",
-      "source":{"repository":"samanramezani1377-hub/3D","branch":"kilo","file":"cad/parametric/model.params.json","blob_sha":CAD_BLOB_SHA,"source_repository_modified":False},
-      "propeller":{"blades":2,"radius_m":R,"diameter_m":D,"pitch_mm":pitch*1000,"pitch_diameter_ratio":pitch/D,
-        "airfoil":{"NACA_parameterization":"4410","camber":p["prop_airfoil_camber"],"camber_position":p["prop_airfoil_camber_position"],"thickness_ratio":p["prop_airfoil_thickness_ratio"],
-        "chord_stations_mm":[[s[0],s[1]*m] for s in stations]}},
-      "motor":{"reference":pr["motor_name"],"KV":pr["kv_rpm_per_volt"],"voltage_V":pr["nominal_battery_voltage_v"],"cells":pr["battery_cells"],"capacity_Ah":pr["battery_capacity_ah"],
-        "ideal_no_load_rpm":pr["kv_rpm_per_volt"]*pr["nominal_battery_voltage_v"],"80pct_loaded_rpm_estimate":rpm,
-        "CAD_can_radius_mm":p["motor_radius"]*m,"CAD_can_height_mm":p["motor_height"]*m,"CAD_hub_radius_mm":p["motor_hub_radius"]*m,"CAD_hub_height_mm":p["motor_hub_height"]*m},
-      "BEMT_static_estimate":{"air_density_kg_m3":rho,"rpm":rpm,"omega_rad_s":omega,"thrust_N_per_rotor":T,"torque_Nm_per_rotor":Q,"CT":CT,"CQ":CQ,
-        "thrust_coefficient_N_per_rad_s2":kf,"torque_coefficient_Nm_per_rad_s2":kq,"torque_to_thrust_m":Q/T},
-      "consistency":{"existing_profile_mass_kg":mass,"four_rotor_thrust_N":total,"estimated_TWR":total/(mass*9.80665),
-        "active_profile_Kf":pr["thrust_coefficient_n_per_rad_s2"],"BEMT_to_active_Kf_ratio":kf/pr["thrust_coefficient_n_per_rad_s2"],
-        "active_profile_max_omega_rad_s":pr["max_rotor_speed_rad_s"]},
-      "limitations":["Approximate thin-airfoil lift slope with capped CL and simple drag polar; no measured low-Re airfoil polars.",
-        "Motor CAD is a simplified envelope, not a winding/stator/rotor model.","No winding resistance, current, ESC limit, torque-speed curve, motor time constant, or motor/prop inertia.",
-        "No material density or measured airframe mass/CG.","Static isolated-rotor estimate only; not a real thrust coefficient."],
-      "active_vehicle_profile_modified":False,"physical_flight_eligible":False
+        "schema_version": 2,
+        "vehicle_id": vehicle["vehicle_id"],
+        "calibration_status": "analytical_estimate_not_measured",
+        "source": {
+            "repository": "samanramezani1377-hub/3D",
+            "branch": "kilo",
+            "file": "cad/parametric/model.params.json",
+            "blob_sha": CAD_BLOB_SHA,
+            "source_repository_modified": False
+        },
+        "propeller": {
+            "blades": 2,
+            "radius_m": radius_m,
+            "diameter_m": diameter_m,
+            "pitch_mm": pitch_m * 1000.0,
+            "pitch_diameter_ratio": pitch_m / diameter_m,
+            "airfoil": {
+                "designation_style": "NACA 4410 parameterization",
+                "camber_ratio": float(params["prop_airfoil_camber"]),
+                "maximum_camber_position_chord": float(params["prop_airfoil_camber_position"]),
+                "thickness_ratio": float(params["prop_airfoil_thickness_ratio"]),
+                "radial_stations": chord_stations,
+                "twist_law": "atan(P/(2*pi*r)), capped at 42 degrees, matching CAD builder"
+            }
+        },
+        "motor_reference": {
+            "name": propulsion["motor_name"],
+            "KV_rpm_per_volt": propulsion["kv_rpm_per_volt"],
+            "battery_voltage_V_nominal": propulsion["nominal_battery_voltage_v"],
+            "battery_cells": propulsion["battery_cells"],
+            "capacity_Ah": propulsion["battery_capacity_ah"],
+            "ideal_no_load_rpm": no_load_rpm,
+            "profile_max_omega_rad_s": propulsion["max_rotor_speed_rad_s"],
+            "analysis_rpm_cap": rpm_cap,
+            "rpm_cap_basis": "minimum of ideal KV*nominal-voltage no-load RPM and configured simulation rotor-speed cap",
+            "loaded_operating_rpm_known": False
+        },
+        "BEMT_model": {
+            "method": "annular actuator-disk momentum balance coupled to blade-element lift/drag",
+            "air_density_kg_m3": RHO,
+            "dynamic_viscosity_Pa_s": MU,
+            "lift_model": "2*pi*alpha per radian, clipped to +/-1.2",
+            "drag_model": "CD = 0.012 + 0.01*CL^2",
+            "rpm_sweep_fraction_of_cap": rpm_cases,
+            "rpm_cases": envelope,
+            "maximum_case_four_rotor_thrust_N": rotor_count * max_case["thrust_N_per_rotor"]
+        },
+        "hover_sanity_check": {
+            "vehicle_mass_kg_from_profile": mass,
+            "rotor_count": rotor_count,
+            "required_hover_thrust_N_per_rotor": required_hover_per_rotor,
+            "estimated_max_case_thrust_N_per_rotor": max_case["thrust_N_per_rotor"],
+            "estimated_max_case_to_hover_requirement_ratio": max_case["thrust_N_per_rotor"] / required_hover_per_rotor,
+            "not_a_certified_flight_performance_result": True
+        },
+        "limitations": [
+            "The CAD calls the section NACA 4410-style, but supplies geometry only; it does not contain measured airfoil polars.",
+            "The calculated Reynolds range is very low; thin-airfoil lift slope and the assumed drag polar are not reliable substitutes for measured low-Reynolds-number data.",
+            "No Prandtl tip/root-loss correction, induced-swirl solution, blade/guard interference, ground effect, or forward-flight model.",
+            "The 50/65/80/95 percent RPM values are analysis points, not predicted loaded motor operating points.",
+            "Motor winding resistance, current limits, ESC, propeller load curve, torque-speed curve, and motor temperature are unknown.",
+            "CAD motor dimensions are simplified envelopes; no measured motor mass or inertia is available.",
+            "No measured airframe mass, thrust-stand data, or flight validation is available."
+        ],
+        "interpretation": "This is a screening estimate only. A low predicted thrust-to-hover ratio is a reason to validate the motor/propeller pairing, not proof that the CAD propeller is defective.",
+        "active_vehicle_profile_modified": False,
+        "physical_flight_eligible": False
     }
 
 
 if __name__ == "__main__":
-    a=argparse.ArgumentParser(); a.add_argument("--output",type=Path,default=OUT); a.add_argument("--check",action="store_true"); x=a.parse_args()
-    report=derive()
-    if x.check:
-        assert .074 < report["propeller"]["diameter_m"] < .076 and len(report["propeller"]["airfoil"]["chord_stations_mm"])==11
-        assert 0 < report["BEMT_static_estimate"]["thrust_coefficient_N_per_rad_s2"] < 1e-6
-        assert report["consistency"]["estimated_TWR"] < 1
-    x.output.parent.mkdir(parents=True,exist_ok=True); x.output.write_text(json.dumps(report,indent=2)+"\n")
-    print(json.dumps(report,indent=2))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=Path, default=OUT)
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+    report = derive()
+    if args.check:
+        assert 0.074 < report["propeller"]["diameter_m"] < 0.076
+        assert len(report["propeller"]["airfoil"]["radial_stations"]) == 11
+        cases = report["BEMT_model"]["rpm_cases"]
+        assert len(cases) == 4 and all(c["thrust_N_per_rotor"] > 0 for c in cases)
+        assert all(a["thrust_N_per_rotor"] < b["thrust_N_per_rotor"]
+                   for a, b in zip(cases, cases[1:]))
+        assert report["motor_reference"]["loaded_operating_rpm_known"] is False
+        assert report["active_vehicle_profile_modified"] is False
+        assert report["physical_flight_eligible"] is False
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps(report, indent=2))
