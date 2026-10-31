@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +16,8 @@ from fast_physics.ppo_action import wrench_to_motor_commands
 from fast_physics.vehicle_family import load_vehicle_profiles, profile_to_parameters
 from fast_physics.velocity_reference import VelocityYawReferenceController
 from fast_physics.dynamics import rotation_matrix, _quaternion_from_euler, _rotation_matrix_from_quaternion
+from fast_physics.system_identification import estimate_first_order_time_constant, estimate_body_axis_drag_coefficients
+from fast_physics.mass_properties import aggregate_mass_properties
 from evaluate_robust_ppo import summarize_episode
 AIRFRAME = ROOT / "vehicle_models/smooth2_parametric/base_airframe.json"
 CALIBRATION = ROOT / "vehicle_models/smooth2_parametric/physics_calibration.json"
@@ -46,6 +49,8 @@ def test_synthetic_calibration_requires_explicit_opt_in():
     )
     assert metadata["synthetic_calibration_used"] is True
     assert params.mass_kg == pytest.approx(0.6)
+    assert params.battery_nominal_voltage_v == pytest.approx(11.1)
+    assert params.battery_capacity_ah == pytest.approx(2.2)
 
 
 def test_airframe_geometry_is_fixed_and_four_rotors_are_present():
@@ -434,3 +439,78 @@ def test_a2212_catalog_reference_is_recorded_without_claiming_physical_calibrati
     assert calibration["motor_propeller"]["motor_time_constant_s"] is None
     with pytest.raises(ValueError, match="Physical calibration is incomplete"):
         load_vehicle_parameters(AIRFRAME, CALIBRATION)
+
+
+def test_electrical_telemetry_estimates_current_and_battery_consumption_without_claiming_voltage_sag():
+    params = replace(
+        synthetic_params(),
+        battery_nominal_voltage_v=11.1,
+        battery_capacity_ah=2.2,
+    )
+    plant = FastQuadrotor(params)
+    reference_plant = FastQuadrotor(synthetic_params())
+    plant.reset(position=(0.0, 0.0, 1.0))
+    reference_plant.reset(position=(0.0, 0.0, 1.0))
+    telemetry = None
+    for _ in range(150):
+        state_with_diagnostics, telemetry = plant.step(np.full(4, 0.7, dtype=np.float32))
+        state_without_diagnostics, _ = reference_plant.step(np.full(4, 0.7, dtype=np.float32))
+        assert np.allclose(state_with_diagnostics, state_without_diagnostics, atol=1e-12)
+    assert telemetry["estimated_battery_current_a"] > 0.0
+    assert len(telemetry["estimated_motor_current_a"]) == 4
+    assert telemetry["estimated_electrical_power_w"] > 0.0
+    assert telemetry["battery_consumed_ah_estimate"] > 0.0
+    assert 0.0 < telemetry["battery_state_of_charge_estimate"] < 1.0
+    assert telemetry["battery_voltage_sag_modelled"] is False
+    assert telemetry["ESC_current_limit_modelled"] is False
+    assert "excludes_no_load" in telemetry["electrical_estimate_status"]
+    plant.reset(position=(0.0, 0.0, 1.0))
+    _, reset_telemetry = plant.step(np.zeros(4, dtype=np.float32))
+    assert reset_telemetry["battery_consumed_ah_estimate"] == 0.0
+    assert reset_telemetry["battery_state_of_charge_estimate"] == pytest.approx(1.0)
+
+
+def test_vehicle_profiles_expose_nominal_battery_capacity_for_telemetry():
+    for profile in load_vehicle_profiles():
+        params = profile_to_parameters(profile)
+        assert params.battery_nominal_voltage_v == pytest.approx(profile["propulsion"]["nominal_battery_voltage_v"])
+        assert params.battery_capacity_ah == pytest.approx(profile["propulsion"]["battery_capacity_ah"])
+        assert profile["propulsion"]["battery_internal_resistance_ohm"] is None
+        assert profile["propulsion"]["esc_current_limit_a_per_motor"] is None
+
+
+def test_first_order_motor_time_constant_can_be_identified_from_rpm_step_log():
+    time = np.linspace(0.0, 0.5, 251)
+    target = np.full_like(time, 800.0)
+    tau = 0.045
+    measured = target * (1.0 - np.exp(-time / tau))
+    result = estimate_first_order_time_constant(time, target, measured)
+    assert result["motor_time_constant_s"] == pytest.approx(tau, rel=0.03)
+    assert result["fit_r_squared"] > 0.99
+    assert result["scope"] == "motor_speed_response_only_no_thrust_or_propeller_inference"
+
+
+def test_component_mass_properties_use_parallel_axis_theorem():
+    result = aggregate_mass_properties([
+        {"component_id": "left", "mass_kg": 1.0, "center_m": [-0.5, 0.0, 0.0]},
+        {"component_id": "right", "mass_kg": 1.0, "center_m": [0.5, 0.0, 0.0]},
+    ])
+    assert result["takeoff_mass_kg"] == pytest.approx(2.0)
+    assert result["center_of_mass_m"] == pytest.approx([0.0, 0.0, 0.0])
+    assert np.asarray(result["inertia_tensor_kg_m2"]) == pytest.approx(np.diag([0.0, 0.5, 0.5]))
+    assert result["coordinate_frame"] == "CAD_EXPORT_Z_UP"
+
+
+def test_body_axis_drag_identification_recovers_linear_and_quadratic_coefficients():
+    rng = np.random.default_rng(19)
+    velocity = rng.uniform(-8.0, 8.0, size=(300, 3))
+    expected_linear = np.array([0.12, 0.20, 0.31])
+    expected_quadratic = np.array([0.018, 0.027, 0.041])
+    force = (
+        -velocity * expected_linear[None, :]
+        -np.abs(velocity) * velocity * expected_quadratic[None, :]
+    )
+    result = estimate_body_axis_drag_coefficients(velocity, force)
+    assert result["linear_drag_body_kg_s"] == pytest.approx(expected_linear, rel=1e-8)
+    assert result["quadratic_drag_body_kg_m"] == pytest.approx(expected_quadratic, rel=1e-8)
+    assert result["fit_r_squared_by_axis"] == pytest.approx([1.0, 1.0, 1.0], abs=1e-10)

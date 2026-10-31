@@ -151,6 +151,9 @@ def profile_to_parameters(profile: dict[str, Any]) -> VehicleParameters:
         linear_drag_body_kg_s=tuple(physical["linear_drag_body_kg_s"]) if physical.get("linear_drag_body_kg_s") is not None else None,
         quadratic_drag_body_kg_m=tuple(physical["quadratic_drag_body_kg_m"]) if physical.get("quadratic_drag_body_kg_m") is not None else None,
         rotor_inertia_kg_m2=float(propulsion.get("rotor_inertia_kg_m2") or 0.0),
+        battery_nominal_voltage_v=float(propulsion["nominal_battery_voltage_v"]) if propulsion.get("nominal_battery_voltage_v") is not None else None,
+        battery_capacity_ah=float(propulsion["battery_capacity_ah"]) if propulsion.get("battery_capacity_ah") is not None else None,
+        motor_efficiency_upper_bound=float(propulsion.get("motor_efficiency_upper_bound", 0.8)),
     )
 
 

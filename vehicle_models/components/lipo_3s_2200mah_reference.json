@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "component_id": "generic-lipo-3s-2200mah-reference",
+  "component_type": "lithium_polymer_battery_pack",
+  "identity": {
+    "manufacturer": null,
+    "exact_vendor_sku": null,
+    "identity_note": "Reference electrical configuration in the Smooth2 software profile only; this is not confirmation of the user's physical battery pack."
+  },
+  "declared_reference_values": {
+    "cell_count": 3,
+    "nominal_voltage_v": 11.1,
+    "capacity_ah": 2.2,
+    "fully_charged_voltage_v": 12.6,
+    "chemistry": "LiPo"
+  },
+  "not_characterized": {
+    "pack_internal_resistance_ohm": null,
+    "continuous_discharge_c": null,
+    "peak_discharge_c": null,
+    "connector_resistance_ohm": null,
+    "cell_imbalance": null,
+    "temperature_limits_c": null,
+    "low_voltage_cutoff_v": null
+  },
+  "simulation_policy": {
+    "voltage_sag_modelled": false,
+    "state_of_charge": "estimated from model-based electrical current only",
+    "current_estimate": "derived from configured rotor torque proxy and an optimistic motor efficiency ceiling; excludes no-load, copper, ESC and wiring losses",
+    "physical_use": "not suitable for battery sizing, flight-time prediction, current-limit selection or real-flight operation"
+  },
+  "required_measurements": [
+    "exact pack label and cell count",
+    "loaded pack voltage during representative current draw",
+    "pack internal resistance using a documented method",
+    "continuous and peak discharge ratings",
+    "cell voltage balance and temperature"
+  ]
+}

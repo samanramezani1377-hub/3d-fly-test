@@ -81,3 +81,80 @@ class OnlineThrustEstimator:
             "residual_ema_m_s2": float(self.residual_ema),
             "samples": int(self.samples),
         }
+
+
+def estimate_first_order_time_constant(time_s, target_speed_rad_s, measured_speed_rad_s) -> dict:
+    """Fit a first-order motor speed lag from command-target and RPM logs.
+
+    Inputs must be synchronized samples in seconds and rad/s. The fit uses
+    d(omega)/dt = (omega_target - omega)/tau. It estimates actuator lag only;
+    it does not infer thrust, torque, current, or propeller performance.
+    """
+    time = np.asarray(time_s, dtype=np.float64)
+    target = np.asarray(target_speed_rad_s, dtype=np.float64)
+    measured = np.asarray(measured_speed_rad_s, dtype=np.float64)
+    if time.ndim != 1 or target.shape != time.shape or measured.shape != time.shape or time.size < 5:
+        raise ValueError("time, target speed and measured speed must be equal-length 1D arrays with at least five samples")
+    if not np.all(np.isfinite(time)) or not np.all(np.isfinite(target)) or not np.all(np.isfinite(measured)):
+        raise ValueError("motor response samples must be finite")
+    if np.any(np.diff(time) <= 0):
+        raise ValueError("time samples must be strictly increasing")
+    drive = target - measured
+    derivative = np.gradient(measured, time)
+    mask = np.abs(drive) > max(float(np.max(np.abs(drive))) * 1e-3, 1e-6)
+    if int(mask.sum()) < 3:
+        raise ValueError("motor response log does not contain enough excitation")
+    denominator = float(np.dot(drive[mask], drive[mask]))
+    rate = float(np.dot(drive[mask], derivative[mask]) / denominator)
+    if not np.isfinite(rate) or rate <= 0:
+        raise ValueError("first-order motor response fit is not physically positive")
+    predicted = rate * drive[mask]
+    residual = derivative[mask] - predicted
+    total = derivative[mask] - float(np.mean(derivative[mask]))
+    r_squared = 1.0 - float(np.dot(residual, residual)) / max(float(np.dot(total, total)), 1e-12)
+    return {
+        "motor_time_constant_s": float(1.0 / rate),
+        "fit_r_squared": float(r_squared),
+        "sample_count": int(mask.sum()),
+        "model": "d_omega_dt=(omega_target-omega)/tau",
+        "scope": "motor_speed_response_only_no_thrust_or_propeller_inference",
+    }
+
+
+def estimate_body_axis_drag_coefficients(relative_air_velocity_body_m_s, drag_force_body_n) -> dict:
+    """Fit per-axis linear/quadratic drag from synchronized body-frame samples.
+
+    drag_force_body_n must be the isolated aerodynamic force after gravity,
+    rotor force and other known forces are removed. This function does not
+    infer drag from raw acceleration without those force terms.
+    """
+    velocity = np.asarray(relative_air_velocity_body_m_s, dtype=np.float64)
+    force = np.asarray(drag_force_body_n, dtype=np.float64)
+    if velocity.ndim != 2 or velocity.shape[1] != 3 or force.shape != velocity.shape or velocity.shape[0] < 8:
+        raise ValueError("velocity and drag force must be matching Nx3 arrays with at least eight samples")
+    if not np.all(np.isfinite(velocity)) or not np.all(np.isfinite(force)):
+        raise ValueError("drag identification samples must be finite")
+    linear, quadratic, scores = [], [], []
+    for axis in range(3):
+        speed = velocity[:, axis]
+        design = np.column_stack((-speed, -np.abs(speed) * speed))
+        if np.linalg.matrix_rank(design) < 2:
+            raise ValueError(f"axis {axis}: velocity samples do not excite both linear and quadratic drag terms")
+        coefficients, _, _, _ = np.linalg.lstsq(design, force[:, axis], rcond=None)
+        if np.any(coefficients < -1e-10):
+            raise ValueError(f"axis {axis}: fitted drag coefficients are negative; check force isolation and frame")
+        prediction = design @ coefficients
+        residual = force[:, axis] - prediction
+        centered = force[:, axis] - float(np.mean(force[:, axis]))
+        r_squared = 1.0 - float(np.dot(residual, residual)) / max(float(np.dot(centered, centered)), 1e-12)
+        linear.append(float(max(coefficients[0], 0.0)))
+        quadratic.append(float(max(coefficients[1], 0.0)))
+        scores.append(float(r_squared))
+    return {
+        "linear_drag_body_kg_s": linear,
+        "quadratic_drag_body_kg_m": quadratic,
+        "fit_r_squared_by_axis": scores,
+        "sample_count": int(velocity.shape[0]),
+        "coordinate_frame": "BODY_FORWARD_LEFT_UP",
+        "scope": "isolated_aerodynamic_drag_only_requires_known_force_subtraction",
+    }
