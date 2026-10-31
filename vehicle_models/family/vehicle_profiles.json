@@ -256,7 +256,9 @@
           "source_branch": "kilo",
           "source_commit": "38d4820fc5f7e2208e6ce502ca6b54a83989196a",
           "source_file": "cad/parametric/model.params.json",
-          "calibration": "screening_estimate_not_bench_measured"
+          "calibration": "screening_estimate_not_bench_measured",
+          "reference_thrust_coefficient_n_per_rad_s2": 0.00000553666,
+          "reference_torque_to_thrust_m": 0.01294
         },
         "propeller_model_status": "runtime_BEMT_enabled_for_Smooth2_only"
       }
