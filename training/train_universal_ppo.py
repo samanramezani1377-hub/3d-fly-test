@@ -40,33 +40,36 @@ def parse_args(argv=None):
 
 
 def build_velocity_evaluation_sequence(episode_index: int, limits_m_s=(1.5, 1.5, 0.75)):
-    """Cover all 6 cardinal, 12 two-axis and 8 three-axis directions per eval episode."""
+    """Cover 6 cardinal, 12 two-axis and 8 three-axis directions, including reversals."""
     limits = np.asarray(limits_m_s, dtype=np.float64)
     if limits.shape != (3,) or np.any(limits <= 0):
         raise ValueError("velocity evaluation limits must be three positive values")
     speed_scale = 0.55 + 0.05 * (int(episode_index) % 10)
-    commands = []
+    direction_pairs = []
+    # Three cardinal axes; each is immediately followed by its reverse.
     for axis in range(3):
-        for sign in (-1.0, 1.0):
-            vector = np.zeros(3, dtype=np.float64)
-            vector[axis] = sign * speed_scale * limits[axis]
-            commands.append(vector)
+        vector = np.zeros(3, dtype=np.float64)
+        vector[axis] = speed_scale * limits[axis]
+        direction_pairs.append(vector)
+    # Six unique two-axis directions modulo sign; reverse each one immediately.
     for first, second in ((0, 1), (0, 2), (1, 2)):
-        for sign_first in (-1.0, 1.0):
-            for sign_second in (-1.0, 1.0):
-                vector = np.zeros(3, dtype=np.float64)
-                vector[first] = sign_first * speed_scale * limits[first] / np.sqrt(2.0)
-                vector[second] = sign_second * speed_scale * limits[second] / np.sqrt(2.0)
-                commands.append(vector)
-    for sign_x in (-1.0, 1.0):
-        for sign_y in (-1.0, 1.0):
-            for sign_z in (-1.0, 1.0):
-                commands.append(speed_scale * limits * np.array([sign_x, sign_y, sign_z]) / np.sqrt(3.0))
-    # Rotate the order between episodes while preserving complete direction coverage.
-    offset = (int(episode_index) * 7) % len(commands)
-    commands = commands[offset:] + commands[:offset]
+        for sign_second in (-1.0, 1.0):
+            vector = np.zeros(3, dtype=np.float64)
+            vector[first] = speed_scale * limits[first] / np.sqrt(2.0)
+            vector[second] = sign_second * speed_scale * limits[second] / np.sqrt(2.0)
+            direction_pairs.append(vector)
+    # Four unique three-axis directions modulo sign; reverse each one immediately.
+    for sign_y in (-1.0, 1.0):
+        for sign_z in (-1.0, 1.0):
+            direction_pairs.append(
+                speed_scale * limits * np.array([1.0, sign_y, sign_z]) / np.sqrt(3.0)
+            )
+    offset = (int(episode_index) * 5) % len(direction_pairs)
+    direction_pairs = direction_pairs[offset:] + direction_pairs[:offset]
+    commands = []
+    for vector in direction_pairs:
+        commands.extend((vector, -vector))
     return [{"velocity_m_s": command.tolist(), "duration_steps": 45} for command in commands]
-
 
 class BalancedProfileCallback(BaseCallback):
     """Choose the checkpoint that best protects the weakest vehicle profile."""
