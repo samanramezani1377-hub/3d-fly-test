@@ -183,6 +183,7 @@ class BalancedProfileCallback(BaseCallback):
                     stable_steps = max_stable_steps = 0
                     saturation_samples = []
                     zero_command_samples = []
+                    estimated_battery_current_samples = []
                     velocity_tracking_errors = []
                     velocity_command_errors = {}
                     yaw_rate_errors = []
@@ -198,6 +199,8 @@ class BalancedProfileCallback(BaseCallback):
                         took_off = took_off or bool(info.get("has_taken_off", False))
                         saturation_samples.append(float(info.get("motor_saturation_fraction", 0.0)))
                         zero_command_samples.append(float(info.get("motor_zero_command_fraction", 0.0)))
+                        if info.get("estimated_battery_current_a") is not None:
+                            estimated_battery_current_samples.append(float(info["estimated_battery_current_a"]))
                         if self.velocity_control:
                             command_index = int(info.get("velocity_command_index", -1))
                             if command_index >= 0:
@@ -260,6 +263,13 @@ class BalancedProfileCallback(BaseCallback):
                     mean_yaw_rate_error = sum(yaw_rate_errors) / max(len(yaw_rate_errors), 1) if self.velocity_control else 0.0
                     max_yaw_command_error = max((sum(values) / len(values) for values in yaw_command_errors.values()), default=float("inf")) if self.velocity_control else 0.0
                     yaw_command_coverage = len(yaw_command_errors) if self.velocity_control else 0
+                    mean_estimated_battery_current_a = (
+                        sum(estimated_battery_current_samples) / len(estimated_battery_current_samples)
+                        if estimated_battery_current_samples else None
+                    )
+                    estimated_battery_energy_consumed_wh = info.get("battery_energy_consumed_wh_estimate")
+                    estimated_battery_consumed_ah = info.get("battery_consumed_ah_estimate")
+                    final_battery_state_of_charge_estimate = info.get("battery_state_of_charge_estimate")
                     success = bool(not crashed and took_off and (
                         mean_tracking_error <= 0.50 and max_command_error <= 0.85
                         and command_coverage == 26
@@ -281,6 +291,10 @@ class BalancedProfileCallback(BaseCallback):
                         "return": total,
                         "mean_motor_saturation_fraction": sum(saturation_samples) / max(len(saturation_samples), 1),
                         "mean_motor_zero_command_fraction": sum(zero_command_samples) / max(len(zero_command_samples), 1),
+                        "mean_estimated_battery_current_a": mean_estimated_battery_current_a,
+                        "estimated_battery_energy_consumed_wh": estimated_battery_energy_consumed_wh,
+                        "estimated_battery_consumed_ah": estimated_battery_consumed_ah,
+                        "final_battery_state_of_charge_estimate": final_battery_state_of_charge_estimate,
                         "altitude_error_m": info.get("altitude_error_m"),
                         "horizontal_error_m": info.get("horizontal_error_m"),
                         "crash_reasons": info.get("crash_reasons", [])})
@@ -307,6 +321,26 @@ class BalancedProfileCallback(BaseCallback):
                 ),
                 "mean_motor_saturation_fraction": sum(x["mean_motor_saturation_fraction"] for x in episodes) / count,
                 "mean_motor_zero_command_fraction": sum(x["mean_motor_zero_command_fraction"] for x in episodes) / count,
+                "mean_estimated_battery_current_a": (
+                    sum(x["mean_estimated_battery_current_a"] for x in episodes if x["mean_estimated_battery_current_a"] is not None)
+                    / sum(x["mean_estimated_battery_current_a"] is not None for x in episodes)
+                    if any(x["mean_estimated_battery_current_a"] is not None for x in episodes) else None
+                ),
+                "mean_estimated_battery_energy_consumed_wh": (
+                    sum(x["estimated_battery_energy_consumed_wh"] for x in episodes if x["estimated_battery_energy_consumed_wh"] is not None)
+                    / sum(x["estimated_battery_energy_consumed_wh"] is not None for x in episodes)
+                    if any(x["estimated_battery_energy_consumed_wh"] is not None for x in episodes) else None
+                ),
+                "mean_estimated_battery_consumed_ah": (
+                    sum(x["estimated_battery_consumed_ah"] for x in episodes if x["estimated_battery_consumed_ah"] is not None)
+                    / sum(x["estimated_battery_consumed_ah"] is not None for x in episodes)
+                    if any(x["estimated_battery_consumed_ah"] is not None for x in episodes) else None
+                ),
+                "mean_final_battery_state_of_charge_estimate": (
+                    sum(x["final_battery_state_of_charge_estimate"] for x in episodes if x["final_battery_state_of_charge_estimate"] is not None)
+                    / sum(x["final_battery_state_of_charge_estimate"] is not None for x in episodes)
+                    if any(x["final_battery_state_of_charge_estimate"] is not None for x in episodes) else None
+                ),
                 "mean_return": sum(x["return"] for x in episodes) / count,
                 "episodes": episodes})
         score = (min(x["success_rate"] for x in profile_reports),
