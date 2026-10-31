@@ -108,6 +108,13 @@ class AdaptiveDroneEnv(gym.Env):
         self._previous_altitude_potential = 0.0
         self._ground_contact = False
 
+    def _ground_clearance_m(self) -> float:
+        """CAD-derived lowest-point clearance for the current episode CG at level attitude."""
+        return max(0.0, -(
+            float(self.plant.params.airframe_lowest_point_z_m)
+            - float(self.plant.params.center_of_mass_m[2])
+        ))
+
     def _measure_state(self, state: np.ndarray) -> np.ndarray:
         """Return the sensor-visible state; never pass simulator truth to the policy estimator."""
         measured = state.astype(np.float64).copy()
@@ -244,7 +251,9 @@ class AdaptiveDroneEnv(gym.Env):
         if wind_low > wind_high:
             raise ValueError("environment.wind_component_m_s lower bound must not exceed upper bound")
         wind = self.np_random.uniform(wind_low, wind_high, size=3) if self.randomize else np.zeros(3)
-        state = self.plant.reset(wind=wind)
+        ground_clearance_m = self._ground_clearance_m()
+        # Keep the existing 8 cm air gap, measured from the lowest CAD solid.
+        state = self.plant.reset(position=(0.0, 0.0, ground_clearance_m + 0.08), wind=wind)
         # Progressive ground-start perturbations: retain the takeoff task while
         # gradually teaching recovery from small initial attitude/position errors.
         stage_info = self.active_randomization.get("active_curriculum_stage") or {}
@@ -307,6 +316,9 @@ class AdaptiveDroneEnv(gym.Env):
         self._ground_contact = False
         info = {
             "vehicle_id": self.model_metadata["vehicle_id"],
+            "ground_contact_model": "CAD_lowest_point_vertical_clearance_level_attitude_approximation",
+            "ground_clearance_m": float(ground_clearance_m),
+            "initial_lowest_point_height_m": float(state[2] - ground_clearance_m),
             "calibration_status": self.model_metadata["calibration_status"],
             "synthetic_calibration_used": self.model_metadata["synthetic_calibration_used"],
             "scenario": dict(self._scenario_details),
@@ -357,16 +369,18 @@ class AdaptiveDroneEnv(gym.Env):
 
         z = float(safe_state[2])
         was_taken_off = self._taken_off
-        self._taken_off = self._taken_off or bool(z > 0.18)
+        ground_clearance_m = self._ground_clearance_m()
+        self._taken_off = self._taken_off or bool(z - ground_clearance_m > 0.18)
         measured = self._measure_state(safe_state)
-        ground_contact = bool(state_finite and z <= 0.0)
+        ground_penetration_m = max(0.0, ground_clearance_m - z) if state_finite else 0.0
+        ground_contact = bool(state_finite and z <= ground_clearance_m)
         if ground_contact:
-            self.plant.position[2] = 0.0
+            self.plant.position[2] = ground_clearance_m
             if self.plant.velocity[2] < 0.0:
                 self.plant.velocity[2] = 0.0
             safe_state = self.plant.state()
             self._last_finite_state = safe_state.copy()
-            z = 0.0
+            z = ground_clearance_m
             measured = self._measure_state(safe_state)
         if state_finite:
             self.estimator.update(action, float(measured[5]), self.dt)
@@ -478,6 +492,9 @@ class AdaptiveDroneEnv(gym.Env):
             "has_taken_off": self._taken_off,
             "takeoff_failed": takeoff_failed,
             "ground_contact": ground_contact,
+            "ground_clearance_m": float(ground_clearance_m),
+            "ground_penetration_before_clamp_m": float(ground_penetration_m),
+            "lowest_point_height_m": float(z - ground_clearance_m),
             "altitude_m": float(z),
             "position_xyz_m": safe_state[:3].astype(float).tolist(),
             "position_error_m": float(np.linalg.norm(position_error)),
