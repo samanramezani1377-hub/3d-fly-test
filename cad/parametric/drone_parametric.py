@@ -354,14 +354,19 @@ def _tick_branch_vectors(p, x, z):
 
 
 def joint_bolt_points(p, x, z):
-    """Bolt centres at the midpoints of the left and right tick branches."""
+    """Fixed fastener centres in radial/tangential coordinates; independent of branch scaling."""
     import math
     angle = math.atan2(z, x)
-    radius = float(p.get("joint_tick_junction_radius", p["joint_arm_start_radius"]))
-    cx, cz = radius * math.cos(angle), radius * math.sin(angle)
+    radial_x, radial_z = math.cos(angle), math.sin(angle)
+    # Match the handedness used by _tick_branch_vectors(): the positive
+    # tangential direction is (radial_z, -radial_x), mirrored by quadrant.
+    side_x, side_z = radial_z, -radial_x
+    if x * z < 0:
+        side_x, side_z = -side_x, -side_z
     return [
-        (cx + dx * length / 2.0, cz + dz * length / 2.0)
-        for length, dx, dz in _tick_branch_vectors(p, x, z)
+        (radial * radial_x + tangent * side_x,
+         radial * radial_z + tangent * side_z)
+        for radial, tangent in p["joint_bolt_positions"]
     ]
 
 
@@ -568,6 +573,12 @@ def _prop_airfoil_wire(radius, chord, twist_deg, sweep, p, y_mid):
         raise ValueError("Invalid propeller airfoil parameters")
     if not (0.06 <= thickness <= 0.18) or samples < 12:
         raise ValueError("Propeller airfoil thickness must be 0.06..0.18 and samples >= 12")
+    model_scale = float(p.get("model_scale") or 1.0)
+    # Printable section: never thinner than the absolute minimum, and a finite (blunt)
+    # trailing edge instead of a sliver, both stated in final millimetres.
+    min_thickness_local = float(p.get("prop_min_section_thickness_mm", 0.0)) / model_scale
+    te_half_local = 0.5 * float(p.get("prop_trailing_edge_thickness_mm", 0.0)) / model_scale
+    thickness = max(thickness, min(0.18, min_thickness_local / chord))
 
     theta = math.radians(twist_deg)
     cos_t, sin_t = math.cos(theta), math.sin(theta)
@@ -578,7 +589,7 @@ def _prop_airfoil_wire(radius, chord, twist_deg, sweep, p, y_mid):
         yt = 5.0 * thickness * (
             0.2969 * math.sqrt(max(0.0, u)) - 0.1260 * u
             - 0.3516 * u**2 + 0.2843 * u**3 - 0.1015 * u**4
-        ) * chord
+        ) * chord + te_half_local * u
         if u < camber_pos:
             yc = camber / camber_pos**2 * (2.0 * camber_pos * u - u**2)
         else:
@@ -587,10 +598,13 @@ def _prop_airfoil_wire(radius, chord, twist_deg, sweep, p, y_mid):
             )
         y_local = yc * chord + side * yt
         z_local = (u - 0.5) * chord
-        # Twist the section about the radial X axis. Sweep is added in the rotor plane
-        # after twist, so it does not accidentally change the section pitch.
-        y_rot = y_local * cos_t + z_local * sin_t
-        z_rot = -y_local * sin_t + z_local * cos_t + sweep
+        # Twist the section about the radial X axis. The rotor spins about +Y so the
+        # leading edge (u=0, at -Z) leads and the blade must be pitched leading-edge UP
+        # for thrust along +Y (the earlier leading-edge-down sign pushed air upward).
+        # Sweep is added in the rotor plane after twist and points to the trailing side,
+        # so it does not change the section pitch.
+        y_rot = y_local * cos_t - z_local * sin_t
+        z_rot = y_local * sin_t + z_local * cos_t + sweep
         return cq.Vector(float(radius), float(y_mid + y_rot), float(z_rot))
 
     # Traverse upper surface from trailing edge to leading edge, then lower surface
@@ -603,8 +617,17 @@ def _prop_airfoil_wire(radius, chord, twist_deg, sweep, p, y_mid):
     return wire
 
 
+def prop_spin(x, z):
+    """Spin sense of the rotor at motor position (x, z): +1 = about +Y (leading edge toward -Z).
+
+    Quad-X layout: the two diagonal motors share a direction and the other diagonal
+    spins the opposite way, which needs mirror-image (opposite-handed) blades.
+    """
+    return 1 if x * z > 0 else -1
+
+
 def prop(p, x, z):
-    """Two-blade low-Re rotor concept: cambered airfoil, radial taper, twist and swept tips.
+    """Four-blade low-Re rotor concept: cambered airfoil, radial taper, twist and swept tips.
 
     This is an aerodynamic-style CAD concept, not a validated thrust/efficiency optimum.
     Motor KV, battery voltage, prop RPM, mass and bench-test data are not present in the repo.
@@ -612,48 +635,52 @@ def prop(p, x, z):
     import math
     radius = float(p["prop_radius"])
     scale = float(p.get("model_scale") or 1.0)
-    pitch_local = float(p.get("prop_pitch_mm", 48.26)) / scale
-    if radius <= 0 or pitch_local <= 0:
-        raise ValueError("Propeller radius and design pitch must be positive")
-    stations_data = p.get("prop_blade_stations") or [
-        [0.05, 6.5], [0.14, 7.8], [0.23, 8.6], [0.33, 8.8],
-        [0.44, 8.2], [0.56, 7.3], [0.68, 6.4], [0.80, 5.6],
-        [0.90, 4.8], [0.96, 4.4], [1.00, 4.0]
-    ]
-    if len(stations_data) < 5:
-        raise ValueError("At least five radial propeller stations are required")
+    if radius <= 0:
+        raise ValueError("Propeller radius must be positive")
+    stations_data = p.get("prop_blade_stations")
+    if not stations_data or len(stations_data) < 5 or any(len(row) != 3 for row in stations_data):
+        raise ValueError("prop_blade_stations needs >= 5 rows of [r/R, chord, pitch_deg]; "
+                         "run cad/parametric/design_prop.py")
     fractions = [float(row[0]) for row in stations_data]
     chords = [float(row[1]) for row in stations_data]
+    betas = [float(row[2]) for row in stations_data]
     if (fractions[0] <= 0 or fractions[-1] != 1.0
             or any(b <= a for a, b in zip(fractions, fractions[1:]))
-            or any(c <= 0 for c in chords)):
-        raise ValueError("Propeller stations must increase from a positive root fraction to 1.0")
+            or any(c <= 0 for c in chords) or any(not (0.0 < b < 60.0) for b in betas)
+            or any(b2 > b1 for b1, b2 in zip(betas, betas[1:]))):
+        raise ValueError("Propeller stations must increase from a positive root fraction to 1.0, "
+                         "with positive chords and a pitch angle that never increases outward")
 
     y_mid = float(p["prop_y"]) + float(p.get("prop_thickness", 1.2)) / 2.0
     sweep_max = float(p.get("prop_tip_sweep", 1.2))
     wires = []
-    for fraction, chord in zip(fractions, chords):
+    for fraction, chord, beta in zip(fractions, chords, betas):
         r = fraction * radius
-        # Constant-pitch design law: beta = atan(P / (2*pi*r); cap the root angle
-        # because the innermost sections are mostly buried in the hub.
-        beta = math.degrees(math.atan(pitch_local / (2.0 * math.pi * max(r, 1e-6))))
-        beta = min(beta, 42.0)
+        # Pitch comes from the BEMT design (cad/parametric/design_prop.py): every station
+        # works at one design lift coefficient. No blanket root-angle cap is applied.
         sweep = sweep_max * fraction**3
         wires.append(_prop_airfoil_wire(r, chord, beta, sweep, p, y_mid))
 
     blade = cq.Solid.makeLoft(wires, ruled=False)
     if not blade.isValid() or len(blade.Solids()) != 1:
         raise RuntimeError("Positive-radius propeller blade loft is invalid")
-    opposite_blade = blade.rotate((0, 0, 0), (0, 1, 0), 180.0)
+    blade_count = int(p.get("prop_blade_count", 2))
+    if not (2 <= blade_count <= 6):
+        raise ValueError("prop_blade_count must be 2..6")
+    other_blades = [blade.rotate((0, 0, 0), (0, 1, 0), 360.0 * k / blade_count)
+                    for k in range(1, blade_count)]
 
     # Preserve the existing elevated hub interface; blades are fused into the hub.
     hub = cq.Solid.makeCylinder(
         float(p["prop_hub_radius"]), float(p["prop_hub_height"]),
         cq.Vector(0.0, y_mid, 0.0), cq.Vector(0.0, 1.0, 0.0)
     )
-    rotor = (cq.Workplane("XY").newObject([hub])
-             .union(cq.Workplane("XY").newObject([blade]))
-             .union(cq.Workplane("XY").newObject([opposite_blade])))
+    rotor = cq.Workplane("XY").newObject([hub]).union(cq.Workplane("XY").newObject([blade]))
+    for other in other_blades:
+        rotor = rotor.union(cq.Workplane("XY").newObject([other]))
+    if prop_spin(x, z) < 0:
+        # Counter-rotating motors need a mirror-image rotor, not the same blade turned over.
+        rotor = rotor.mirror("XY")
     rotor = rotor.translate((x, 0.0, z))
     if not rotor.val().isValid() or len(rotor.val().Solids()) != 1:
         raise RuntimeError("Propeller blades and hub must form one valid connected solid")
@@ -700,6 +727,66 @@ def body_shell_parts(p):
         if not part.val().isValid() or len(part.val().Solids()) != 1:
             raise RuntimeError(f"{name} generated from source surfaces is invalid or not one solid")
     return lower, crown
+
+
+def _prop_pitch_sign_ok(p):
+    """True when every blade section is pitched leading-edge UP (thrust along +Y)."""
+    rows = p["prop_blade_stations"]
+    radius = float(p["prop_radius"])
+    y_mid = float(p["prop_y"]) + float(p.get("prop_thickness", 1.2)) / 2.0
+    for fraction, chord, beta in rows:
+        wire = _prop_airfoil_wire(fraction * radius, chord, beta, 0.0, p, y_mid)
+        pts = [(v.Y, v.Z) for v in wire.Vertices()]
+        leading = min(pts, key=lambda t: t[1])
+        trailing = max(pts, key=lambda t: t[1])
+        if not leading[0] > trailing[0]:
+            return False
+    return True
+
+
+def _prop_bemt_summary(p):
+    """Screening-only thrust/power at fixed RPMs and at the assumed motor's operating points."""
+    import math
+    import prop_bemt as pb
+    scale = float(p.get("model_scale") or 1.0)
+    radius = float(p["prop_radius"]) * scale / 1000.0
+    hub = float(p["prop_hub_radius"]) * scale / 1000.0
+    blades = int(p.get("prop_blade_count", 2))
+    rows = p["prop_blade_stations"]
+    stations_m = [(r[0], r[1] * scale / 1000.0) for r in rows]
+    betas = [r[2] for r in rows]
+    alpha0 = pb.thin_airfoil_alpha0(float(p["prop_airfoil_camber"]),
+                                    float(p["prop_airfoil_camber_position"]))
+    design = p.get("prop_design", {})
+    motor = dict(pb.A2212_ASSUMED, **design.get("motor", {}))
+    out = {"model": "annular blade-element/momentum, CL=2*pi*(alpha-alpha0) clipped at +-1.2, CD=0.012+0.01*CL^2, rho=1.225, Prandtl loss, hub region excluded",
+           "validated_against_thrust_stand": False,
+           "motor_constants_assumed_not_measured": motor,
+           "zero_lift_angle_deg": round(math.degrees(alpha0), 3), "points": []}
+    for rpm in (5252, 6828, 8403, 9979):
+        res = pb.analyse(radius, stations_m, betas, rpm, hub_radius=hub, blades=blades,
+                         alpha0=alpha0, prandtl=True)
+        clipped = sum(1 for _, _, cl in res["detail"] if abs(cl) >= 1.19) / len(res["detail"])
+        out["points"].append({"rpm": rpm, "thrust_N_per_rotor": round(res["thrust_N"], 4),
+                              "shaft_power_W": round(res["power_W"], 3),
+                              "span_fraction_at_cl_clip": round(clipped, 3)})
+    full = pb.motor_operating_point(radius, stations_m, betas, hub, blades, alpha0, motor)
+    mass = float(design.get("vehicle_mass_kg", 0.6))
+    weight = mass * 9.80665 / 4.0
+    out["full_throttle"] = {"rpm": round(full["rpm"]), "thrust_N_per_rotor": round(full["thrust_N"], 3),
+                            "current_A": round(full["current_a"], 2),
+                            "electrical_power_W": round(full["electrical_power_w"], 1),
+                            "thrust_to_weight": round(4.0 * full["thrust_N"] / (mass * 9.80665), 2)}
+    lo, hi = 0.2 * motor["voltage_v"], motor["voltage_v"]
+    for _ in range(25):
+        v = 0.5 * (lo + hi)
+        h = pb.motor_operating_point(radius, stations_m, betas, hub, blades, alpha0, motor,
+                                     voltage=v, n_int=40)
+        lo, hi = (lo, v) if h["thrust_N"] > weight else (v, hi)
+    out["hover"] = {"vehicle_mass_kg": mass, "thrust_N_per_rotor": round(weight, 3),
+                    "rpm": round(h["rpm"]), "current_A": round(h["current_a"], 2),
+                    "throttle_equivalent": round(v / motor["voltage_v"], 2)}
+    return out
 
 
 def _prop_collision_report(p):
@@ -1231,8 +1318,13 @@ def write_validation_report(parts, scale, out_dir, params):
         },
         "components": components,
         "propeller": {
-            "design": "two-blade cambered NACA 4410 concept with radial chord taper, geometric twist and mild tip sweep",
-            "blade_count": 2,
+            "design": "multi-blade cambered NACA 4-digit (4/40/10) concept sized for the target thrust with the existing motor; BEMT-designed twist holds every station at one design lift coefficient, root starts inside the hub, mild tip sweep, printable minimum thickness and blunt trailing edge",
+            "pitch_law": "designed per station by cad/parametric/design_prop.py (prop_bemt.design_twist); no constant-pitch law and no blanket root cap",
+            "pitch_sign_verified_leading_edge_up": _prop_pitch_sign_ok(p),
+            "spin_sense_by_prop": {f"prop_{i}": ("about +Y (leading edge toward -Z)" if prop_spin(x, z) > 0 else "about -Y, mirror-image blade")
+                                   for i, (x, z) in enumerate(stations(p), 1)},
+            "bemt_screening_estimate": _prop_bemt_summary(p),
+            "blade_count": int(p.get("prop_blade_count", 2)),
             "diameter_mm": round(2.0 * float(p["prop_radius"]) * float(scale), 3),
             "nominal_geometric_pitch_mm": round(float(p.get("prop_pitch_mm", 48.26)), 3),
             "nominal_geometric_pitch_in": round(float(p.get("prop_pitch_mm", 48.26)) / 25.4, 3),
@@ -1331,10 +1423,15 @@ def write_validation_report(parts, scale, out_dir, params):
     if len(arm_geometry) != 4 or not all(v["cross_section_constant_by_generator"] for v in arm_geometry.values()):
         raise RuntimeError("Constant arm width/height requirement is not satisfied for all four arms")
     prop_report = report["propeller"]
-    if prop_report["blade_count"] != 2 or prop_report["diameter_mm"] <= 0:
+    if prop_report["blade_count"] < 2 or prop_report["diameter_mm"] <= 0:
         raise RuntimeError("Propeller geometry metadata is invalid")
     if not prop_report["guard_clearance_positive"]:
         raise RuntimeError("Propeller radius exceeds the available guard inner radius")
+    if not prop_report["pitch_sign_verified_leading_edge_up"]:
+        raise RuntimeError("Propeller sections must be pitched leading-edge up (thrust along +Y)")
+    if sorted(set(prop_report["spin_sense_by_prop"].values())) != sorted({
+            "about +Y (leading edge toward -Z)", "about -Y, mirror-image blade"}):
+        raise RuntimeError("Quad-X needs both spin senses (mirror-image blades) among the four props")
     if len([name for name in parts if name.startswith("prop_")]) != 4:
         raise RuntimeError("Expected four independently exported propeller solids")
     if p["include_props"]:

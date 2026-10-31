@@ -6,11 +6,11 @@
     "cad_script": "cad/parametric/drone_parametric.py",
     "parameter_file": "cad/parametric/model.params.json",
     "assembly_manifest": "output/smooth2-parametric/assembly-manifest.json",
-    "geometry_revision": "3D:kilo@d591b81bd671e04abe7d4bdeb0865fd3c3bf381b",
+    "geometry_revision": "3D:kilo@38d4820fc5f7e2208e6ce502ca6b54a83989196a",
     "evidence": "Exact source revision and generated CAD exports are pinned in assets/preflight/MODEL_SOURCE_REVISION.md; geometry values are CAD-derived design dimensions, not a metrology certificate.",
     "repository": "https://github.com/samanramezani1377-hub/3D",
     "branch": "kilo",
-    "commit": "d591b81bd671e04abe7d4bdeb0865fd3c3bf381b"
+    "commit": "38d4820fc5f7e2208e6ce502ca6b54a83989196a"
   },
   "coordinate_frame": {
     "frame": "CAD_EXPORT_Z_UP",
@@ -29,26 +29,27 @@
   },
   "geometry": {
     "model_scale": 1.414028,
-    "body_height_mm_design": 13,
-    "body_half_width_mm_design": 38,
-    "body_front_z_mm_design": 66,
-    "body_rear_z_mm_design": -52,
+    "body_height_mm_design": 17.875,
+    "body_half_width_mm_design": 47.5,
+    "body_front_z_mm_design": 82.5,
+    "body_rear_z_mm_design": -65,
     "arm_count": 4,
-    "motor_x_mm_design": 58,
-    "motor_z_mm_design": 58,
+    "motor_x_mm_design": 88.5,
+    "motor_z_mm_design": 88.5,
     "propeller_count": 4,
-    "propeller_blade_count": 2,
-    "propeller_radius_mm_design": 26.45,
-    "propeller_pitch_mm_design": 53.086,
-    "guard_outer_radius_mm_design": 35.5,
+    "propeller_blade_count": 4,
+    "propeller_radius_mm_design": 56.222,
+    "propeller_diameter_mm_final": 158.998964432,
+    "propeller_pitch_mm_design": 98.004,
+    "guard_outer_radius_mm_design": 44.375,
     "camera_tilt_down_deg": 35
   },
   "rotors": [
     {
       "id": "rotor_xp_yp",
       "position_m": [
-        0.082013624,
-        0.082013624,
+        0.125141478,
+        0.125141478,
         0
       ],
       "axis_body": [
@@ -61,8 +62,8 @@
     {
       "id": "rotor_xp_yn",
       "position_m": [
-        0.082013624,
-        -0.082013624,
+        0.125141478,
+        -0.125141478,
         0
       ],
       "axis_body": [
@@ -75,8 +76,8 @@
     {
       "id": "rotor_xn_yn",
       "position_m": [
-        -0.082013624,
-        -0.082013624,
+        -0.125141478,
+        -0.125141478,
         0
       ],
       "axis_body": [
@@ -89,8 +90,8 @@
     {
       "id": "rotor_xn_yp",
       "position_m": [
-        -0.082013624,
-        0.082013624,
+        -0.125141478,
+        0.125141478,
         0
       ],
       "axis_body": [
@@ -141,9 +142,10 @@
     ]
   },
   "notes": [
-    "Rotor locations are transformed from design coordinates using the CAD model_scale and the documented 90-degree X export rotation.",
-    "The CAD source uses a 26.45 mm design propeller radius and model_scale 1.414028; the resulting scaled diameter is approximately 74.8 mm. Existing README text contains a conflicting 63.5 mm statement; do not use that conflicting statement as a trusted dimension.",
-    "Alternating spin signs are a conventional quad-X modelling assumption and must be confirmed against the actual motor wiring/propeller rotation direction.",
-    "Mass and inertia values are deliberately null here. The legacy config/drone.json values are simulator placeholders and are not copied as aircraft facts."
+    "Rotor locations are derived from the latest 3D/kilo CAD propeller and motor centers using model_scale 1.414028 and the documented 90-degree X export rotation.",
+    "The source CAD defines four-blade propellers with a final diameter of approximately 159.0 mm and nominal geometric pitch 98.004 mm.",
+    "Simulator thrust-generation code and its configured thrust coefficient are intentionally unchanged by this CAD synchronization; CAD-derived BEMT estimates are not measured thrust data.",
+    "Mass and inertia values remain unknown and are deliberately null. Geometry synchronization does not create physical mass-property calibration.",
+    "Alternating spin signs remain a conventional quad-X assumption and must be confirmed against actual motor wiring and propeller rotation direction."
   ]
 }

@@ -1,0 +1,67 @@
+name: One-time Smooth2 CAD sync from 3D/kilo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/sync-smooth2-model.trigger"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: smooth2-cad-sync-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[sync-smooth2-model]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout destination main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Checkout exact authoritative 3D/kilo revision
+        uses: actions/checkout@v4
+        with:
+          repository: samanramezani1377-hub/3D
+          ref: 38d4820fc5f7e2208e6ce502ca6b54a83989196a
+          path: source3d
+          fetch-depth: 1
+
+      - name: Verify source revision and synchronize complete CAD package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C source3d rev-parse HEAD)" = "38d4820fc5f7e2208e6ce502ca6b54a83989196a"
+          mkdir -p cad/parametric output/smooth2-parametric
+          cp -a source3d/cad/parametric/. cad/parametric/
+          cp source3d/requirements.txt cad/parametric/requirements.txt
+          cp -a source3d/output/smooth2-parametric/. output/smooth2-parametric/
+          rm -f .github/sync-smooth2-model.trigger
+          test -s cad/parametric/drone_parametric.py
+          test -s cad/parametric/prop_bemt.py
+          test -s output/smooth2-parametric/drone_parametric.step
+          test -s output/smooth2-parametric/drone_parametric.stl
+          test -s output/smooth2-parametric/prop_1.step
+          test -s output/smooth2-parametric/prop_1.stl
+
+      - name: Commit synchronized source and every generated export
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- cad/parametric output/smooth2-parametric .github/sync-smooth2-model.trigger
+          if git diff --cached --quiet; then
+            echo "CAD package already matches the pinned source revision."
+            exit 0
+          fi
+          git commit -m "Import complete Smooth2 CAD exports from 3D/kilo"
+          git push origin HEAD:main

@@ -1,10 +1,11 @@
 # Smooth2 non-propeller physical calibration plan
 
-**Scope:** complete the non-propeller physical model using existing CAD and component references. Propeller geometry, thrust curves and torque curves are explicitly out of scope and remain untouched.
+**Scope:** complete the non-propeller physical model using the latest synchronized CAD and component references. CAD propeller geometry has been synchronized from the authoritative 3D/kilo revision; this calibration plan does not modify the simulator's thrust-generation implementation, thrust coefficient, torque proxy or measured/unknown status.
 
 ## Already represented in software
 
-- CAD-derived frame convention, body geometry, rotor positions and motor mount locations.
+- CAD-derived frame convention, body geometry, rotor positions and motor mount locations from 3D/kilo@38d4820fc5f7e2208e6ce502ca6b54a83989196a.
+- Latest CAD propeller geometry: four blades, approximately 159.0 mm diameter and 98.004 mm nominal geometric pitch. Geometry is not a measured thrust curve.
 - Four-motor 6-DoF rigid-body equations, quaternion attitude integration, rotor lag, rotor reaction torque, gyroscopic coupling and body-axis drag.
 - Provisional reference motor: generic A2212/13T 1000KV. Exact manufacturer and SKU are unknown.
 - Provisional battery reference: 3S, 11.1 V nominal, 2.2 Ah. Exact pack identity and discharge rating are unknown.
@@ -74,5 +75,5 @@ available.
 - Do not launch a long PPO run solely to validate these bookkeeping changes.
 - Do not merge changes that alter the policy observation dimensions or the
   existing flight-control command contract.
-- No propeller design, geometry, thrust coefficient or torque coefficient is
-  changed by this calibration work.
+- The simulator thrust-generation implementation and its configured thrust coefficient, torque proxy, motor lag and rotor-speed limits remain unchanged by this CAD synchronization.
+- CAD/BEMT screening estimates must not be treated as measured propeller thrust or torque.

@@ -18,7 +18,7 @@
     "motor_make": "Generic/unbranded A2212-series (exact manufacturer not identified)",
     "motor_model": "A2212/13T 1000KV reference profile",
     "esc_model": null,
-    "propeller_geometry_source": "3D repository kilo branch at d591b81bd671e04abe7d4bdeb0865fd3c3bf381b; cad/parametric/model.params.json and output/smooth2-parametric/assembly-manifest.json. Custom two-blade parametric propeller design; geometry is not a measured thrust/torque curve.",
+    "propeller_geometry_source": "3D repository kilo branch at 38d4820fc5f7e2208e6ce502ca6b54a83989196a; cad/parametric/model.params.json and output/smooth2-parametric/assembly-manifest.json. Four-blade parametric propeller; geometry is not a measured thrust/torque curve.",
     "battery_model": null,
     "max_rotor_speed_rad_s": null,
     "thrust_coefficient_n_per_rad_s2": null,
@@ -66,18 +66,20 @@
       "recommended_esc_margin_a": 30
     },
     "catalog_data_note": "Sourced values from multiple A2212/13T vendors; exact user's motor identity is not verified. Conflicting values are preserved with source attribution in vehicle_models/components/a2212_1000kv_motor.json. Catalog values do not replace bench measurements.",
-    "propeller_design_revision": "d591b81bd671e04abe7d4bdeb0865fd3c3bf381b",
+    "propeller_design_revision": "38d4820fc5f7e2208e6ce502ca6b54a83989196a",
     "propeller_geometry_design": {
-      "blade_count": 2,
-      "radius_mm_design": 26.45,
-      "pitch_mm_design": 53.086,
+      "blade_count": 4,
+      "radius_mm_design": 56.222,
+      "diameter_mm_final": 158.998964432,
+      "pitch_mm_design": 98.004,
       "airfoil_parameters": {
         "max_camber_fraction": 0.04,
         "max_camber_position_fraction": 0.4,
         "thickness_ratio": 0.1
       },
       "source_parameter_file": "cad/parametric/model.params.json"
-    }
+    },
+    "simulator_thrust_model_policy": "unchanged_by_CAD_sync; existing simulator thrust coefficient, torque proxy, motor lag and rotor-speed limits are preserved; no measured thrust curve is inferred from CAD."
   },
   "synthetic_software_test_values": {
     "warning": "Only enabled by an explicit software-only flag. Never use for physical predictions or real flight.",
