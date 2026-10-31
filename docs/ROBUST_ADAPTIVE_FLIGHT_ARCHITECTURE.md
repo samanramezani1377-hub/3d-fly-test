@@ -56,7 +56,7 @@ Geometry and physics are intentionally separate records.
 
 ### Unknown or calibrated physical properties
 
-`physics_calibration.json` is the only source for aircraft-specific mass and propulsion values. Unknown values are represented as JSON `null`, not zero and not copied from legacy simulator defaults.
+`physics_calibration.json` is the only source for aircraft-specific mass and propulsion values. Its `physical_properties.coordinate_frame` declares the frame used for measured CG/inertia values; the loader converts them to `BODY_FORWARD_LEFT_UP`. Unknown values are represented as JSON `null`, not zero and not copied from legacy simulator defaults.
 
 Required measured/manufacturer-backed values include:
 
