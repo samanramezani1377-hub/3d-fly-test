@@ -448,10 +448,14 @@ def test_electrical_telemetry_estimates_current_and_battery_consumption_without_
         battery_capacity_ah=2.2,
     )
     plant = FastQuadrotor(params)
+    reference_plant = FastQuadrotor(synthetic_params())
     plant.reset(position=(0.0, 0.0, 1.0))
+    reference_plant.reset(position=(0.0, 0.0, 1.0))
     telemetry = None
     for _ in range(150):
-        _, telemetry = plant.step(np.full(4, 0.7, dtype=np.float32))
+        state_with_diagnostics, telemetry = plant.step(np.full(4, 0.7, dtype=np.float32))
+        state_without_diagnostics, _ = reference_plant.step(np.full(4, 0.7, dtype=np.float32))
+        assert np.allclose(state_with_diagnostics, state_without_diagnostics, atol=1e-12)
     assert telemetry["estimated_battery_current_a"] > 0.0
     assert len(telemetry["estimated_motor_current_a"]) == 4
     assert telemetry["estimated_electrical_power_w"] > 0.0
