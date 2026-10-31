@@ -120,6 +120,26 @@ def test_env_observation_contains_history_but_not_privileged_parameters():
         env.close()
 
 
+def test_env_starts_and_clamps_using_cad_lowest_point_clearance():
+    params = replace(synthetic_params(), airframe_lowest_point_z_m=-0.012)
+    env = AdaptiveDroneEnv(params=params, randomization_path=RANDOMIZATION, randomize=False)
+    try:
+        _, reset_info = env.reset(seed=5)
+        expected_clearance = 0.012
+        assert reset_info["ground_clearance_m"] == pytest.approx(expected_clearance)
+        assert reset_info["initial_lowest_point_height_m"] == pytest.approx(0.08)
+        # Force a known penetration, then verify the ground response restores the
+        # CG to the CAD-derived clearance rather than incorrectly setting CG z=0.
+        env.plant.position[2] = expected_clearance - 0.01
+        _, _, _, _, info = env.step(np.zeros(4, dtype=np.float32))
+        assert info["ground_contact"] is True
+        assert info["ground_clearance_m"] == pytest.approx(expected_clearance)
+        assert info["ground_penetration_before_clamp_m"] > 0.0
+        assert info["lowest_point_height_m"] == pytest.approx(0.0)
+    finally:
+        env.close()
+
+
 def test_randomized_env_seed_repeats_scenario():
     env = AdaptiveDroneEnv(params=synthetic_params(), randomization_path=RANDOMIZATION)
     try:
