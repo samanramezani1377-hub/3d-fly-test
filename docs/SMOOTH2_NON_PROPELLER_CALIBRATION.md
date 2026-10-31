@@ -1,6 +1,6 @@
 # Smooth2 non-propeller physical calibration plan
 
-**Scope:** complete the non-propeller physical model using the latest synchronized CAD and component references. CAD propeller geometry has been synchronized from the authoritative 3D/kilo revision; this calibration plan does not modify the simulator's thrust-generation implementation, thrust coefficient, torque proxy or measured/unknown status.
+**Scope:** complete the physical-model estimate using the latest synchronized CAD and component references. A provisional CAD-station BEMT thrust/torque estimate is now active in the PPO Smooth2 profile; the simulator's thrust-generation equations remain unchanged. The estimate is explicitly not a bench measurement.
 
 ## Already represented in software
 
