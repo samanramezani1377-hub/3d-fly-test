@@ -85,6 +85,8 @@ class FastQuadrotor:
         self.motor_omega = np.zeros(4, dtype=np.float64)
         self.wind = np.zeros(3, dtype=np.float64)
         self.time = 0.0
+        self.battery_consumed_ah_estimate = 0.0
+        self.battery_energy_consumed_wh_estimate = 0.0
 
     def reset(self, position=(0.0, 0.0, 0.08), wind=(0.0, 0.0, 0.0)) -> np.ndarray:
         self.position = np.asarray(position, dtype=np.float64).copy()
@@ -98,6 +100,8 @@ class FastQuadrotor:
         if not np.all(np.isfinite(self.position)) or not np.all(np.isfinite(self.wind)):
             raise ValueError("position and wind must be finite")
         self.time = 0.0
+        self.battery_consumed_ah_estimate = 0.0
+        self.battery_energy_consumed_wh_estimate = 0.0
         return self.state()
 
     def state(self) -> np.ndarray:
@@ -123,6 +127,29 @@ class FastQuadrotor:
             * self.motor_omega ** 2
             * np.asarray(p.motor_effectiveness, dtype=np.float64)
         )
+        # Electrical telemetry is a model-based estimate from the configured
+        # reaction-torque proxy. It deliberately excludes no-load, copper,
+        # ESC and wiring losses; no battery sag is applied because pack IR and
+        # ESC limits are not characterized. It must not be read as measured current.
+        estimated_shaft_torque_nm = p.torque_to_thrust_m * thrusts
+        estimated_shaft_power_w = np.abs(estimated_shaft_torque_nm * self.motor_omega)
+        if p.battery_nominal_voltage_v is not None:
+            estimated_motor_current_a = estimated_shaft_power_w / (
+                p.motor_efficiency_upper_bound * p.battery_nominal_voltage_v
+            )
+            estimated_battery_current_a = float(np.sum(estimated_motor_current_a))
+            estimated_electrical_power_w = estimated_battery_current_a * p.battery_nominal_voltage_v
+            self.battery_consumed_ah_estimate += estimated_battery_current_a * self.dt / 3600.0
+            self.battery_energy_consumed_wh_estimate += estimated_electrical_power_w * self.dt / 3600.0
+            battery_soc_estimate = (
+                float(np.clip(1.0 - self.battery_consumed_ah_estimate / p.battery_capacity_ah, 0.0, 1.0))
+                if p.battery_capacity_ah is not None else None
+            )
+        else:
+            estimated_motor_current_a = None
+            estimated_battery_current_a = None
+            estimated_electrical_power_w = None
+            battery_soc_estimate = None
         rotor_positions = np.asarray(p.rotor_positions_m, dtype=np.float64) - np.asarray(
             p.center_of_mass_m, dtype=np.float64
         )
@@ -209,6 +236,19 @@ class FastQuadrotor:
             "rotor_thrust_n": thrusts.astype(float).tolist(),
             "rotor_omega_rad_s": self.motor_omega.astype(float).tolist(),
             "total_thrust_n": float(thrusts.sum()),
+            "estimated_motor_shaft_torque_nm": estimated_shaft_torque_nm.astype(float).tolist(),
+            "estimated_motor_shaft_power_w": estimated_shaft_power_w.astype(float).tolist(),
+            "estimated_motor_current_a": estimated_motor_current_a.astype(float).tolist() if estimated_motor_current_a is not None else None,
+            "estimated_battery_current_a": estimated_battery_current_a,
+            "estimated_electrical_power_w": estimated_electrical_power_w,
+            "battery_nominal_voltage_v": p.battery_nominal_voltage_v,
+            "battery_capacity_ah": p.battery_capacity_ah,
+            "battery_consumed_ah_estimate": float(self.battery_consumed_ah_estimate),
+            "battery_energy_consumed_wh_estimate": float(self.battery_energy_consumed_wh_estimate),
+            "battery_state_of_charge_estimate": battery_soc_estimate,
+            "electrical_estimate_status": "model_based_estimate_excludes_no_load_copper_ESC_and_wiring_losses_no_voltage_sag" if p.battery_nominal_voltage_v is not None else "unavailable_battery_voltage_not_configured",
+            "battery_voltage_sag_modelled": False,
+            "ESC_current_limit_modelled": False,
             "body_force_n": total_force_body.astype(float).tolist(),
             "body_torque_nm": total_torque_body.astype(float).tolist(),
             "rotor_gyroscopic_torque_nm": rotor_gyro_torque.astype(float).tolist(),
