@@ -49,7 +49,11 @@ Current workflow configuration (keep this section aligned with the [full operati
 | Checkpoint interval | 50,000 aggregate transitions |
 | Runtime | CPU-only; 360-minute job timeout |
 
-The workflow restores the selected 1M teacher-assisted bootstrap checkpoint from Actions run [41158518207](https://github.com/samanramezani1377-hub/3d-fly-test/actions/runs/41158518207), then chains each stage's best teacher-assisted checkpoint into its teacher-free phase and each teacher-free best checkpoint into the next stage. It evaluates nose-relative 3D velocity commands, pure in-place yaw turns in both directions, and combined translation/yaw commands. The stage yaw-rate limits are 20, 35, 50, 70 and 90 degrees/second.
+The workflow restores the selected 1M teacher-assisted bootstrap checkpoint from Actions run [41158518207](https://github.com/samanramezani1377-hub/3d-fly-test/actions/runs/41158518207), then chains each stage's best teacher-assisted checkpoint into its teacher-free phase and each teacher-free best checkpoint into the next stage.
+
+Before checkpoint restoration or PPO training, the workflow now runs `training/preflight_velocity_teacher.py`: 12 teacher-only randomized closed-loop episodes (3 per profile, all four profiles) at 100% teacher contribution and zero PPO contribution. It requires successful takeoff, no crashes, complete 26-direction/30-yaw-command coverage, velocity/yaw tracking within the documented evaluator limits, and neutral braking within 3.5 seconds. Any failed episode blocks the training job. The report is uploaded even on failure and copied into the published model output on success. This is a finite seeded Stage-5 sample, not proof over every possible condition or real hardware.
+
+ It evaluates nose-relative 3D velocity commands, pure in-place yaw turns in both directions, and combined translation/yaw commands. The stage yaw-rate limits are 20, 35, 50, 70 and 90 degrees/second.
 
 The workflow randomizes mass, CG, inertia, motor effectiveness/response/RPM, thrust and torque coefficients, battery voltage factor, drag, wind and sensor noise. The four vehicle profiles are still marked `provisional_estimate`; randomization does not replace measured physical calibration. The workflow publishes its model, stage outputs and final independent per-profile evaluation under `training/models/universal-quad-four-vehicle-five-stage/`.
 
