@@ -101,6 +101,34 @@ def test_domain_randomization_is_reproducible_and_changes_mass_cg_inertia():
     assert a.inertia_kg_m2 != params.inertia_kg_m2
 
 
+
+def test_motor_randomization_is_common_mode_unless_per_rotor_mismatch_is_opted_in():
+    params = synthetic_params()
+    config = json.loads(RANDOMIZATION.read_text(encoding="utf-8"))
+    sampled, details = sample_scenario(params, np.random.default_rng(31), config)
+    assert np.allclose(sampled.motor_effectiveness, sampled.motor_effectiveness[0])
+    assert details["motor_effectiveness_mode"] == "matched_common_mode"
+
+    config["motor"]["per_rotor_effectiveness"] = True
+    mismatched, mismatch_details = sample_scenario(params, np.random.default_rng(31), config)
+    assert len(set(np.round(mismatched.motor_effectiveness, 10))) > 1
+    assert mismatch_details["motor_effectiveness_mode"] == "independent_per_rotor"
+
+
+def test_identical_rotors_at_identical_rpm_and_inflow_generate_equal_thrust():
+    params = synthetic_params()
+    plant = FastQuadrotor(params, dt=0.01)
+    plant.reset(position=(0.0, 0.0, 1.0))
+    plant.motor_omega[:] = 700.0
+    plant.velocity[:] = plant.wind
+    plant.angular_velocity[:] = 0.0
+    _, telemetry = plant.step(np.full(4, 700.0 / params.max_rotor_speed_rad_s))
+    assert telemetry["rotor_thrust_n"] == pytest.approx(
+        [telemetry["rotor_thrust_n"][0]] * 4, rel=1e-10, abs=1e-10
+    )
+    assert telemetry["body_torque_nm"][:2] == pytest.approx([0.0, 0.0], abs=1e-10)
+
+
 def test_env_observation_contains_history_but_not_privileged_parameters():
     env = AdaptiveDroneEnv(
         params=synthetic_params(), randomization_path=RANDOMIZATION,
