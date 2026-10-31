@@ -64,7 +64,7 @@ def test_smooth2_runtime_plant_reports_bemt_and_finite_rigid_body_outputs():
     plant.reset(position=(0.0, 0.0, 1.0))
     state, info = plant.step(np.full(4, 0.65, dtype=np.float64))
     assert info["thrust_model_status"] == (
-        "runtime_CAD_station_BEMT_with_axial_inflow_and_randomized_effectiveness"
+        "runtime_CAD_station_BEMT_with_axial_inflow_and_per_motor_effectiveness"
     )
     assert len(info["rotor_shaft_torque_nm"]) == 4
     assert len(info["rotor_thrust_n"]) == 4
