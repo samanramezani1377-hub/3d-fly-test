@@ -124,7 +124,7 @@ async function loadTrainingEngine(){
   if(!pyodide)throw Error("راه‌اندازی Pyodide ناموفق بود. "+bootErrors.join(" || ")+" | diagnostics: "+bootTrace.join(" || "));
   phase="بارگذاری micropip";await pyodide.loadPackage(["micropip"]);
   phase="نصب Gymnasium";await pyodide.runPythonAsync("import micropip\nawait micropip.install('gymnasium==1.2.3')");
-  const paths=["__init__.py","dynamics.py","parameters.py","system_identification.py","mass_properties.py","curriculum.py","env.py","vehicle_family.py","diagnostics.py"];
+  const paths=["__init__.py","dynamics.py","parameters.py","propeller.py","system_identification.py","mass_properties.py","curriculum.py","env.py","vehicle_family.py","diagnostics.py"];
   pyodide.FS.mkdirTree("/repo/training/fast_physics");pyodide.FS.mkdirTree("/repo/vehicle_models/family");pyodide.FS.mkdirTree("/repo");
   phase="دریافت فایل‌های فیزیک";
   for(const name of paths){const url="./training/fast_physics/"+name;const res=await fetch(url);if(!res.ok)throw Error("بارگذاری "+url+" ناموفق: HTTP "+res.status);pyodide.FS.writeFile("/repo/training/fast_physics/"+name,await res.text())}
