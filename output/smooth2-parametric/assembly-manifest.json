@@ -3,9 +3,9 @@
   "parameter_source": "cad/parametric/model.params.json",
   "parameter_snapshot": "drone_parametric.params.json",
   "input_sha256": {
-    "builder": "4e83c871b93f9e997411cf1c65242565e3ce59c95dc8551128d8a45a3bdb06af",
-    "parameters": "01db4601267d9a8bcf2284a243fbd96b47e874d101ccf47814b0eb57c9683ce7",
-    "body_sections": "0ab619d6aca819ae7029b37d5ed1215abd9c503e990bca544f2bc8f5a83e3ad9"
+    "builder": "bb96d3a4a0ab21dba89af5d777bd15fe81f66299b75830d5d0cede340e02b1ef",
+    "parameters": "3c5ab45eae1ec478c994f240018dc05dadc0ee05fa9aa16e6071c5818eb4fa2e",
+    "body_sections": "11e31f8b2ca19ee1b251d103651d7ad40596e37fbbd99b0415ca240e73e3be56"
   },
   "export_semantics": {
     "drone_parametric.step": "assembled pose; named 26-component STEP assembly",
@@ -201,27 +201,27 @@
     "integral_tab": false,
     "bolt_positions_radial_tangent_model_units": [
       [
-        28.5,
-        -4.5
+        40.908653,
+        9.010672
       ],
       [
-        28.5,
-        4.5
+        43.202959,
+        -5.734064
       ]
     ],
     "tick_root_geometry": {
-      "long_branch_length_model_units": 22,
-      "short_branch_length_model_units": 14,
+      "long_branch_length_model_units": 27.5,
+      "short_branch_length_model_units": 17.5,
       "branch_width_ratio": 0.6,
       "long_branch_axis_deg": 55,
       "short_branch_axis_deg": 55,
       "included_angle_deg": 110,
-      "junction_radius_model_units": 36.61,
-      "junction_radius_final_mm": 51.768
+      "junction_radius_model_units": 47.217994,
+      "junction_radius_final_mm": 66.768
     },
     "tab_removed": true,
-    "arm_start_radius_model_units": 36.61,
-    "main_beam_height_mm": 16.968,
+    "arm_start_radius_model_units": 47.217994,
+    "main_beam_height_mm": 21.21,
     "approx_m3_clearance_hole_diameter_mm": 3.342,
     "hardware_geometry_is_simplified": true,
     "physical_fit_tested": false,
