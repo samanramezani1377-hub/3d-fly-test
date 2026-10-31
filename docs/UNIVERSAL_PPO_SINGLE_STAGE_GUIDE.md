@@ -1,223 +1,209 @@
-# Universal PPO — single-stage takeoff and hover training
+# Universal PPO — five-stage 3D velocity and yaw-rate training
 
-## 1. Current operating mode
+> **This guide describes the current executable workflow, not the older single-stage hover experiment.** The legacy filename is retained so existing links do not break. The source of truth is `.github/workflows/universal-ppo-five-stage.yml` and the trainer implementation it invokes.
 
-The existing workflow, `.github/workflows/universal-ppo-five-stage.yml`, is temporarily configured for a **single active training stage**. The immediate objective is deliberately narrow:
+## 1. Purpose and current operating mode
 
-1. learn to leave the ground reliably;
-2. reach the target altitude without crashing;
-3. maintain a stable hover for at least five continuous seconds under the current simulator's stability definition.
+The manual GitHub Actions workflow trains one hardware-conditioned PPO policy across four quadrotor profiles. The policy is trained for:
 
-Only curriculum stage 1 is executed. Stages 2, 3, 4 and 5 remain in the source code and are **disabled, not deleted**. They are not trained, resumed, evaluated or used for checkpoint handoff while `--active-stages 1` is selected. The final held-out release evaluation is also deferred until all five stages are explicitly re-enabled.
+- 3D translational velocity tracking, with horizontal commands expressed relative to the current nose heading;
+- independent yaw-rate control, including in-place left/right turns with zero translational velocity;
+- combined translation and yaw rotation;
+- progressive command and physical-domain randomization across five chained curriculum stages.
 
-This is a temporary training focus, not a change to the long-term five-stage design.
+This is **five active stages**, not the former single-stage takeoff/hover-only workflow. Each stage has two phases: teacher-assisted followed by teacher-free. The next stage starts from the best evaluated teacher-free checkpoint of the preceding stage.
+
+The workflow is simulation-only. The four profiles are explicitly provisional estimates. Successful training or evaluation does not establish real-aircraft performance or flight readiness.
 
 ## 2. Exact GitHub Actions configuration
 
-A manual `workflow_dispatch` on the existing workflow runs the following command:
+Workflow: [`.github/workflows/universal-ppo-five-stage.yml`](../.github/workflows/universal-ppo-five-stage.yml)
 
-```bash
-python training/run_universal_curriculum.py \
-  --active-stages 1 \
-  --timesteps-per-stage 2000000 \
-  --n-envs 32 \
-  --run-prefix universal-quad-v5-foundation \
-  --checkpoint-eval-episodes 2 \
-  --eval-frequency 100000 \
-  --checkpoint-frequency 20000 \
-  --evaluation-episodes 20
-```
+Launch it manually from **Actions → Universal quadrotor PPO - Five-stage 3D velocity and yaw-rate curriculum → Run workflow**, selecting `main`.
 
-| Setting | Current value | Meaning |
+| Setting | Current value |
+|---|---:|
+| Trigger | Manual `workflow_dispatch` only |
+| Training stages | 5, all active |
+| Phases per stage | 2 (teacher-assisted, then teacher-free) |
+| Timesteps per phase | 400,000 aggregate transitions |
+| Timesteps per stage | 800,000 |
+| Total new training budget | 4,000,000 aggregate transitions |
+| Parallel environments | 100 |
+| PPO rollout length | 500 per environment |
+| Aggregate transitions per rollout | 50,000 |
+| PPO minibatch size | 250 |
+| Device | CPU-only |
+| Teacher blend in phase A | 0.80 |
+| Teacher blend in phase B | 0.00 (teacher disabled) |
+| Periodic evaluation | Every 200,000 aggregate transitions, at rollout boundaries |
+| Episodes per profile per periodic evaluation | 10 |
+| Latest checkpoint interval | 50,000 aggregate transitions, at rollout boundaries |
+| Maximum job duration | 360 minutes |
+| Run output directory | `training/runs/` |
+| Published model directory | `training/models/universal-quad-four-vehicle-five-stage/` |
+
+A timestep is an aggregate environment transition. With 100 parallel environments, one vectorized step contributes 100 transitions. A rollout contains 500 vectorized steps, or 50,000 aggregate transitions. Therefore each 400,000-transition phase consists of eight complete PPO rollouts.
+
+The workflow installs CPU-only PyTorch and constrains common numerical libraries to one thread per process. It does not request a GPU.
+
+## 3. Initial checkpoint and stage chaining
+
+The workflow downloads the selected teacher-assisted 1,000,000-step checkpoint from Actions run [41158518207](https://github.com/samanramezani1377-hub/3d-fly-test/actions/runs/41158518207), artifact:
+
+`universal-ppo-stage2-teacher-to-teacher-free-backup`
+
+Before training, it verifies the checkpoint files and selection metadata, checks that the selected timestep count is exactly 1,000,000, and confirms the expected four vehicle IDs and their `provisional_estimate` calibration status.
+
+The new velocity/yaw policy interface adds four command inputs to the older hover checkpoint. The loader preserves compatible policy weights, initializes the new command-input weights to zero, remaps the legacy roll/pitch action outputs for the required body-frame convention, and initializes a fresh optimizer. This is a warm start, not a same-architecture optimizer-state resume.
+
+For every stage:
+
+1. Phase A loads the preceding checkpoint and trains 400,000 transitions with teacher weight 0.80.
+2. The best evaluated phase-A checkpoint is required; the terminal snapshot is not substituted.
+3. Phase B loads that phase-A best checkpoint and trains 400,000 transitions with the teacher disabled and weight 0.00.
+4. The best evaluated phase-B checkpoint becomes the starting checkpoint for the next stage.
+
+The five stage pairs are therefore sequential and form one checkpoint lineage. If a phase fails to produce its required evaluated best checkpoint, the workflow stops rather than silently continuing from an unevaluated model.
+
+## 4. What the policy is commanded to do
+
+The action interface combines nose-relative 3D velocity commands and a separate yaw-rate command.
+
+- Body-horizontal axes are nose-forward and nose-left.
+- Vertical velocity is world-up.
+- Positive yaw rate turns the nose left (counter-clockwise when viewed from above); negative yaw rate turns it right.
+- The velocity limits are 1.5 m/s forward, 1.5 m/s lateral, and 0.75 m/s vertical.
+- Yaw-rate command limits increase by stage: 20, 35, 50, 70, then 90 degrees/second.
+
+The evaluation sequence includes 26 translational direction combinations, paired with yaw commands, plus four pure-yaw commands (both directions at full and half stage rate). Pure-yaw commands have zero translational velocity, so the evaluator explicitly exercises in-place rotation. Commands are held for 35 simulation steps each, followed by a neutral braking period.
+
+| Stage | Maximum yaw-rate command | Curriculum focus |
 |---|---:|---|
-| Active stages | 1 | Only stage 1 runs |
-| PPO transitions | 2,000,000 | Aggregate environment transitions for the active stage |
-| Parallel environments | 32 | 32 simulator instances collect data for one shared PPO policy |
-| PPO rollout length | 500 per environment | Existing PPO configuration |
-| Aggregate transitions per rollout | 16,000 | 32 × 500 |
-| PPO minibatch size | 250 | Existing PPO configuration |
-| Checkpoint evaluation interval | 100,000 requested | Checked at rollout boundaries |
-| Episodes per profile per checkpoint evaluation | 2 | Balanced profile evaluation |
-| Latest-checkpoint interval | 20,000 requested | Saved at a rollout boundary |
-| Teacher contribution | 0.80 in stage 1 | Privileged simulator reference contributes to action blending in this stage |
-| Final held-out evaluation | Deferred | Not run in single-stage mode |
+| 1 | 20°/s | Low-speed single-axis motion and yaw-only turns |
+| 2 | 35°/s | Medium-speed single-axis motion with yaw |
+| 3 | 50°/s | Two-axis translation/yaw combinations |
+| 4 | 70°/s | Two- and three-axis translation/yaw combinations |
+| 5 | 90°/s | Continuous randomized 3D velocity and yaw-rate commands |
 
-The 2,000,000-step budget is exactly 125 complete rollouts of 16,000 transitions. Therefore, it is aligned to the PPO rollout boundary and should not require a partial final rollout.
+The curriculum is a progressive training distribution; it is not a guarantee that the policy will meet every command-tracking threshold.
 
-**Meaning of “step”:** the configured timestep budget is the aggregate number of transitions across all 32 environments, not two million transitions per environment. A complete vectorized step advances all 32 environments and contributes 32 aggregate transitions.
+## 5. Vehicle family and domain randomization
 
-## 3. What stage 1 is trying to learn
+The policy is shared across exactly these four profiles in `vehicle_models/family/vehicle_profiles.json`:
 
-Stage 1 uses the current takeoff/hover task and the stage-1 initial-condition/randomization configuration. It does not attempt to solve the later curriculum's progressively harder conditions.
+- `smooth2-a2212-custom-prop`
+- `generic-5inch-quad`
+- `generic-7inch-long-range`
+- `generic-3inch-cinewhoop`
 
-The training objective is assessed through the existing balanced per-profile evaluator. The most important signals are:
+Each profile is marked `provisional_estimate`. The Smooth2 profile combines CAD-derived rotor geometry with provisional physical and propulsion coefficients. The other profiles are generic class estimates, not verified specifications for particular commercial aircraft.
 
-- takeoff success rate;
-- five-second sustained-hover success rate;
-- crash rate and crash reasons;
-- longest continuous stable-hover duration;
-- altitude and horizontal-position error;
-- motor saturation and zero-command fractions;
-- episode return.
+The active randomization configuration is `vehicle_models/family/domain_randomization.json`. It varies, within stage-dependent bounds:
 
-A sustained-hover success is not merely reaching the target altitude or surviving until timeout. The evaluator requires takeoff, no crash, and a continuous five-second interval satisfying the environment's current bounds:
+- mass, centre of mass and inertia;
+- motor effectiveness, motor response time, maximum rotor speed and thrust/torque coefficients;
+- battery voltage factor;
+- aerodynamic drag;
+- world-frame wind;
+- sensor/observation noise for position, velocity, attitude and angular rate.
 
-- altitude error at most 0.15 m;
-- horizontal position error at most 0.20 m;
-- translational speed at most 0.35 m/s;
-- absolute roll and pitch at most 0.25 rad;
-- angular-rate norm at most 0.5 rad/s.
+The Stage 5 outer bounds include mass scale 0.8–1.06, inertia scale 0.7–1.4, drag scale 0.7–1.4 and wind components from -2 to +2 m/s. These are simulator randomization ranges, not measured uncertainty bounds or safe operating limits.
 
-These thresholds are simulator evaluation criteria. They are not real-aircraft acceptance limits.
+**Important distinction:** wind and sensor noise are already represented in the current randomization configuration. A more detailed physical wind/aerodynamic model, realistic sensor dynamics and estimator stack, and real measured calibration are still future fidelity improvements; they are not prerequisites to running this software-training experiment.
 
-## 4. Teacher guidance in stage 1
+## 6. Evaluation and checkpoint selection
 
-The stage-1 policy uses the body-wrench action wrapper. Its PPO action represents collective thrust and body-axis roll, pitch and yaw torque requests; the wrapper allocates the requested wrench to motor commands.
+Periodic evaluations run without the teacher. Each evaluation checks all four profiles for 10 episodes each, using the current stage's velocity/yaw command sequence. The evaluation records include takeoff/crash outcomes, velocity and yaw-rate tracking errors, direction/command coverage, neutral braking, motor saturation and estimated battery telemetry.
 
-In stage 1, the privileged hover-reference controller contributes with weight 0.80. This means the early policy is teacher-guided rather than fully autonomous. The reference controller can use the simulator's true plant state and episode parameters inside the wrapper. Those privileged values are not appended to the PPO observation.
+The balanced best-checkpoint selection prioritizes the weakest vehicle profile. The current lexicographic order is:
 
-Stages 2–5 retain their existing teacher schedule in code (0.60, 0.40, 0.20 and 0.00 respectively), but they are dormant in the current workflow. The current stage-1 run therefore does **not** demonstrate teacher-free policy performance. That must be evaluated after the teacher is reduced or removed in a later training phase.
+1. maximize minimum per-profile velocity-mission success;
+2. minimize worst per-profile crash rate;
+3. maximize minimum per-profile takeoff success;
+4. minimize minimum-profile velocity-tracking error;
+5. minimize yaw-rate tracking error;
+6. minimize motor saturation;
+7. maximize mean episode return as the final tie-breaker.
 
-## 5. Parallel environments and throughput
+The final independent evaluation runs after stage 5, with the teacher disabled, a separate deterministic seed range beginning at 987654, and 10 episodes per profile (40 episodes total). The workflow verifies that all four profiles are present and writes `final-evaluation-summary.json`.
 
-The 32 environments belong to one shared PPO learner; they do not train 32 separate policies. Each PPO rollout collects 500 transitions from each environment, giving 16,000 aggregate transitions per rollout.
+Evaluation results are simulator measurements. Inspect per-episode reports and all profile-level metrics; a successful workflow run alone is not evidence that the learned policy has met the mission objective.
 
-The callback measures elapsed wall-clock time with a monotonic high-resolution timer and prints one machine-searchable record at every rollout boundary:
+## 7. Checkpoints, logs and published outputs
 
-```text
-[PPO_SPEED] timesteps=16000 rollout_steps=16000 rollout_seconds=... rollout_steps_per_sec=... average_steps_per_sec=...
-```
+During a phase, its run directory is under `training/runs/<run-name>/` and contains, as applicable:
 
-Fields:
+- `latest_model.zip` and `training_state.json` for the latest resumable snapshot;
+- `final_model.zip` for the terminal phase snapshot;
+- `best/best_model.zip` and `best/selection.json` for the best evaluated checkpoint;
+- profile evaluation JSON reports, sampling weights, metadata and TensorBoard/log output.
 
-- `timesteps`: cumulative aggregate transitions reported by Stable-Baselines3;
-- `rollout_steps`: aggregate transitions collected since the previous speed record;
-- `rollout_seconds`: wall-clock seconds for that interval, including environment collection and PPO work since the preceding rollout-end callback;
-- `rollout_steps_per_sec`: interval aggregate transitions divided by interval seconds;
-- `average_steps_per_sec`: aggregate transitions since the start of this `learn()` call divided by elapsed wall-clock seconds.
+The workflow publishes the chained stage directories, initial checkpoint and checksum, final selected model, independent evaluation summary, and the randomization configuration under:
 
-The speed is **aggregate environment transitions per second across all workers**, not steps/second per individual environment. The cumulative average restarts when an interrupted job resumes because the timer measures the current process lifetime; the checkpoint timestep counter itself is retained.
+`training/models/universal-quad-four-vehicle-five-stage/`
 
-The records are written to the GitHub Actions console and streamed to `single-stage-training.log` using `tee`. The workflow prints the log tail at the end and uploads the full log as part of the workflow artifact. This allows later comparison of throughput across runs. Compare runs using the same hardware class, Python/PyTorch dependencies, environment count and evaluation frequency; evaluation work can create visible dips in the interval speed.
+The workflow commits the published outputs to the branch on which it was dispatched, if there are changes. The final selected model is also retained with the run output. Do not confuse a phase's terminal `final_model.zip` with its best evaluated `best/best_model.zip`; stage handoff uses the latter.
 
-## 6. Checkpointing, resume and artifact locations
-
-The active run prefix is `universal-quad-v5-foundation`. It intentionally isolates this foundation run from older `universal-quad-v5` runs and earlier v4 checkpoints.
-
-During execution, working artifacts are placed under:
+The trainer emits machine-searchable throughput records:
 
 ```text
-training/runs/
-  universal-quad-v5-foundation-stage1/
-    latest_model.zip
-    training_state.json
-    final_model.zip
-    best/
-      best_model.zip
-      selection.json
-    profile-evaluations/
-    profile-sampling-weights.json
-    metadata.json
-  universal-quad-v5-foundation-curriculum-manifest.json
+[PPO_SPEED] timesteps=... rollout_steps=... rollout_seconds=... rollout_steps_per_sec=... average_steps_per_sec=...
 ```
 
-The workflow restores previously committed foundation artifacts from:
+Rates are aggregate transitions per second across all 100 environments, not per-environment speed. Evaluation work can cause visible throughput dips.
 
-```text
-training/models/universal-quad-v5-foundation/
-```
+## 8. How to launch and monitor
 
-At rollout boundaries, the trainer saves a resumable latest checkpoint and a state file. The callback's checkpoint threshold is 20,000 aggregate transitions, but saves occur only at complete rollout boundaries. With 16,000 transitions per rollout, the first eligible boundary is 32,000 transitions. The evaluation threshold is 100,000 and is likewise checked at rollout boundaries, so the first eligible boundary is 112,000 transitions. These are threshold-based intervals, not exact wall-clock schedules.
+1. Open the [Actions workflow](https://github.com/samanramezani1377-hub/3d-fly-test/actions/workflows/universal-ppo-five-stage.yml).
+2. Select the `main` branch.
+3. Select **Run workflow** once.
+4. Monitor the single job and confirm it advances through all ten phase runs (five teacher phases and five teacher-free phases).
+5. Confirm the final independent evaluation and publish step complete.
+6. Inspect the published model directory and the run logs before interpreting the result.
 
-If the workflow is interrupted, rerunning the same manual workflow restores the foundation directory and the runner resumes the incomplete stage from its latest checkpoint, provided the manifest, stage state and configuration agree. Do not change the stage budget, environment count, vehicle-family file, seed or other manifest settings when resuming an existing run. The runner intentionally refuses a mismatched manifest rather than mixing incompatible runs.
+The workflow has a concurrency group with `cancel-in-progress: false`; do not manually start duplicate runs. The workflow is manually dispatched and is not automatically started by ordinary commits or pull requests.
 
-At completion, `final_model.zip` is the terminal training snapshot. `best/best_model.zip` is the best checkpoint selected by the periodic balanced profile evaluation. They are distinct artifacts and must not be assumed to be identical.
+## 9. Current prerequisites versus future fidelity work
 
-The workflow copies the stage artifacts back into `training/models/universal-quad-v5-foundation/` and commits them to the current branch when the job has produced changes. It also uploads a 90-day Actions artifact backup. TensorBoard directories and Monitor CSV files are excluded from the repository checkpoint copy to avoid unnecessary repository growth; the workflow artifact retains the run directory.
+### Already implemented for this simulation-training run
 
-## 7. Checkpoint selection
+- Four-profile shared-policy training and profile-conditioned observations.
+- Nose-relative 3D velocity commands and independent positive/negative yaw-rate commands.
+- Explicit pure-yaw / in-place-turn evaluation and combined translation-plus-yaw evaluation.
+- Five-stage curriculum with increasing yaw command limits.
+- Teacher-assisted then teacher-free training in every stage.
+- Best-checkpoint selection and sequential checkpoint handoff.
+- Randomization of mass, CG, inertia, actuator/propulsion parameters, battery voltage factor, drag, wind and sensor noise.
+- Per-profile periodic evaluation and a separate final evaluation.
 
-At each checkpoint evaluation, the policy is evaluated deterministically against every configured vehicle profile. Two episodes are run per profile. The selection score is compared lexicographically in this order:
+### Not required to start this training, but required for stronger physical claims
 
-1. maximize the minimum per-profile sustained-hover success rate;
-2. minimize the worst per-profile crash rate;
-3. maximize the minimum per-profile takeoff success rate;
-4. maximize mean stable-hover duration;
-5. minimize mean motor saturation fraction;
-6. maximize mean episode return as the final tie-breaker.
+- Measured complete takeoff mass, centre of gravity and full inertia tensor for each real aircraft.
+- Measured motor/propeller thrust and reaction-torque curves across RPM and voltage, plus motor response data.
+- Actual ESC current limits, battery internal resistance, voltage sag, thermal behavior and electrical dynamics.
+- More realistic aerodynamic/propeller-flow effects, detailed wind disturbances, and a physical sensor/estimator model with latency, bias, drift and correlated noise.
+- Verified rotor spin directions, motor numbering, actuator allocation and hardware failsafes.
+- Independent hardware-in-the-loop, bench and controlled flight validation.
 
-This ranking intentionally protects the weakest profile instead of allowing a strong result on one profile to hide a failure on another. With only two episodes per profile, these rates are noisy early indicators, not statistically conclusive estimates. Inspect the episode-level reports and later run a larger evaluation before drawing conclusions.
+The current randomization and estimated battery/current telemetry do not constitute a validated electrical model. In particular, current profiles contain null values for several real electrical properties and explicitly describe their electrical model as provisional.
 
-The adaptive profile sampler updates profile weights from observed weaknesses. This changes how often profiles are sampled in subsequent training episodes; it does not change the vehicle parameters or create separate policies.
+## 10. Simulation-only safety boundary
 
-## 8. How to launch the training
+All four vehicle profiles are provisional estimates. The fast-physics plant is a simplified 6-DoF research model, not a validated digital twin. The teacher is privileged simulator-side guidance; it is not available as a real-world safety mechanism. The PPO policy and its checkpoints are not certified or approved flight controllers.
 
-1. Open the repository's **Actions** tab.
-2. Select **Universal PPO - Five-stage curriculum**.
-3. Select the `main` branch.
-4. Choose **Run workflow**.
+Do not connect this policy directly to a real aircraft or use the training score as flight clearance. Real hardware use would require aircraft-specific measured parameters, verified control/coordinate conventions, electrical and thermal limits, failsafes, independent bench testing and a separately designed, supervised flight-validation process.
 
-Every push/commit and pull request runs `.github/workflows/validate-physics-cad.yml`, covering reward/checkpoint behavior, physics, vehicle-family behavior, hover control and CAD asset integrity. PPO training starts only through manual dispatch of `.github/workflows/universal-ppo-five-stage.yml`. Flight Lab publication is a separate manual action: `.github/workflows/deploy-flight-lab.yml`. Neither training nor deployment is triggered by commits.
+## 11. Source of truth
 
-Do not start duplicate manual runs concurrently. The workflow concurrency group prevents overlapping runs on the same ref from proceeding independently.
+When documentation and executable settings disagree, use these files as the authority:
 
-## 9. How to inspect the result
+- `.github/workflows/universal-ppo-five-stage.yml` — workflow trigger, CPU setup, stage budgets, checkpoint bootstrap, chaining and publication;
+- `training/train_universal_ppo.py` — PPO hyperparameters, velocity/yaw command generation, teacher-free evaluation and checkpoint selection;
+- `training/fast_physics/ppo_action.py` — command/action mapping and teacher blending;
+- `training/fast_physics/velocity_reference.py` — privileged velocity/yaw reference controller;
+- `training/fast_physics/vehicle_family.py` — profile loading, sampling and hardware-conditioned observations;
+- `vehicle_models/family/vehicle_profiles.json` — four profile definitions and calibration provenance;
+- `vehicle_models/family/domain_randomization.json` — stage-specific randomization ranges.
 
-After the run, inspect the following in order:
-
-1. `single-stage-training.log`: search for `[PPO_SPEED]`, warnings, exceptions and the final timestep count.
-2. `training_state.json`: confirm `completed: true` and `num_timesteps: 2000000`.
-3. `best/selection.json`: see the selected checkpoint's score and evaluation report.
-4. `profile-evaluations/profile-evaluation-*.json`: compare all profiles and inspect individual episode outcomes.
-5. `metadata.json`: verify the configuration, profile provenance, teacher schedule and simulation-only warning.
-6. `universal-quad-v5-foundation-curriculum-manifest.json`: confirm that only stage 1 is listed as active and stages 2–5 are recorded as deferred.
-
-A completed job only proves that the configured simulation training budget ran and artifacts were saved. It does not prove that the policy has learned reliable takeoff or hover. The evaluation metrics must show that. If the weakest profile remains unsuccessful, investigate its episode-level crash reasons, takeoff behavior, motor saturation, reward terms, initial conditions and reference-controller performance before increasing compute or activating later stages.
-
-## 10. Re-enabling the later curriculum stages
-
-Stages 2–5 are retained in the runner. To reactivate the full chain later, change the existing workflow argument from:
-
-```bash
---active-stages 1
-```
-
-to:
-
-```bash
---active-stages 5
-```
-
-Do this only after reviewing stage-1 takeoff and hover results and deciding that the foundation checkpoint is suitable for curriculum continuation. Keep the same isolated run prefix if the intent is to continue the same curriculum lineage. The runner then proceeds through stages 1–5 and enables the final held-out evaluation after stage 5. The five-stage final held-out gate is not part of the current single-stage run.
-
-Do not point the later stages at a checkpoint from a different action/observation version or incompatible PPO rollout configuration. The v5 foundation prefix is intentionally separate from older checkpoint families.
-
-## 11. Existing workflow and test policy
-
-No additional workflow was created. The existing workflow still has two event paths:
-
-- pull request: runs the pre-existing physics, family and hover regression tests;
-- manual dispatch: runs the one-stage PPO training.
-
-No test suite was added for this documentation change. Do not use a PR validation run as a substitute for the manual training run, and do not repeatedly trigger training merely to inspect code changes.
-
-## 12. Simulation-only and safety boundary
-
-The example vehicle profiles and many physical parameters are provisional estimates. The simplified fast-physics plant is not a validated digital twin of the final aircraft. It does not establish accurate motor/ESC electrical behavior, battery dynamics, custom-propeller aerodynamics, sensor/estimator behavior, controller timing or sim-to-real transfer.
-
-The privileged teacher is a simulator-side training aid. Neither the teacher nor the PPO checkpoint is an approved flight controller. Even a perfect simulated takeoff/hover score does not authorize a physical flight. Aircraft-specific mass, CG, inertia, rotor geometry and spin directions, motor/ESC/propeller/battery performance, current/thermal limits, failsafes and independent bench/flight validation are prerequisites for any separate real-world safety assessment.
-
-**Never connect this policy directly to a real aircraft based only on these training results.**
-
-## 13. Source of truth
-
-The current runtime settings are defined by:
-
-- `.github/workflows/universal-ppo-five-stage.yml` — GitHub Actions entry point and run arguments;
-- `training/run_universal_curriculum.py` — active-stage selection, budgets, resume and deferred final evaluation;
-- `training/train_universal_ppo.py` — PPO configuration, evaluation/checkpoint callback and throughput logging;
-- `training/fast_physics/ppo_action.py` — policy body-wrench action mapping and stage teacher blending;
-- `training/fast_physics/vehicle_family.py` — vehicle-profile selection and adaptive sampling;
-- `training/evaluate_universal_ppo.py` — standalone per-profile evaluator.
-
-If this document and executable settings disagree, the workflow and source code are authoritative; update this guide when those settings change.
+This guide must be updated whenever those executable settings change.
