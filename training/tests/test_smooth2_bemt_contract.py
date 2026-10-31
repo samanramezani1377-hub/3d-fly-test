@@ -94,6 +94,39 @@ def test_smooth2_velocity_teacher_collective_limit_matches_four_rotor_bemt_autho
     assert teacher.max_collective_thrust_n < 4.0 * expected_total
 
 
+
+def test_smooth2_velocity_teacher_roll_and_pitch_signs_match_world_acceleration():
+    params = profile_to_parameters(smooth2_profile())
+    teacher = VelocityYawReferenceController(params)
+    state = np.zeros(12, dtype=np.float64)
+    target = np.zeros(3, dtype=np.float64)
+
+    left_wrench = teacher.desired_wrench(
+        state, target_position=target,
+        desired_velocity_body=np.array([0.0, 1.0, 0.0]),
+        desired_yaw_rate_rad_s=0.0,
+    )
+    right_wrench = teacher.desired_wrench(
+        state, target_position=target,
+        desired_velocity_body=np.array([0.0, -1.0, 0.0]),
+        desired_yaw_rate_rad_s=0.0,
+    )
+    forward_wrench = teacher.desired_wrench(
+        state, target_position=target,
+        desired_velocity_body=np.array([1.0, 0.0, 0.0]),
+        desired_yaw_rate_rad_s=0.0,
+    )
+    backward_wrench = teacher.desired_wrench(
+        state, target_position=target,
+        desired_velocity_body=np.array([-1.0, 0.0, 0.0]),
+        desired_yaw_rate_rad_s=0.0,
+    )
+
+    assert left_wrench[1] > 0.0 and right_wrench[1] < 0.0
+    assert forward_wrench[2] > 0.0 and backward_wrench[2] < 0.0
+
+
+
 def test_smooth2_wrench_allocator_returns_bounded_finite_motor_commands():
     params = profile_to_parameters(smooth2_profile())
     requests = (
