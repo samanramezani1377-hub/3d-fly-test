@@ -167,6 +167,8 @@ jobs:
             "checkpoint_frequency": 20000,
             "parallel_environments": 20,
             "geometry_and_rotor_positions": "fixed Smooth2 CAD geometry",
+            "minimum_worst_case_thrust_to_weight_ratio": 1.05,
+            "thrust_margin_calculation": "includes mass, battery voltage squared, motor effectiveness, maximum rotor speed squared and thrust coefficient",
             "randomized_parameters": ["mass", "center_of_mass", "inertia_tensor", "motor_effectiveness", "motor_response_time", "maximum_rotor_speed", "thrust_coefficient", "torque_to_thrust_ratio", "battery_voltage_factor", "aerodynamic_drag", "wind", "sensor_noise"],
             "episode_randomization_ground_truth_hidden": true,
             "checkpoint_migration": "copy compatible hover policy weights; zero-initialize four new command input columns (forward, left, up, yaw rate); initialize a fresh optimizer",
