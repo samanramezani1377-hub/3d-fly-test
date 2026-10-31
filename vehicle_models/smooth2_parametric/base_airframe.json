@@ -24,6 +24,7 @@
     "cad_to_body_flu": "(x_body, y_body, z_body) = (-Y_cad, X_cad, Z_cad)",
     "body_forward": "positive body X; CAD nose is negative Y",
     "body_left": "positive body Y; CAD positive X",
+    "spin_sign_semantics": "spin_sign is the sign of body reaction torque about +body Z; rotor angular momentum uses the opposite sign",
     "units": "metres internally; source CAD parameters are millimetres"
   },
   "geometry": {
