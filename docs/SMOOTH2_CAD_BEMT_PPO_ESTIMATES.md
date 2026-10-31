@@ -15,20 +15,20 @@ Pinned geometry source: `3D/kilo@38d4820fc5f7e2208e6ce502ca6b54a83989196a`.
 
 ## Propeller BEMT screening estimate
 
-The existing `cad/parametric/prop_bemt.py` annular blade-element/momentum model was evaluated using the four-blade CAD station geometry, Prandtl tip loss, sea-level density 1.225 kg/m³, and the generic A2212 motor operating-point model.
+The existing `cad/parametric/prop_bemt.py` annular blade-element/momentum model was evaluated using the four-blade CAD station geometry, Prandtl tip loss, sea-level density 1.225 kg/m³, and the generic A2212 motor operating-point model, including the CAD airfoil camber correction (4% camber at 40% chord; thin-airfoil zero-lift angle −4.1545°).
 
 | Quantity | Nominal estimate |
 |---|---:|
-| Loaded full-throttle speed | 10,392 rpm / 1,088.3 rad/s |
-| Static thrust per rotor | 4.635 N |
-| Static torque per rotor | 0.05153 N·m |
-| Shaft power per rotor | 56.08 W |
-| Estimated current per motor | 5.90 A |
-| Fitted thrust coefficient | 3.9133e-6 N/(rad/s)² |
-| Fitted torque coefficient | 4.351e-8 N·m/(rad/s)² |
-| Torque/thrust ratio | 0.01112 m |
-| Four-rotor static thrust | 18.54 N |
-| T/W at nominal 0.60 kg | 3.15 |
+| Loaded full-throttle speed | 10,044 rpm / 1,051.8 rad/s |
+| Static thrust per rotor | 6.125 N |
+| Static torque per rotor | 0.07927 N·m |
+| Shaft power per rotor | 83.38 W |
+| Estimated current per motor | 8.80 A |
+| Fitted thrust coefficient | 5.5367e-6 N/(rad/s)² |
+| Fitted torque coefficient | 7.1658e-8 N·m/(rad/s)² |
+| Torque/thrust ratio | 0.01294 m |
+| Four-rotor static thrust | 24.50 N |
+| T/W at nominal 0.60 kg | 4.16 |
 
 The RPM/thrust/torque operating points are also recorded in `vehicle_models/smooth2_parametric/physics_calibration.json`. These are model outputs, not measured stand data. BEMT uncertainty includes airfoil polar approximation, Reynolds number, blade flexibility, guard interference, inflow, manufacturing variation and motor vendor differences.
 
