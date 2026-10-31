@@ -181,6 +181,7 @@ class BalancedProfileCallback(BaseCallback):
                     velocity_command_errors = {}
                     neutral_started_step = None
                     neutral_stop_time = None
+                    neutral_stop_stable_steps = 0
                     while True:
                         policy_action, _ = self.model.predict(obs, deterministic=True)
                         obs, reward, terminated, truncated, info = e.step(policy_action)
@@ -199,10 +200,13 @@ class BalancedProfileCallback(BaseCallback):
                             if info.get("velocity_command_sequence_complete"):
                                 if neutral_started_step is None:
                                     neutral_started_step = int(plant_env.inner._steps)
-                                if neutral_stop_time is None and float(np.linalg.norm(info.get("state_velocity_m_s", [999, 999, 999]))) <= 0.25:
-                                    neutral_stop_time = (
-                                        int(plant_env.inner._steps) - neutral_started_step
-                                    ) * float(plant_env.inner.dt)
+                                if neutral_stop_time is None:
+                                    current_speed = float(np.linalg.norm(info.get("state_velocity_m_s", [999, 999, 999])))
+                                    neutral_stop_stable_steps = neutral_stop_stable_steps + 1 if current_speed <= 0.25 else 0
+                                    if neutral_stop_stable_steps >= 25:
+                                        neutral_stop_time = (
+                                            int(plant_env.inner._steps) - neutral_started_step - 24
+                                        ) * float(plant_env.inner.dt)
                         velocity = info.get("state_velocity_m_s", [float("inf")] * 3)
                         attitude = info.get("attitude_rad", [float("inf")] * 3)
                         angular_rate = info.get("angular_velocity_rad_s", [float("inf")] * 3)
@@ -241,7 +245,7 @@ class BalancedProfileCallback(BaseCallback):
                     max_command_error = max(command_means, default=float("inf")) if self.velocity_control else 0.0
                     command_coverage = len(velocity_command_errors) if self.velocity_control else 0
                     success = bool(not crashed and took_off and (
-                        mean_tracking_error <= 0.50 and max_command_error <= 1.25
+                        mean_tracking_error <= 0.50 and max_command_error <= 0.85
                         and command_coverage == 26 and neutral_stop_time is not None and neutral_stop_time <= 3.5
                         if self.velocity_control else stable_seconds >= 5.0))
                     episodes.append({"seed": seed, "success": success,
