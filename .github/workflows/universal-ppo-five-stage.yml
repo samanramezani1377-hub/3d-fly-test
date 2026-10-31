@@ -325,7 +325,7 @@ jobs:
             "thrust_margin_calculation": "includes mass, battery voltage squared, motor effectiveness, maximum rotor speed squared and thrust coefficient",
             "randomized_parameters": ["mass", "center_of_mass", "inertia_tensor", "motor_effectiveness", "motor_response_time", "maximum_rotor_speed", "thrust_coefficient", "torque_to_thrust_ratio", "battery_voltage_factor", "aerodynamic_drag", "wind", "sensor_noise"],
             "episode_randomization_ground_truth_hidden": true,
-            "checkpoint_migration": "copy compatible hover policy weights; zero-initialize four new command input columns (forward, left, up, yaw rate); initialize a fresh optimizer",
+            "checkpoint_migration": "preserve compatible hover weights; zero-initialize four command inputs; remap legacy roll/pitch action outputs for CAD_EXPORT_Z_UP to BODY_FORWARD_LEFT_UP; initialize a fresh optimizer",
             "stage_chaining": "each stage teacher phase starts from previous stage best; its best checkpoint initializes the same-stage teacher-free phase; the teacher-free best checkpoint initializes the next stage",
             "teacher_controller": "privileged cascaded velocity/position-to-attitude controller with body-yaw-frame horizontal velocity tracking, world-up vertical velocity and independent world-vertical yaw-rate feedback; uses true randomized plant parameters and wind only inside the oracle action wrapper",
             "simulation_only": true,
