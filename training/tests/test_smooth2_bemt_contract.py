@@ -9,6 +9,7 @@ import numpy as np
 from training.fast_physics.dynamics import FastQuadrotor
 from training.fast_physics.ppo_action import wrench_to_motor_commands
 from training.fast_physics.propeller import BladeElementPropeller
+from training.fast_physics.velocity_reference import VelocityYawReferenceController
 from training.fast_physics.vehicle_family import load_vehicle_profiles, profile_to_parameters
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -73,6 +74,24 @@ def test_smooth2_runtime_plant_reports_bemt_and_finite_rigid_body_outputs():
     assert np.all(np.asarray(info["rotor_shaft_torque_nm"]) >= 0)
     assert np.all(np.asarray(info["rotor_thrust_n"]) >= 0)
     assert np.isclose(info["mass_kg"], params.mass_kg)
+
+
+
+def test_smooth2_velocity_teacher_collective_limit_matches_four_rotor_bemt_authority():
+    params = profile_to_parameters(smooth2_profile())
+    teacher = VelocityYawReferenceController(params)
+    model = BladeElementPropeller(params.propeller_bemt)
+    reference_kf = float(params.propeller_bemt.get(
+        "reference_thrust_coefficient_n_per_rad_s2",
+        params.thrust_coefficient_n_per_rad_s2,
+    ))
+    thrust_scale = params.thrust_coefficient_n_per_rad_s2 / reference_kf
+    per_rotor_max = model.evaluate(
+        params.max_rotor_speed_rad_s * params.voltage_factor, 0.0
+    )[0] * thrust_scale
+    expected_total = per_rotor_max * float(np.sum(params.motor_effectiveness))
+    assert np.isclose(teacher.max_collective_thrust_n, expected_total, rtol=1e-12)
+    assert teacher.max_collective_thrust_n < 4.0 * expected_total
 
 
 def test_smooth2_wrench_allocator_returns_bounded_finite_motor_commands():
