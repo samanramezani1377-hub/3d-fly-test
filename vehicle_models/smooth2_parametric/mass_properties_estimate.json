@@ -1,0 +1,349 @@
+{
+  "schema_version": 1,
+  "vehicle_id": "smooth2-parametric-v1",
+  "status": "provisional_component_lumped_estimate_not_mesh_integrated",
+  "coordinate_frame": "CAD_EXPORT_Z_UP",
+  "method": "component centroidal inertias plus parallel-axis theorem using assumed component masses, simple envelope shapes and CAD rotor coordinates",
+  "total_mass_kg": 0.6,
+  "center_of_mass_m": [
+    0,
+    0,
+    0.005183333333333333
+  ],
+  "inertia_tensor_kg_m2": [
+    [
+      0.003935447909363858,
+      0,
+      0
+    ],
+    [
+      0,
+      0.004031247909363858,
+      0
+    ],
+    [
+      0,
+      0,
+      0.007722739818727713
+    ]
+  ],
+  "principal_moments_kg_m2": [
+    0.003935447909363858,
+    0.004031247909363858,
+    0.007722739818727713
+  ],
+  "uncertainty": {
+    "mass_fractional": [
+      -0.25,
+      0.25
+    ],
+    "center_of_mass_offset_m": [
+      -0.015,
+      0.015
+    ],
+    "inertia_fractional": [
+      -0.35,
+      0.35
+    ]
+  },
+  "components": [
+    {
+      "component_id": "motor_1",
+      "mass_kg": 0.053,
+      "center_m": [
+        0.125141478,
+        0.125141478,
+        0.01
+      ],
+      "inertia_kg_m2": [
+        [
+          0.000005724828125,
+          0,
+          0
+        ],
+        [
+          0,
+          0.000005724828125,
+          0
+        ],
+        [
+          0,
+          0,
+          0.00000501015625
+        ]
+      ],
+      "assumption": "Generic A2212 vendor mass midpoint; exact installed motor not verified."
+    },
+    {
+      "component_id": "motor_2",
+      "mass_kg": 0.053,
+      "center_m": [
+        0.125141478,
+        -0.125141478,
+        0.01
+      ],
+      "inertia_kg_m2": [
+        [
+          0.000005724828125,
+          0,
+          0
+        ],
+        [
+          0,
+          0.000005724828125,
+          0
+        ],
+        [
+          0,
+          0,
+          0.00000501015625
+        ]
+      ],
+      "assumption": "Generic A2212 vendor mass midpoint; exact installed motor not verified."
+    },
+    {
+      "component_id": "motor_3",
+      "mass_kg": 0.053,
+      "center_m": [
+        -0.125141478,
+        -0.125141478,
+        0.01
+      ],
+      "inertia_kg_m2": [
+        [
+          0.000005724828125,
+          0,
+          0
+        ],
+        [
+          0,
+          0.000005724828125,
+          0
+        ],
+        [
+          0,
+          0,
+          0.00000501015625
+        ]
+      ],
+      "assumption": "Generic A2212 vendor mass midpoint; exact installed motor not verified."
+    },
+    {
+      "component_id": "motor_4",
+      "mass_kg": 0.053,
+      "center_m": [
+        -0.125141478,
+        0.125141478,
+        0.01
+      ],
+      "inertia_kg_m2": [
+        [
+          0.000005724828125,
+          0,
+          0
+        ],
+        [
+          0,
+          0.000005724828125,
+          0
+        ],
+        [
+          0,
+          0,
+          0.00000501015625
+        ]
+      ],
+      "assumption": "Generic A2212 vendor mass midpoint; exact installed motor not verified."
+    },
+    {
+      "component_id": "arm_guard_module_1",
+      "mass_kg": 0.018,
+      "center_m": [
+        0.06257,
+        0.06257,
+        0.01
+      ],
+      "inertia_kg_m2": [
+        [
+          9.374999999999999e-7,
+          0,
+          0
+        ],
+        [
+          0,
+          0.000021937499999999998,
+          0
+        ],
+        [
+          0,
+          0,
+          0.000022199999999999998
+        ]
+      ],
+      "assumption": "Assumed combined printed arm and integrated guard mass; not weighed."
+    },
+    {
+      "component_id": "arm_guard_module_2",
+      "mass_kg": 0.018,
+      "center_m": [
+        0.06257,
+        -0.06257,
+        0.01
+      ],
+      "inertia_kg_m2": [
+        [
+          9.374999999999999e-7,
+          0,
+          0
+        ],
+        [
+          0,
+          0.000021937499999999998,
+          0
+        ],
+        [
+          0,
+          0,
+          0.000022199999999999998
+        ]
+      ],
+      "assumption": "Assumed combined printed arm and integrated guard mass; not weighed."
+    },
+    {
+      "component_id": "arm_guard_module_3",
+      "mass_kg": 0.018,
+      "center_m": [
+        -0.06257,
+        -0.06257,
+        0.01
+      ],
+      "inertia_kg_m2": [
+        [
+          9.374999999999999e-7,
+          0,
+          0
+        ],
+        [
+          0,
+          0.000021937499999999998,
+          0
+        ],
+        [
+          0,
+          0,
+          0.000022199999999999998
+        ]
+      ],
+      "assumption": "Assumed combined printed arm and integrated guard mass; not weighed."
+    },
+    {
+      "component_id": "arm_guard_module_4",
+      "mass_kg": 0.018,
+      "center_m": [
+        -0.06257,
+        0.06257,
+        0.01
+      ],
+      "inertia_kg_m2": [
+        [
+          9.374999999999999e-7,
+          0,
+          0
+        ],
+        [
+          0,
+          0.000021937499999999998,
+          0
+        ],
+        [
+          0,
+          0,
+          0.000022199999999999998
+        ]
+      ],
+      "assumption": "Assumed combined printed arm and integrated guard mass; not weighed."
+    },
+    {
+      "component_id": "lower_and_upper_body_shell",
+      "mass_kg": 0.08,
+      "center_m": [
+        0,
+        0,
+        0.01
+      ],
+      "inertia_kg_m2": [
+        [
+          0.00015863999999999999,
+          0,
+          0
+        ],
+        [
+          0,
+          0.00006880666666666667,
+          0
+        ],
+        [
+          0,
+          0,
+          0.00021016666666666666
+        ]
+      ],
+      "assumption": "CAD envelope cuboid approximation with assumed printed-polymer mass."
+    },
+    {
+      "component_id": "battery_pack",
+      "mass_kg": 0.15,
+      "center_m": [
+        0,
+        0,
+        -0.015
+      ],
+      "inertia_kg_m2": [
+        [
+          0.00003906250000000001,
+          0,
+          0
+        ],
+        [
+          0,
+          0.00013281250000000004,
+          0
+        ],
+        [
+          0,
+          0,
+          0.00015625000000000003
+        ]
+      ],
+      "assumption": "Assumed 3S pack mass and envelope; exact pack not identified."
+    },
+    {
+      "component_id": "electronics_wiring_fasteners",
+      "mass_kg": 0.086,
+      "center_m": [
+        0,
+        0,
+        0.02
+      ],
+      "inertia_kg_m2": [
+        [
+          0.000020783333333333338,
+          0,
+          0
+        ],
+        [
+          0,
+          0.000028666666666666664,
+          0
+        ],
+        [
+          0,
+          0,
+          0.00004371666666666666
+        ]
+      ],
+      "assumption": "Residual BOM mass allocation; not measured."
+    }
+  ],
+  "warning": "This is a transparent engineering prior, not a mesh-density integration or measured BOM. Motor, arm/guard, frame, battery and electronics masses are assumptions. Replace each component row with measured mass, CG and local inertia using component_mass_measurements_template.csv before physical prediction."
+}
