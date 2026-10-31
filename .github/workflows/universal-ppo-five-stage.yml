@@ -47,6 +47,53 @@ jobs:
           python -m pip install -r training/requirements.txt
           python -c "import torch; assert torch.version.cuda is None; print('CPU-only PyTorch:', torch.__version__)"
 
+      - name: Validate velocity and yaw-rate teacher before training
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            training/fast_physics/velocity_reference.py \
+            training/fast_physics/ppo_action.py \
+            training/train_universal_ppo.py
+          python - <<'PY'
+          import sys
+          import numpy as np
+          sys.path.insert(0, "training")
+          from fast_physics.vehicle_family import load_vehicle_profiles, profile_to_parameters
+          from fast_physics.velocity_reference import VelocityYawReferenceController
+
+          profiles = load_vehicle_profiles("vehicle_models/family/vehicle_profiles.json")
+          selected = [p for p in profiles if p["vehicle_id"] == "smooth2-a2212-custom-prop"]
+          assert len(selected) == 1, "Smooth2 teacher profile missing or duplicated"
+          params = profile_to_parameters(selected[0])
+          teacher = VelocityYawReferenceController(params, wind_m_s=(0.0, 0.0, 0.0), dt_s=0.02)
+          state = np.zeros(12, dtype=np.float64)
+          state[2] = 1.0
+          target = np.array([0.0, 0.0, 1.0])
+          forward = teacher.desired_wrench(
+              state, target_position=target,
+              desired_velocity_body=np.array([0.5, 0.0, 0.0]),
+              desired_yaw_rate_rad_s=0.0,
+          )
+          yaw_left = teacher.desired_wrench(
+              state, target_position=target,
+              desired_velocity_body=np.zeros(3), desired_yaw_rate_rad_s=0.3,
+          )
+          yaw_right = teacher.desired_wrench(
+              state, target_position=target,
+              desired_velocity_body=np.zeros(3), desired_yaw_rate_rad_s=-0.3,
+          )
+          assert forward.shape == yaw_left.shape == yaw_right.shape == (4,)
+          assert all(np.all(np.isfinite(x)) for x in (forward, yaw_left, yaw_right))
+          assert yaw_left[3] > 0.0 and yaw_right[3] < 0.0, "Yaw teacher direction/sign check failed"
+          rotated = teacher._body_yaw_velocity_to_world(np.array([1.0, 0.0, 0.0]), np.pi / 2)
+          assert np.allclose(rotated, [0.0, 1.0, 0.0], atol=1e-6), "Nose-relative velocity frame check failed"
+          print("Velocity/yaw teacher preflight passed:", {
+              "forward_wrench_finite": True,
+              "yaw_left_right_signs": [float(yaw_left[3]), float(yaw_right[3])],
+              "body_frame_rotation": rotated.tolist(),
+          })
+          PY
+
       - name: Restore selected 1M teacher-assisted checkpoint
         uses: actions/download-artifact@v4
         with:
