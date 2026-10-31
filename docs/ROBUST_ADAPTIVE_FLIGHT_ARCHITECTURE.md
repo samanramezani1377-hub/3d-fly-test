@@ -499,3 +499,11 @@ PYTHONPATH=training python -m fast_physics.mass_properties \
 The output is a calculation from supplied measurements, not an automatic CAD
 mass estimate. Do not populate the production calibration record until every
 required component is represented and the coordinate frame is checked.
+
+
+The same identification module also exposes
+`fast_physics.system_identification.estimate_body_axis_drag_coefficients`.
+It fits linear and quadratic drag independently along body forward/left/up
+axes, but requires already-isolated aerodynamic force samples and
+wind-relative body velocity. Raw acceleration alone is insufficient because
+gravity, rotor force and angular coupling must first be removed.
