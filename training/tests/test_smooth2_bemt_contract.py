@@ -32,8 +32,10 @@ def test_smooth2_profile_has_traceable_provisional_physics_contract():
     cg = np.asarray(physical["center_of_mass_m"], dtype=float)
     inertia = np.asarray(physical["inertia_kg_m2"], dtype=float)
     assert cg.shape == (3,) and np.all(np.isfinite(cg))
-    assert inertia.shape == (3,) and np.all(np.isfinite(inertia))
-    assert np.all(inertia > 0)
+    assert inertia.size in (3, 9) and np.all(np.isfinite(inertia))
+    inertia_matrix = np.diag(inertia) if inertia.size == 3 else inertia.reshape(3, 3)
+    assert np.allclose(inertia_matrix, inertia_matrix.T, atol=1e-9)
+    assert np.min(np.linalg.eigvalsh(inertia_matrix)) > 0
     assert physical["mass_properties_estimate"]["status"] == "provisional_not_mesh_integrated"
     bemt = profile["propulsion"]["propeller_bemt"]
     assert bemt["model"] == "cad_station_blade_element_momentum"
