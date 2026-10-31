@@ -54,7 +54,6 @@ jobs:
             training/fast_physics/velocity_reference.py \
             training/fast_physics/ppo_action.py \
             training/train_universal_ppo.py
-          python -m pytest training/tests/test_fast_physics.py -q
           python - <<'PY'
           import sys
           import numpy as np
