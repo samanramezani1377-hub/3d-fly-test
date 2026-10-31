@@ -44,7 +44,50 @@
     "guard_outer_radius_mm_design": 44.375,
     "camera_tilt_down_deg": 35,
     "lowest_assembled_point_z_m": -0.0059737,
-    "ground_clearance_reference": "CAD-derived from minimum assembled Z=-5.9737 mm in output/smooth2-parametric/validation-report.json; clearance is recomputed relative to each episode CG"
+    "ground_clearance_reference": "CAD-derived from minimum assembled Z=-5.9737 mm in output/smooth2-parametric/validation-report.json; clearance is recomputed relative to each episode CG",
+    "ground_contact_points_cad_m": [
+      [
+        -0.0671663,
+        -0.1231237,
+        -0.0059737
+      ],
+      [
+        -0.0671663,
+        0.0919118,
+        -0.0059737
+      ],
+      [
+        0.0671663,
+        -0.1231237,
+        -0.0059737
+      ],
+      [
+        0.0671663,
+        0.0919118,
+        -0.0059737
+      ],
+      [
+        -0.2220772,
+        -0.2220471,
+        -0.0000062
+      ],
+      [
+        -0.2220772,
+        0.2220499,
+        -0.0000062
+      ],
+      [
+        0.2220798,
+        -0.2220693,
+        -0.0000062
+      ],
+      [
+        0.2220798,
+        0.2220468,
+        -0.0000062
+      ]
+    ],
+    "ground_contact_points_reference": "Conservative underside support samples from body_lower and four arm CAD bounding boxes in CAD_EXPORT_Z_UP; a collision proxy, not exact tessellated contact geometry."
   },
   "rotors": [
     {
