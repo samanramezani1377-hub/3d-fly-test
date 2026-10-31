@@ -259,7 +259,16 @@ def sample_scenario(
     inertia_scale = rng.uniform(float(inertia_bounds[0]), float(inertia_bounds[1]), size=3)
     motor_cfg = randomization.get("motor", {})
     motor_bounds = motor_cfg.get("effectiveness", [0.90, 1.10])
-    motor_effectiveness = rng.uniform(float(motor_bounds[0]), float(motor_bounds[1]), size=4)
+    # By default, motor/propeller hardware is nominally matched: sample one
+    # episode-wide effectiveness factor and apply it to all four rotors. This
+    # preserves common-mode uncertainty without inventing a persistent motor
+    # mismatch that can create roll/pitch torque under symmetric commands.
+    # Independent rotor mismatch is opt-in for explicitly configured studies.
+    if motor_cfg.get("per_rotor_effectiveness", False):
+        motor_effectiveness = rng.uniform(float(motor_bounds[0]), float(motor_bounds[1]), size=4)
+    else:
+        common_effectiveness = float(rng.uniform(float(motor_bounds[0]), float(motor_bounds[1])))
+        motor_effectiveness = np.full(4, common_effectiveness, dtype=np.float64)
     motor_response_scale = uniform("motor", "time_constant_scale", (1.0, 1.0))
     max_rotor_speed_scale = uniform("motor", "max_rotor_speed_scale", (1.0, 1.0))
     thrust_coefficient_scale = uniform("thrust", "coefficient_scale", (1.0, 1.0))
@@ -303,6 +312,7 @@ def sample_scenario(
         "center_of_mass_offset_m": cg_offset.tolist(),
         "inertia_scale_xyz": inertia_scale.tolist(),
         "motor_effectiveness": motor_effectiveness.tolist(),
+        "motor_effectiveness_mode": "independent_per_rotor" if motor_cfg.get("per_rotor_effectiveness", False) else "matched_common_mode",
         "motor_response_scale": motor_response_scale,
         "max_rotor_speed_scale": max_rotor_speed_scale,
         "thrust_coefficient_scale": thrust_coefficient_scale,
