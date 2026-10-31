@@ -1,4 +1,4 @@
-name: Smooth2 PPO - Five-stage 3D velocity and yaw-rate curriculum
+name: Smooth2 PPO - Five-stage teacher-to-student 3D velocity and yaw-rate curriculum
 
 on:
   workflow_dispatch:
@@ -19,11 +19,11 @@ env:
   PYTHONUNBUFFERED: "1"
   SMOOTH2_ID: smooth2-a2212-custom-prop
   STAGE_STEPS: "400000"
-  N_ENVS: "20"
+  N_ENVS: "100"
 
 jobs:
   train-smooth2:
-    name: Smooth2 only - 5 x 400K 3D velocity plus yaw-rate stages
+    name: Smooth2 only - 5 x (400K teacher + 400K teacher-free), 100 parallel envs
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
@@ -87,33 +87,51 @@ jobs:
           cp "$source_selection" training/runs/smooth2-initial-from-1m-teacher-best-selection.json
           sha256sum "$source_model" | tee training/runs/smooth2-initial-from-1m-teacher-best.sha256
 
-      - name: Train five chained teacher-free 3D velocity and yaw-rate stages
+      - name: Train five chained teacher-assisted then teacher-free velocity and yaw-rate stages
         run: |
           set -euo pipefail
           checkpoint="training/runs/smooth2-initial-from-1m-teacher-best.zip"
-          teacher_weight="0.0"
           for stage in 1 2 3 4 5; do
-            teacher="$teacher_weight"
-            run_name="smooth2-velocity-ppo-stage-${stage}"
-            echo "===== Smooth2 velocity+yaw stage $stage: 400K steps, teacher disabled ====="
+            teacher_run="smooth2-velocity-ppo-stage-${stage}-teacher"
+            student_run="smooth2-velocity-ppo-stage-${stage}-teacher-free"
+
+            echo "===== Stage ${stage}A: 400K steps, velocity/yaw teacher weight 0.80, 100 envs ====="
             python training/train_universal_ppo.py \
               --timesteps "$STAGE_STEPS" --n-envs "$N_ENVS" \
-              --seed "$((2042 + stage))" \
-              --run-name "$run_name" --output-dir training/runs \
+              --seed "$((2042 + stage * 10 + 1))" \
+              --run-name "$teacher_run" --output-dir training/runs \
               --vehicle-family training/runs/smooth2-only-profiles.json \
               --vehicle-id "$SMOOTH2_ID" \
               --randomization-config vehicle_models/family/domain_randomization.json \
               --curriculum-stage "$stage" \
               --load-model "$checkpoint" \
-              --no-teacher --teacher-weight "$teacher" --velocity-control \
+              --teacher-weight "0.8" --velocity-control \
               --eval-episodes 10 --eval-frequency 200000 \
-              --checkpoint-frequency 20000 \
-              2>&1 | tee "$run_name.log"
-            selected="training/runs/$run_name/best/best_model.zip"
-            selection="training/runs/$run_name/best/selection.json"
-            test -s "$selected" || { echo "Stage $stage did not produce an evaluated best checkpoint"; exit 1; }
-            test -s "$selection"
-            checkpoint="$selected"
+              --checkpoint-frequency 50000 \
+              2>&1 | tee "$teacher_run.log"
+
+            teacher_best="training/runs/$teacher_run/best/best_model.zip"
+            test -s "$teacher_best" || { echo "Stage $stage teacher phase produced no evaluated best checkpoint"; exit 1; }
+            test -s "training/runs/$teacher_run/best/selection.json"
+
+            echo "===== Stage ${stage}B: 400K steps, teacher disabled (0.00), 100 envs ====="
+            python training/train_universal_ppo.py \
+              --timesteps "$STAGE_STEPS" --n-envs "$N_ENVS" \
+              --seed "$((2042 + stage * 10 + 2))" \
+              --run-name "$student_run" --output-dir training/runs \
+              --vehicle-family training/runs/smooth2-only-profiles.json \
+              --vehicle-id "$SMOOTH2_ID" \
+              --randomization-config vehicle_models/family/domain_randomization.json \
+              --curriculum-stage "$stage" \
+              --load-model "$teacher_best" \
+              --no-teacher --teacher-weight "0.0" --velocity-control \
+              --eval-episodes 10 --eval-frequency 200000 \
+              --checkpoint-frequency 50000 \
+              2>&1 | tee "$student_run.log"
+
+            checkpoint="training/runs/$student_run/best/best_model.zip"
+            test -s "$checkpoint" || { echo "Stage $stage teacher-free phase produced no evaluated best checkpoint"; exit 1; }
+            test -s "training/runs/$student_run/best/selection.json"
           done
           cp "$checkpoint" training/runs/smooth2-final-selected-best.zip
 
@@ -218,8 +236,12 @@ jobs:
             "airframe": "smooth2-a2212-custom-prop",
             "initial_checkpoint": "best teacher-assisted checkpoint selected at 1000000 steps from run 41158518207",
             "stages": 5,
-            "timesteps_per_stage": 400000,
-            "total_additional_timesteps": 2000000,
+            "timesteps_per_phase": 400000,
+            "phases_per_stage": 2,
+            "teacher_phase_weight": 0.80,
+            "teacher_free_phase_weight": 0.0,
+            "timesteps_per_stage": 800000,
+            "total_additional_timesteps": 4000000,
             "training_mode": "nose-relative 3D velocity tracking plus independent yaw-rate control with hover warm-start",
             "velocity_command_frame": "yaw-aligned nose-forward/nose-left plus world-up; positive yaw rate turns nose left (counter-clockwise viewed from above)",
             "yaw_rate_command_limits_deg_s_by_stage": {"stage_1": 20, "stage_2": 35, "stage_3": 50, "stage_4": 70, "stage_5": 90},
@@ -232,7 +254,7 @@ jobs:
               "stage_4": "two/three-axis translation/yaw combinations",
               "stage_5": "continuous random 3D velocity and yaw-rate commands"
             },
-            "teacher_training_weights": [0.0, 0.0, 0.0, 0.0, 0.0],
+            "teacher_training_weights_by_stage": {"stage_1": {"teacher_phase": 0.80, "teacher_free_phase": 0.0}, "stage_2": {"teacher_phase": 0.80, "teacher_free_phase": 0.0}, "stage_3": {"teacher_phase": 0.80, "teacher_free_phase": 0.0}, "stage_4": {"teacher_phase": 0.80, "teacher_free_phase": 0.0}, "stage_5": {"teacher_phase": 0.80, "teacher_free_phase": 0.0}},
             "periodic_evaluation_teacher_weight": 0.0,
             "evaluation_frequency": 200000,
             "evaluation_episodes": 10,
@@ -249,13 +271,15 @@ jobs:
             "evaluation_neutral_speed_acceptance_m_s": 0.25,
             "evaluation_neutral_speed_sustained_seconds": 0.5,
             "checkpoint_frequency": 20000,
-            "parallel_environments": 20,
+            "parallel_environments": 100,
             "geometry_and_rotor_positions": "fixed Smooth2 CAD geometry",
             "minimum_worst_case_thrust_to_weight_ratio": 1.05,
             "thrust_margin_calculation": "includes mass, battery voltage squared, motor effectiveness, maximum rotor speed squared and thrust coefficient",
             "randomized_parameters": ["mass", "center_of_mass", "inertia_tensor", "motor_effectiveness", "motor_response_time", "maximum_rotor_speed", "thrust_coefficient", "torque_to_thrust_ratio", "battery_voltage_factor", "aerodynamic_drag", "wind", "sensor_noise"],
             "episode_randomization_ground_truth_hidden": true,
             "checkpoint_migration": "copy compatible hover policy weights; zero-initialize four new command input columns (forward, left, up, yaw rate); initialize a fresh optimizer",
+            "stage_chaining": "each stage teacher phase starts from previous stage best; its best checkpoint initializes the same-stage teacher-free phase; the teacher-free best checkpoint initializes the next stage",
+            "teacher_controller": "privileged cascaded velocity/position-to-attitude controller with body-yaw-frame horizontal velocity tracking, world-up vertical velocity and independent world-vertical yaw-rate feedback; uses true randomized plant parameters and wind only inside the oracle action wrapper",
             "simulation_only": true,
             "physical_flight_eligible": false
           }
