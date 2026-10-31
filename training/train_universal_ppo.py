@@ -202,9 +202,10 @@ class BalancedProfileCallback(BaseCallback):
                             velocity_tracking_errors.append(float(info.get("velocity_tracking_error_m_s", float("inf"))))
                             command_index = int(info.get("velocity_command_index", -1))
                             if command_index >= 0:
-                                velocity_command_errors.setdefault(command_index, []).append(
-                                    float(info.get("velocity_tracking_error_m_s", float("inf")))
-                                )
+                                if command_index < 26:
+                                    velocity_command_errors.setdefault(command_index, []).append(
+                                        float(info.get("velocity_tracking_error_m_s", float("inf")))
+                                    )
                                 yaw_error = abs(float(info.get("yaw_rate_tracking_error_rad_s", float("inf"))))
                                 yaw_rate_errors.append(yaw_error)
                                 yaw_command_errors.setdefault(command_index, []).append(yaw_error)
