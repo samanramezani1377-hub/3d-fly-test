@@ -76,7 +76,7 @@ jobs:
         run: |
           set -euo pipefail
           python training/train_universal_ppo.py \
-            --timesteps 1000000 --n-envs 40 --seed 2042 \
+            --timesteps 1000000 --n-envs 20 --seed 2042 \
             --run-name universal-quad-v5-foundation-stage2-teacher \
             --output-dir training/runs --curriculum-stage 2 \
             --load-model training/runs/stage2-initial-from-previous-latest_model.zip \
@@ -90,7 +90,7 @@ jobs:
           teacher_final="training/runs/universal-quad-v5-foundation-stage2-teacher/final_model.zip"
           test -s "$teacher_final" || { echo "Stage-2 teacher-trained final checkpoint is missing."; exit 1; }
           python training/train_universal_ppo.py \
-            --timesteps 1000000 --n-envs 40 --seed 2043 \
+            --timesteps 1000000 --n-envs 20 --seed 2043 \
             --run-name universal-quad-v5-foundation-stage2-teacher-free \
             --output-dir training/runs --curriculum-stage 2 --no-teacher \
             --load-model "$teacher_final" \
@@ -125,7 +125,7 @@ jobs:
             "stage_2_teacher_free_segment_timesteps": 1000000,
             "stage_2_teacher_free_weight": 0.0,
             "second_segment_initial_checkpoint": "stage-2 teacher segment final_model.zip",
-            "parallel_environments": 40,
+            "parallel_environments": 20,
             "total_stage_2_timesteps": 2000000,
             "simulation_only": true,
             "physical_flight_eligible": false
