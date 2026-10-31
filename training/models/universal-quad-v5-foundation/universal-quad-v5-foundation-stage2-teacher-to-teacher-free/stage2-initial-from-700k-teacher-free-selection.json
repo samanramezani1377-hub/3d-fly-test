@@ -1,0 +1,20 @@
+{
+  "score": [
+    0.3,
+    -0.7,
+    1.0,
+    23.856,
+    -0.08535647850828611,
+    4142.522602198967
+  ],
+  "report": "profile-evaluation-700000.json",
+  "timesteps": 700000,
+  "selection_rule": [
+    "maximize minimum per-profile five-second sustained-hover success",
+    "minimize worst-profile crash rate",
+    "maximize minimum per-profile takeoff rate",
+    "maximize mean stable-hover duration",
+    "minimize motor saturation",
+    "maximize mean return as final tie-breaker"
+  ]
+}

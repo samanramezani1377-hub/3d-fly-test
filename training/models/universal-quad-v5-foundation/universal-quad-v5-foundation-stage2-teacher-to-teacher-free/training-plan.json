@@ -1,0 +1,15 @@
+{
+  "active_curriculum_stage": 2,
+  "stage_1_training": false,
+  "initial_checkpoint_source": "best/best_model.zip from run 41153598860, stage-2 teacher-free, selected at 700000 steps",
+  "stage_2_teacher_segment_timesteps": 1000000,
+  "stage_2_teacher_weight": 0.8,
+  "stage_2_teacher_free_segment_timesteps": 1000000,
+  "stage_2_teacher_free_weight": 0.0,
+  "first_segment_initial_checkpoint": "selected 700K teacher-free best_model.zip from run 41153598860",
+  "second_segment_initial_checkpoint": "stage-2 teacher-trained final_model.zip",
+  "parallel_environments": 20,
+  "total_stage_2_timesteps": 2000000,
+  "simulation_only": true,
+  "physical_flight_eligible": false
+}
