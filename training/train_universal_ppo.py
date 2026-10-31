@@ -39,6 +39,35 @@ def parse_args(argv=None):
 
 
 
+def build_velocity_evaluation_sequence(episode_index: int, limits_m_s=(1.5, 1.5, 0.75)):
+    """Cover all 6 cardinal, 12 two-axis and 8 three-axis directions per eval episode."""
+    limits = np.asarray(limits_m_s, dtype=np.float64)
+    if limits.shape != (3,) or np.any(limits <= 0):
+        raise ValueError("velocity evaluation limits must be three positive values")
+    speed_scale = 0.55 + 0.05 * (int(episode_index) % 10)
+    commands = []
+    for axis in range(3):
+        for sign in (-1.0, 1.0):
+            vector = np.zeros(3, dtype=np.float64)
+            vector[axis] = sign * speed_scale * limits[axis]
+            commands.append(vector)
+    for first, second in ((0, 1), (0, 2), (1, 2)):
+        for sign_first in (-1.0, 1.0):
+            for sign_second in (-1.0, 1.0):
+                vector = np.zeros(3, dtype=np.float64)
+                vector[first] = sign_first * speed_scale * limits[first] / np.sqrt(2.0)
+                vector[second] = sign_second * speed_scale * limits[second] / np.sqrt(2.0)
+                commands.append(vector)
+    for sign_x in (-1.0, 1.0):
+        for sign_y in (-1.0, 1.0):
+            for sign_z in (-1.0, 1.0):
+                commands.append(speed_scale * limits * np.array([sign_x, sign_y, sign_z]) / np.sqrt(3.0))
+    # Rotate the order between episodes while preserving complete direction coverage.
+    offset = (int(episode_index) * 7) % len(commands)
+    commands = commands[offset:] + commands[:offset]
+    return [{"velocity_m_s": command.tolist(), "duration_steps": 50} for command in commands]
+
+
 class BalancedProfileCallback(BaseCallback):
     """Choose the checkpoint that best protects the weakest vehicle profile."""
     def __init__(self, profiles, family_path, randomization_path, history_length,
@@ -138,12 +167,15 @@ class BalancedProfileCallback(BaseCallback):
             try:
                 for ei in range(self.episodes):
                     seed = self.seed + self.n_calls * 100 + pi * 1000 + ei
-                    obs, _ = e.reset(seed=seed)
+                    eval_options = ({"velocity_command_sequence": build_velocity_evaluation_sequence(ei)}
+                                    if self.velocity_control else None)
+                    obs, _ = e.reset(seed=seed, options=eval_options)
                     total, crashed, took_off = 0.0, False, False
                     stable_steps = max_stable_steps = 0
                     saturation_samples = []
                     zero_command_samples = []
                     velocity_tracking_errors = []
+                    velocity_command_errors = {}
                     while True:
                         policy_action, _ = self.model.predict(obs, deterministic=True)
                         obs, reward, terminated, truncated, info = e.step(policy_action)
@@ -154,6 +186,11 @@ class BalancedProfileCallback(BaseCallback):
                         zero_command_samples.append(float(info.get("motor_zero_command_fraction", 0.0)))
                         if self.velocity_control:
                             velocity_tracking_errors.append(float(info.get("velocity_tracking_error_m_s", float("inf"))))
+                            command_index = int(info.get("velocity_command_index", -1))
+                            if command_index >= 0:
+                                velocity_command_errors.setdefault(command_index, []).append(
+                                    float(info.get("velocity_tracking_error_m_s", float("inf")))
+                                )
                         velocity = info.get("state_velocity_m_s", [float("inf")] * 3)
                         attitude = info.get("attitude_rad", [float("inf")] * 3)
                         angular_rate = info.get("angular_velocity_rad_s", [float("inf")] * 3)
@@ -188,12 +225,19 @@ class BalancedProfileCallback(BaseCallback):
                             break
                     stable_seconds = max_stable_steps * plant_env.inner.dt
                     mean_tracking_error = (sum(velocity_tracking_errors) / max(len(velocity_tracking_errors), 1)) if self.velocity_control else 0.0
-                    success = bool(not crashed and (mean_tracking_error <= 0.50 if self.velocity_control else stable_seconds >= 5.0))
+                    command_means = [sum(values) / len(values) for values in velocity_command_errors.values()]
+                    max_command_error = max(command_means, default=float("inf")) if self.velocity_control else 0.0
+                    command_coverage = len(velocity_command_errors) if self.velocity_control else 0
+                    success = bool(not crashed and took_off and (
+                        mean_tracking_error <= 0.50 and max_command_error <= 1.25 and command_coverage == 26
+                        if self.velocity_control else stable_seconds >= 5.0))
                     episodes.append({"seed": seed, "success": success,
                         "takeoff_success": took_off, "takeoff_failed": bool(not took_off and truncated),
                         "crashed": crashed, "steps": plant_env.inner._steps,
                         "stable_hover_seconds_max": stable_seconds,
                         "mean_velocity_tracking_error_m_s": mean_tracking_error,
+                        "max_direction_velocity_tracking_error_m_s": max_command_error,
+                        "velocity_direction_coverage": command_coverage,
                         "return": total,
                         "mean_motor_saturation_fraction": sum(saturation_samples) / max(len(saturation_samples), 1),
                         "mean_motor_zero_command_fraction": sum(zero_command_samples) / max(len(zero_command_samples), 1),
@@ -211,6 +255,8 @@ class BalancedProfileCallback(BaseCallback):
                 "crash_rate": sum(x["crashed"] for x in episodes) / count,
                 "mean_stable_hover_seconds": sum(x["stable_hover_seconds_max"] for x in episodes) / count,
                 "mean_velocity_tracking_error_m_s": sum(x["mean_velocity_tracking_error_m_s"] for x in episodes) / count,
+                "mean_max_direction_tracking_error_m_s": sum(x["max_direction_velocity_tracking_error_m_s"] for x in episodes) / count,
+                "mean_velocity_direction_coverage": sum(x["velocity_direction_coverage"] for x in episodes) / count,
                 "mean_motor_saturation_fraction": sum(x["mean_motor_saturation_fraction"] for x in episodes) / count,
                 "mean_motor_zero_command_fraction": sum(x["mean_motor_zero_command_fraction"] for x in episodes) / count,
                 "mean_return": sum(x["return"] for x in episodes) / count,
@@ -458,6 +504,7 @@ def main(argv=None):
             "policy_observation": ("dimensionless-scaled state/action history + online lift estimate/confidence + normalized body-relative forward/left and world-up velocity command + 12 nominal hardware features" if args.velocity_control else "dimensionless-scaled state/action history + online lift estimate/confidence + 12 normalized nominal hardware features"),
             "velocity_control_enabled": args.velocity_control,
             "velocity_command_frame": "yaw-aligned nose-forward/nose-left plus world-up; forward/left rotate with yaw, vertical remains world-up",
+            "velocity_evaluation_protocol": "every periodic evaluation episode covers 6 cardinal + 12 two-axis + 8 three-axis directions, 50 steps each, followed by a neutral braking interval",
             "velocity_command_limits_m_s": [1.5, 1.5, 0.75] if args.velocity_control else None,
             "velocity_command_curriculum": {"stage_1": "single-axis low speed", "stage_2": "single-axis medium speed", "stage_3": "two-axis combinations", "stage_4": "two/three-axis combinations", "stage_5": "continuous random 3D commands"} if args.velocity_control else None,
             "policy_action_semantics": "unbounded_gaussian_tanh_squashed_collective_roll_pitch_yaw_body_wrench",
@@ -469,7 +516,7 @@ def main(argv=None):
             "reference_teacher_disabled_for_all_periodic_evaluations": True,
             "reference_teacher_weight_override": args.teacher_weight,
             "evaluation_reference_teacher_weight": 0.0,
-            "evaluation_metrics": (["takeoff_success", "mean_3D_velocity_tracking_error_m_s", "path_and_altitude_tracking", "crash_rate", "motor_saturation_fraction", "mean_return"] if args.velocity_control else ["takeoff_success", "five_second_sustained_hover", "crash_rate", "stable_hover_duration", "motor_saturation_fraction", "mean_return"]),
+            "evaluation_metrics": (["takeoff_success", "all_26_direction_combinations_covered", "mean_and_worst_direction_velocity_tracking_error_m_s", "neutral_command_braking", "path_and_altitude_tracking", "crash_rate", "motor_saturation_fraction", "mean_return"] if args.velocity_control else ["takeoff_success", "five_second_sustained_hover", "crash_rate", "stable_hover_duration", "motor_saturation_fraction", "mean_return"]),
             "sb3_diagnostics": ["train/approx_kl", "train/explained_variance", "train/entropy_loss", "train/value_loss", "train/policy_gradient_loss"],
             "episode_randomization_ground_truth_is_hidden": True,
             "physics_backend": "training.fast_physics.FastQuadrotor",
