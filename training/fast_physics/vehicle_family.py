@@ -91,7 +91,7 @@ def resolve_profile(profile: dict[str, Any]) -> dict[str, Any]:
         derived.append("inertia_kg_m2:point-mass-arm-estimate")
     else:
         arr = np.asarray(inertia, dtype=np.float64)
-        if arr.shape not in ((3,), (3, 3)) or not np.all(np.isfinite(arr)):
+        if arr.shape not in ((3,), (3, 3), (9,)) or not np.all(np.isfinite(arr)):
             raise ValueError(f"{p.get('vehicle_id')}: inertia must be a diagonal 3-vector or finite 3x3 matrix")
         physical["inertia_kg_m2"] = arr.reshape(-1).tolist()
 
