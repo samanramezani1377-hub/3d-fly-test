@@ -210,7 +210,14 @@ jobs:
           output_dir = Path("training/runs/universal-final-independent-evaluation")
           assert model_path.is_file() and model_path.stat().st_size > 0, "Final selected PPO model is missing"
           profiles = load_vehicle_profiles(family_path)
-          assert len(profiles) == 1 and profiles[0]["vehicle_id"] == "smooth2-a2212-custom-prop", profiles
+          expected_profile_ids = {
+              "smooth2-a2212-custom-prop",
+              "generic-5inch-quad",
+              "generic-7inch-long-range",
+              "generic-3inch-cinewhoop",
+          }
+          assert {p["vehicle_id"] for p in profiles} == expected_profile_ids, profiles
+          assert len(profiles) == 4, profiles
 
           model = PPO.load(str(model_path), device="cpu")
           callback = BalancedProfileCallback(
@@ -356,11 +363,11 @@ jobs:
           git add "$target"
           if ! git diff --cached --quiet; then
             find "$target" -type f -size +90M -print -quit | grep -q . && { echo "Checkpoint exceeds 90 MB."; exit 1; } || true
-            git commit -m "Train Smooth2 PPO through five staged randomized teacher-fade stages"
+            git commit -m "Train universal quad PPO through five four-profile velocity stages"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
-      - name: Print Smooth2 training summaries
+      - name: Print universal four-profile training summaries
         if: always()
         run: |
           for log in universal-velocity-ppo-stage-*.log; do
