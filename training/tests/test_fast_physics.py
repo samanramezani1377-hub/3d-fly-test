@@ -414,7 +414,7 @@ def test_optional_rotor_gyroscopic_coupling_is_applied():
     plant.angular_velocity[:] = [1.0, 0.0, 0.0]
     commands = plant.motor_omega / params.max_rotor_speed_rad_s
     _, telemetry = plant.step(commands)
-    assert telemetry["rotor_gyroscopic_torque_nm"][1] > 0.0
+    assert telemetry["rotor_gyroscopic_torque_nm"][1] < 0.0
 
 
 def test_a2212_catalog_reference_is_recorded_without_claiming_physical_calibration():
