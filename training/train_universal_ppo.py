@@ -343,6 +343,8 @@ def main(argv=None):
         raise SystemExit("--teacher-weight must be between 0.0 and 1.0")
     if args.no_teacher and args.teacher_weight not in (None, 0.0):
         raise SystemExit("--no-teacher cannot be combined with a nonzero --teacher-weight")
+    if args.velocity_control and not args.no_teacher and args.teacher_weight not in (None, 0.0):
+        raise SystemExit("velocity-control training requires the hover reference teacher to be disabled")
     if args.timesteps <= 0 or args.n_envs <= 0 or args.eval_frequency <= 0 or args.checkpoint_frequency <= 0 or args.eval_episodes <= 0:
         raise SystemExit("--timesteps, --n-envs, --eval-frequency, --checkpoint-frequency and --eval-episodes must be positive")
     if args.resume and not args.load_model:
@@ -404,20 +406,11 @@ def main(argv=None):
         teacher_weight=args.teacher_weight, velocity_control=args.velocity_control)
     try:
         if args.load_model:
-            model = PPO.load(str(args.load_model), env=env, device="cpu")
-            model.tensorboard_log = str(run_dir / "tensorboard")
+            model = load_ppo_checkpoint(PPO, args.load_model, env, args, run_dir)
             if model.n_steps != 500 or model.batch_size != 250:
                 raise RuntimeError("Checkpoint PPO rollout settings do not match the v5 training pipeline.")
         else:
-            model = PPO(
-                "MlpPolicy", env, learning_rate=args.learning_rate, n_steps=500,
-                batch_size=250, gamma=0.99, gae_lambda=0.95, clip_range=0.15,
-                ent_coef=0.008, vf_coef=0.5, max_grad_norm=0.5,
-                target_kl=0.03, normalize_advantage=True,
-                policy_kwargs={"net_arch": {"pi": [128, 128], "vf": [128, 128]}, "log_std_init": -1.0},
-                verbose=1, seed=args.seed, device="cpu",
-                tensorboard_log=str(run_dir / "tensorboard"),
-            )
+            model = build_ppo(PPO, env, args, run_dir)
         if args.resume:
             state_path = run_dir / "training_state.json"
             if not state_path.is_file():
@@ -454,24 +447,28 @@ def main(argv=None):
             "best_checkpoint": str(best_checkpoint),
             "balanced_selection_score": list(eval_callback.best_score),
             "balanced_selection_report": eval_callback.best_report,
-            "checkpoint_selection": "min_profile_hover_then_min_worst_crash_then_min_profile_takeoff_then_stable_duration_then_min_upper_motor_saturation_then_mean_episode_return",
+            "checkpoint_selection": ("min_profile_velocity_mission_success_then_min_worst_crash_then_min_profile_takeoff_then_min_velocity_tracking_error_then_min_motor_saturation_then_mean_return" if args.velocity_control else "min_profile_hover_then_min_worst_crash_then_min_profile_takeoff_then_stable_duration_then_min_upper_motor_saturation_then_mean_episode_return"),
             "history_length": args.history_length, "curriculum_stage": args.curriculum_stage,
             "initial_model": str(args.load_model) if args.load_model else None,
             "domain_randomization": not args.no_randomization,
             "vehicle_family_file": str(args.vehicle_family),
             "vehicle_profiles": [{"vehicle_id":p["vehicle_id"],"calibration_status":p["calibration_status"],
                                   "parameter_source":p.get("parameter_source","unspecified")} for p in profiles],
-            "policy_observation": "dimensionless-scaled state/action history + online lift estimate/confidence + 12 normalized nominal hardware features",
+            "policy_observation": ("dimensionless-scaled state/action history + online lift estimate/confidence + normalized body-relative forward/left and world-up velocity command + 12 nominal hardware features" if args.velocity_control else "dimensionless-scaled state/action history + online lift estimate/confidence + 12 normalized nominal hardware features"),
+            "velocity_control_enabled": args.velocity_control,
+            "velocity_command_frame": "yaw-aligned nose-forward/nose-left plus world-up; forward/left rotate with yaw, vertical remains world-up",
+            "velocity_command_limits_m_s": [1.5, 1.5, 0.75] if args.velocity_control else None,
+            "velocity_command_curriculum": {"stage_1": "single-axis low speed", "stage_2": "single-axis medium speed", "stage_3": "two-axis combinations", "stage_4": "two/three-axis combinations", "stage_5": "continuous random 3D commands"} if args.velocity_control else None,
             "policy_action_semantics": "unbounded_gaussian_tanh_squashed_collective_roll_pitch_yaw_body_wrench",
             "motor_allocator": "geometry-derived nominal-profile wrench allocation; randomized episode parameters hidden",
             "policy_is_hardware_conditioned": True,
             "profile_sampling": "adaptive weakness-weighted sampling; smoothed updates from balanced profile evaluation",
-            "reference_teacher_schedule": {"stage_1": 0.80, "stage_2": 0.60, "stage_3": 0.40, "stage_4": 0.20, "stage_5": 0.0},
+            "reference_teacher_schedule": ({"stage_1": 0.0, "stage_2": 0.0, "stage_3": 0.0, "stage_4": 0.0, "stage_5": 0.0} if args.velocity_control else {"stage_1": 0.80, "stage_2": 0.60, "stage_3": 0.40, "stage_4": 0.20, "stage_5": 0.0}),
             "reference_teacher_disabled_for_this_run": args.no_teacher,
             "reference_teacher_disabled_for_all_periodic_evaluations": True,
             "reference_teacher_weight_override": args.teacher_weight,
             "evaluation_reference_teacher_weight": 0.0,
-            "evaluation_metrics": ["takeoff_success", "five_second_sustained_hover", "crash_rate", "stable_hover_duration", "motor_saturation_fraction", "mean_return"],
+            "evaluation_metrics": (["takeoff_success", "3D_velocity_tracking_error_m_s", "commanded_axis_combinations", "crash_rate", "motor_saturation_fraction", "mean_return"] if args.velocity_control else ["takeoff_success", "five_second_sustained_hover", "crash_rate", "stable_hover_duration", "motor_saturation_fraction", "mean_return"]),
             "sb3_diagnostics": ["train/approx_kl", "train/explained_variance", "train/entropy_loss", "train/value_loss", "train/policy_gradient_loss"],
             "episode_randomization_ground_truth_is_hidden": True,
             "physics_backend": "training.fast_physics.FastQuadrotor",
