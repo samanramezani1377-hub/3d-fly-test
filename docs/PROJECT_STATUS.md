@@ -188,3 +188,9 @@ Implementation status and limitations: [Robust/adaptive architecture](ROBUST_ADA
 
 
 The robust backend also now includes an online effective-lift RLS context estimator, configurable four-stage randomization, a chained curriculum runner and a held-out randomized-seed PPO evaluator. The evaluator reports success/crash/hover metrics per stage. Its held-out split uses different seeds within the same declared parameter bounds; out-of-range extrapolation remains a separate future test.
+
+## 8C. Smooth2 CAD-to-simulator integration (2026-10-31)
+
+The current `3D/kilo` Smooth2 CAD revision is now the explicit geometry source for the vehicle profile, legacy simulator geometry fields and Flight Lab visual. The existing physics/CAD validation workflow checks rotor stations, diagonal motor span, propeller diameter, reaction-torque signs, source hashes and fallback dimensions. The existing Pages deployment generates a named 26-part GLB from the committed STL components, converts millimetres to metres and CAD Z-up to Three.js Y-up, and publishes the four propellers as separate animated nodes. No additional test workflow or PPO training run is created.
+
+The simulator's thrust coefficient, torque proxy, motor lag, RPM limits and PPO logic remain unchanged. Smooth2 remains `provisional_estimate`; actual mass properties and measured motor/ESC/propeller/battery performance are still required. PR #23 is intentionally excluded from this work.
