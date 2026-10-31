@@ -38,7 +38,7 @@ The geometry is held constant in v1:
 - motor mounting positions and rotor axes;
 - camera and guard geometry.
 
-The CAD parameter snapshot records `motor_x = 58 mm`, `motor_z = 58 mm`, `model_scale = 1.414028`, and `prop_radius = 26.45 mm`. The normalized rotor centres therefore use approximately 82.014 mm offsets in the horizontal plane. The CAD export is Z-up. The declared CAD transform is `(x, y, z) -> (x, -z, y)`; the fast plant uses a right-handed Z-up frame with X/Y horizontal. These conventions must be preserved and covered by tests before any adapter to the existing Y-up SkySim backend is attempted.
+The CAD parameter snapshot records `motor_x = 58 mm`, `motor_z = 58 mm`, `model_scale = 1.414028`, and `prop_radius = 26.45 mm`. The normalized rotor centres therefore use approximately 82.014 mm offsets in the horizontal plane. The CAD export is Z-up. The CAD export frame has X=lateral, Y=longitudinal with the nose at negative Y, and Z=up. The rigid-body plant uses `BODY_FORWARD_LEFT_UP` (X=forward, Y=left, Z=up), so the CAD-to-body transform is `(x_body, y_body, z_body) = (-Y_cad, X_cad, Z_cad)`. Rotor locations, centre of mass and inertia are transformed together; the transform is right-handed and is applied once by the profile/airframe loaders. World yaw zero points along world +X, and positive yaw turns toward world +Y. Regression tests protect the convention.
 
 ### Geometry discrepancies
 
@@ -83,7 +83,7 @@ The plant is implemented in `training/fast_physics/dynamics.py`.
 
 ### Rotor actuator
 
-Each normalized command is clipped to [0, 1]. A first-order motor response is used:
+Each normalized command is clipped to [0, 1]. The first-order motor response is discretized exactly over each simulation step:
 
 [
 omega_{k+1} = omega_k + alpha(omega_{cmd}-omega_k),quad
@@ -110,10 +110,10 @@ The propeller geometry is preserved as metadata for later BEMT integration; geom
 
 ### Rigid-body translation
 
-The four rotor forces are summed in the body frame and rotated to the world frame. Gravity and a simple linear + quadratic drag approximation are applied:
+The four rotor forces are summed in the forward-left-up body frame and rotated to the world frame. Wind-relative velocity is transformed back into the body frame. Optional per-axis drag coefficients represent different forward, lateral and vertical resistance; when they are unavailable, the legacy scalar coefficients are used isotropically:
 
 [
-F_d = -c_1 v_{air} - c_2 |v_{air}|v_{air}
+F_d^b = -C_1 v_{air}^b - C_2 (|v_{air}^b| \odot v_{air}^b),\quad F_d^w=R F_d^b
 ]
 
 [
@@ -128,29 +128,29 @@ Rotor moment is computed from each rotor position relative to the episode centre
 	au = sum_i (r_i-r_{CG})	imes F_i + 	au_{reaction}
 ]
 
-Angular motion uses the rigid-body Euler equation:
+Angular motion uses the full rigid-body equation, with optional rotor angular-momentum coupling when rotor polar inertia is calibrated:
 
 [
 Idotomega = 	au - omega	imes(Iomega) - D_omegaomega
 ]
 
-The current fast implementation integrates Euler attitude angles and body rates. It is intended for bounded flight attitudes, not aerobatics or near-singular pitch configurations. A quaternion integrator is a future hardening task if the envelope expands.
+Attitude is integrated with a normalized body-to-world quaternion using the midpoint body rate; Euler angles are derived only for the existing policy/state interface. This removes the Euler-rate singularity from the plant integration. The public policy state still uses Euler angles, so near-inverted flight and extreme manoeuvres need additional observation/controller work.
 
 ### Fidelity limits
 
 Not modelled as high-fidelity physics in v1:
 
-- blade-element/momentum-theory inflow solution;
+- blade-element/momentum-theory inflow solution and advance-ratio-dependent thrust/torque;
 - blade Reynolds/Mach effects and airfoil polar lookup;
 - rotor-rotor interference and rotor/guard/body flow interaction;
 - ground effect and vortex-ring-state dynamics;
 - blade flexibility, structural resonance and propeller imbalance;
-- ESC commutation, motor heating and detailed electrical dynamics;
+- ESC commutation, motor heating, current draw, battery sag and detailed electrical dynamics;
 - detailed battery state-of-charge and thermal model;
 - full sensor/estimator dynamics, delays and correlated noise;
 - collision geometry from STEP solids.
 
-The plant is therefore a fast control-learning approximation with explicit uncertainty, not a high-fidelity aerodynamic simulator.
+The plant is therefore a stronger 6-DoF control-learning approximation with explicit uncertainty, not a complete high-fidelity aerodynamic simulator. In particular, the newly supported body-axis drag and rotor gyroscopic terms remain disabled/unparameterized until measured values are supplied. Correct coordinate handling and sign tests prove internal consistency, not aircraft-specific accuracy.
 
 ## 5. Domain randomization and family of scenarios
 
