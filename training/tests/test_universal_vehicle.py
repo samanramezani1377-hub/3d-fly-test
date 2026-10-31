@@ -184,3 +184,22 @@ def test_non_positive_definite_inertia_is_rejected(tmp_path):
     path.write_text(json.dumps(profile), encoding="utf-8")
     with pytest.raises(ValueError):
         load_vehicle_profiles(path)
+
+
+def test_production_velocity_workflow_trains_and_evaluates_all_four_profiles():
+    workflow = (ROOT / ".github" / "workflows" / "universal-ppo-five-stage.yml").read_text(encoding="utf-8")
+    expected_ids = {
+        "smooth2-a2212-custom-prop",
+        "generic-5inch-quad",
+        "generic-7inch-long-range",
+        "generic-3inch-cinewhoop",
+    }
+    assert all(vehicle_id in workflow for vehicle_id in expected_ids)
+    assert "--vehicle-family vehicle_models/family/vehicle_profiles.json" in workflow
+    assert "--vehicle-id" not in workflow
+    assert "assert len(profiles) == 4" in workflow
+    assert "assert len(results) == 4" in workflow
+    assert '"episodes_per_vehicle": 10' in workflow
+    assert '"metrics_by_vehicle": metrics_by_vehicle' in workflow
+    assert "universal-quad-four-vehicle-five-stage" in workflow
+    assert '"physical_flight_eligible": false' in workflow.lower()

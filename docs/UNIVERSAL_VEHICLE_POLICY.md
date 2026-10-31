@@ -143,3 +143,41 @@ No new workflow or test suite was created. The existing five-stage workflow
 stores v5 checkpoints separately at `training/models/universal-quad-v5/`.
 The oracle teacher is a simulation training aid, not a flight controller.
 Successful PPO simulation metrics do not establish real-flight safety.
+
+
+## Five-stage nose-relative velocity and yaw-rate curriculum
+
+The production workflow is `.github/workflows/universal-ppo-five-stage.yml`. It
+uses one shared, hardware-conditioned PPO policy across all four profiles in
+`vehicle_models/family/vehicle_profiles.json`:
+
+- `smooth2-a2212-custom-prop`
+- `generic-5inch-quad`
+- `generic-7inch-long-range`
+- `generic-3inch-cinewhoop`
+
+No profile is pinned during training. The sampler can adapt exposure using
+per-profile evaluation weaknesses. Domain-randomization ranges are proportional
+to each profile's own nominal parameters; the same absolute mass, motor, or
+thrust constants are not imposed across unlike vehicles.
+
+Each of five curriculum stages chains a 400K-step teacher-assisted phase into a
+400K-step teacher-free phase. The teacher is an oracle available only inside
+the training action wrapper. It tracks nose-forward/nose-left horizontal
+velocity, world-up vertical velocity, and an independent yaw-rate command.
+Positive yaw rate turns the nose left; zero translational command with nonzero
+yaw-rate command produces an in-place horizontal turn. Stage-specific yaw-rate
+limits increase from 20 to 90 degrees per second.
+
+The final held-out evaluation is independent of periodic checkpoint selection:
+10 episodes are evaluated separately for each of the four profiles. The
+workflow fails if any profile is missing, duplicated, or has fewer than 10
+episodes, and stores metrics by vehicle rather than averaging away a weak
+profile.
+
+All four profile records currently carry `provisional_estimate` calibration
+status. Their simulation results are software research evidence only, not
+measured performance, flight clearance, or evidence of sim-to-real transfer.
+The Smooth2 propeller geometry and thrust calibration remain deliberately
+separate from this training workflow and must be updated only after the
+redesign and subsequent motor/propeller characterization are available.
