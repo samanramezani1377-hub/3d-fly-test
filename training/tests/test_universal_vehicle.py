@@ -20,11 +20,12 @@ from fast_physics.vehicle_family import (
 )
 
 
-def test_family_has_distinct_provisional_quadrotor_profiles():
+def test_family_has_distinct_provisional_and_cad_estimated_quadrotor_profiles():
     profiles = load_vehicle_profiles(DEFAULT_VEHICLE_FAMILY)
     assert len(profiles) >= 3
     assert len({p["vehicle_id"] for p in profiles}) == len(profiles)
-    assert all(p["calibration_status"] == "provisional_estimate" for p in profiles)
+    assert profiles[0]["calibration_status"] == "cad_bemt_estimate"
+    assert all(p["calibration_status"] == "provisional_estimate" for p in profiles[1:])
     assert len({p["physical"]["mass_kg"] for p in profiles}) > 1
     assert len({p["geometry"]["propeller_diameter_m"] for p in profiles}) > 1
 
