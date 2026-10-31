@@ -1,0 +1,1 @@
+Smooth2 CAD propulsion analysis. Analytical BEMT estimate only; not measured data.
