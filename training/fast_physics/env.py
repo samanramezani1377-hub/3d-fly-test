@@ -150,6 +150,9 @@ class AdaptiveDroneEnv(gym.Env):
     def _sample_velocity_command(self) -> np.ndarray:
         stage = int((self.active_randomization.get("active_curriculum_stage") or {}).get("stage", 1))
         limits = self.velocity_command_limits_m_s.astype(np.float64)
+        # Explicit neutral intervals teach braking, stopping and stable hover.
+        if self.np_random.random() < 0.15:
+            return np.zeros(3, dtype=np.float32)
         if stage <= 1:
             axes, magnitude = 1, float(self.np_random.uniform(0.15, 0.35))
         elif stage == 2:
