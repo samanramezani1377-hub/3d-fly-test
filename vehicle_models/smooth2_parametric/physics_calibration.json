@@ -30,8 +30,16 @@
     "linear_drag_kg_s": 0.08,
     "quadratic_drag_kg_m": 0.015,
     "angular_damping_nms": 0.002,
-    "linear_drag_body_kg_s": null,
-    "quadratic_drag_body_kg_m": null,
+    "linear_drag_body_kg_s": [
+      0.02,
+      0.02,
+      0.012
+    ],
+    "quadratic_drag_body_kg_m": [
+      0.022,
+      0.022,
+      0.012
+    ],
     "evidence": "scalar drag and damping defaults are numerical regularizers; body-axis drag coefficients and rotor polar inertia are unmeasured and remain unknown",
     "estimate_method": {
       "mass": "0.6 kg engineering baseline retained as the nominal assembled mass; current CAD exports do not encode verified material assignments or electronics masses, so this is a BOM-level estimate rather than a mesh-density measurement.",
@@ -51,6 +59,54 @@
           0.35
         ]
       }
+    },
+    "aerodynamic_estimate": {
+      "method": "CAD-envelope projected-area estimate from body, four arms and four vertical propeller guards",
+      "drag_coefficient_assumed": 1,
+      "air_density_kg_m3": 1.225,
+      "quadratic_drag_coefficients_kg_m": [
+        0.022,
+        0.022,
+        0.012
+      ],
+      "uncertainty_fractional": [
+        -0.5,
+        0.8
+      ],
+      "note": "Screening estimate only; no CFD or wind-tunnel validation. Propwash/guard interference not resolved."
+    },
+    "mass_properties_estimate": {
+      "method": "component-lumped estimate constrained to nominal 0.6 kg takeoff mass",
+      "motor_count": 4,
+      "motor_mass_each_kg_assumed": 0.053,
+      "remaining_frame_battery_electronics_fasteners_mass_kg": 0.388,
+      "center_of_mass_m": [
+        0,
+        0,
+        0
+      ],
+      "inertia_tensor_kg_m2": [
+        [
+          0.0038,
+          0,
+          0
+        ],
+        [
+          0,
+          0.0038,
+          0
+        ],
+        [
+          0,
+          0,
+          0.0075
+        ]
+      ],
+      "uncertainty_fractional": [
+        -0.35,
+        0.35
+      ],
+      "note": "Full tensor format, but not integrated from STEP solids: CAD material densities and verified battery/electronics BOM are unavailable. Products of inertia set to zero under nominal symmetry assumption."
     }
   },
   "motor_propeller": {
@@ -118,7 +174,7 @@
       },
       "source_parameter_file": "cad/parametric/model.params.json"
     },
-    "simulator_thrust_model_policy": "unchanged_by_CAD_sync; existing simulator thrust coefficient, torque proxy, motor lag and rotor-speed limits are preserved; no measured thrust curve is inferred from CAD.",
+    "simulator_thrust_model_policy": "Runtime CAD-station blade-element/momentum model is enabled for Smooth2 only, including per-rotor axial inflow and reaction torque. It remains a screening estimate, not bench-calibrated.",
     "bemt_estimate": {
       "method": "existing cad/parametric/prop_bemt.py analyse() + motor_operating_point() model",
       "assumptions": {
@@ -206,6 +262,13 @@
         ]
       },
       "warning": "BEMT screening estimate includes the CAD airfoil camber zero-lift correction (-4.1545 deg), but remains sensitive to airfoil polar approximation, Reynolds number, blade flexibility, inflow, guard interference and motor vendor variation. Do not use as a verified real-flight limit."
+    },
+    "propeller_runtime_model": {
+      "implementation": "training/fast_physics/propeller.py",
+      "method": "blade-element/momentum annulus solve with Prandtl tip loss",
+      "inputs": "CAD radial station radius fraction, chord, twist, four blades, 158.999 mm diameter, 10 mm hub radius",
+      "inflow": "local body-axis air velocity plus angular-rate contribution at each rotor station",
+      "calibration": "BEMT-derived screening estimate; not a measured thrust stand curve"
     }
   },
   "synthetic_software_test_values": {
