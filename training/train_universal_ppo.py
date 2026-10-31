@@ -124,10 +124,12 @@ class BalancedProfileCallback(BaseCallback):
         self.last_eval_timesteps = int(self.num_timesteps)
         profile_reports = []
         for pi, profile in enumerate(self.profiles):
+            # Checkpoint selection must measure the PPO policy alone. The teacher
+            # may guide training, but is always disabled in every periodic evaluation.
             e = BodyWrenchActionWrapper(VehicleFamilyEnv(vehicle_family_path=self.family_path,
                 randomization_path=self.randomization_path, history_length=self.history_length,
                 randomize=True, curriculum_stage=self.stage, vehicle_id=profile["vehicle_id"]),
-                disable_teacher=self.disable_teacher, reference_weight_override=self.teacher_weight)
+                disable_teacher=True, reference_weight_override=0.0)
             plant_env = e.env
             episodes = []
             try:
@@ -380,7 +382,9 @@ def main(argv=None):
             "profile_sampling": "adaptive weakness-weighted sampling; smoothed updates from balanced profile evaluation",
             "reference_teacher_schedule": {"stage_1": 0.80, "stage_2": 0.60, "stage_3": 0.40, "stage_4": 0.20, "stage_5": 0.0},
             "reference_teacher_disabled_for_this_run": args.no_teacher,
+            "reference_teacher_disabled_for_all_periodic_evaluations": True,
             "reference_teacher_weight_override": args.teacher_weight,
+            "evaluation_reference_teacher_weight": 0.0,
             "evaluation_metrics": ["takeoff_success", "five_second_sustained_hover", "crash_rate", "stable_hover_duration", "motor_saturation_fraction", "mean_return"],
             "sb3_diagnostics": ["train/approx_kl", "train/explained_variance", "train/entropy_loss", "train/value_loss", "train/policy_gradient_loss"],
             "episode_randomization_ground_truth_is_hidden": True,
