@@ -1,7 +1,7 @@
 {
   "mass_kg": 1.5,
-  "rotor_radius_m": 0.127,
-  "arm_length_m": 0.2667,
+  "rotor_radius_m": 0.079499482216,
+  "arm_length_m": 0.17697677540301432,
   "motor_kv_rpm_per_volt": 920,
   "max_voltage_v": 14.8,
   "inertia_kg_m2": {
@@ -16,10 +16,10 @@
     "z": 0
   },
   "visual": {
-    "body_x_m": 0.3,
-    "body_y_m": 0.09,
-    "body_z_m": 0.3,
-    "propeller_radius_m": 0.13
+    "body_x_m": 0.1456852,
+    "body_y_m": 0.0585755,
+    "body_z_m": 0.2150355,
+    "propeller_radius_m": 0.079499482216
   },
   "model_scale": 1,
   "battery_cells": 4,
