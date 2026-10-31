@@ -264,6 +264,10 @@ jobs:
               "mean_yaw_command_coverage",
               "mean_neutral_braking_time_seconds",
               "mean_motor_saturation_fraction",
+              "mean_estimated_battery_current_a",
+              "mean_estimated_battery_energy_consumed_wh",
+              "mean_estimated_battery_consumed_ah",
+              "mean_final_battery_state_of_charge_estimate",
           )
           metrics_by_vehicle = {}
           for result in results:
