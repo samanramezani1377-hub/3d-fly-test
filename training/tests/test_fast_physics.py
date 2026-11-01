@@ -271,12 +271,25 @@ def test_env_exposes_estimator_context_but_not_ground_truth_parameters():
         env.close()
 
 
-def test_full_cg_offset_is_randomized_in_all_three_body_axes():
+def test_cg_randomization_preserves_vertical_symmetry_axis():
     params = synthetic_params()
     config = json.loads(RANDOMIZATION.read_text(encoding="utf-8"))
     sampled, details = sample_scenario(params, np.random.default_rng(31), config)
-    assert len(details["center_of_mass_offset_m"]) == 3
+    offset = np.asarray(details["center_of_mass_offset_m"])
+    assert details["center_of_mass_randomization_axes"] == "vertical_body_z_only"
+    assert offset == pytest.approx([0.0, 0.0, offset[2]], abs=0.0)
+    assert sampled.center_of_mass_m[:2] == pytest.approx(params.center_of_mass_m[:2], abs=0.0)
     assert sampled.center_of_mass_m[2] != params.center_of_mass_m[2]
+
+
+def test_stage_one_smooth2_cg_remains_on_the_geometric_vertical_axis():
+    params = synthetic_params()
+    config = json.loads((ROOT / "vehicle_models/family/domain_randomization.json").read_text(encoding="utf-8"))
+    stage_one = randomization_for_stage(config, 1)
+    sampled, details = sample_scenario(params, np.random.default_rng(12345), stage_one)
+    assert sampled.center_of_mass_m[0] == pytest.approx(params.center_of_mass_m[0], abs=0.0)
+    assert sampled.center_of_mass_m[1] == pytest.approx(params.center_of_mass_m[1], abs=0.0)
+    assert details["center_of_mass_offset_m"][:2] == [0.0, 0.0]
 
 
 def test_sensor_noise_is_reproducible_with_same_seed():
