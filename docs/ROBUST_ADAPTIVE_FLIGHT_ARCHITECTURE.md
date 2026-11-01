@@ -155,12 +155,12 @@ The plant is therefore a stronger 6-DoF control-learning approximation with expl
 
 `domain_randomization.json` defines initial software experiment bounds. A new physical parameter set is sampled at reset; the airframe geometry does not change.
 
-Randomized values:
+Randomized values (for Smooth2, CG randomization is vertical-only; its body-frame X/Y coordinates remain on the geometric centreline):
 
 | Parameter | Initial range | Reason |
 |---|---:|---|
 | Total mass multiplier | 0.80–1.25 | added/removed payload and battery variation |
-| CG offset, all body axes | ±15 mm | payload placement and assembly variation |
+| CG offset, vertical body axis only | configured bound; no lateral/longitudinal shift | Smooth2's symmetric design constrains CG to the vertical line through the geometric centre; asymmetric CG shifts are not sampled |
 | Inertia multiplier per axis | 0.70–1.40 | distribution of mass changes |
 | Per-motor effectiveness | 0.90–1.10 | motor/propeller mismatch |
 | Voltage factor | 0.82–1.00 | loaded battery / sag proxy |
