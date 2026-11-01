@@ -272,13 +272,17 @@ def sample_scenario(
 
     mass_scale = uniform("mass", "scale", (0.80, 1.25))
     cg_cfg = randomization.get("center_of_mass", {})
+    # Smooth2 is a fourfold-symmetric airframe whose design CG is constrained
+    # to the vertical line through the geometric centre. Randomize only its
+    # vertical coordinate; lateral/longitudinal CG offsets would invent an
+    # asymmetric payload layout and create artificial roll/pitch moments.
     if "offset_arm_fraction" in cg_cfg:
         arm_radius = float(np.mean(np.linalg.norm(np.asarray(base.rotor_positions_m)[:, :2], axis=1)))
-        cg_bound = float(cg_cfg["offset_arm_fraction"])
-        cg_offset = rng.uniform(-cg_bound, cg_bound, size=3) * arm_radius
+        cg_bound = float(cg_cfg["offset_arm_fraction"]) * arm_radius
     else:
         cg_bounds = cg_cfg.get("offset_m", [-0.015, 0.015])
-        cg_offset = rng.uniform(float(cg_bounds[0]), float(cg_bounds[1]), size=3)
+        cg_bound = max(abs(float(cg_bounds[0])), abs(float(cg_bounds[1])))
+    cg_offset = np.array([0.0, 0.0, float(rng.uniform(-cg_bound, cg_bound))], dtype=np.float64)
     inertia_bounds = randomization.get("inertia", {}).get("scale", [0.70, 1.40])
     inertia_scale = rng.uniform(float(inertia_bounds[0]), float(inertia_bounds[1]), size=3)
     motor_cfg = randomization.get("motor", {})
@@ -334,6 +338,7 @@ def sample_scenario(
     details = {
         "mass_scale": mass_scale,
         "center_of_mass_offset_m": cg_offset.tolist(),
+        "center_of_mass_randomization_axes": "vertical_body_z_only",
         "inertia_scale_xyz": inertia_scale.tolist(),
         "motor_effectiveness": motor_effectiveness.tolist(),
         "motor_effectiveness_mode": "independent_per_rotor" if motor_cfg.get("per_rotor_effectiveness", False) else "matched_common_mode",
