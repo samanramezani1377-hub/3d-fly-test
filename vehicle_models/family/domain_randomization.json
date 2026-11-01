@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Family PPO domain randomization. Smooth2 nominal physics now uses CAD/BEMT screening estimates; these ranges deliberately expose their uncertainty. All bounds are simulation priors, not verified flight limits.",
+  "description": "Family PPO domain randomization. Smooth2 nominal physics now uses CAD/BEMT screening estimates; these ranges deliberately expose their uncertainty. All bounds are simulation priors, not verified flight limits. Smooth2 centre-of-mass uncertainty is sampled only along body Z; body X/Y remain on the geometric centreline.",
   "mass": {
     "scale": [
       0.75,
