@@ -19,11 +19,12 @@ class VelocityYawReferenceController:
 
     def __init__(
         self, params: VehicleParameters, *, wind_m_s=(0.0, 0.0, 0.0),
-        dt_s: float = 0.02, velocity_kp=(2.4, 2.4, 2.8),
-        position_kp=(1.0, 1.0, 1.4), attitude_kp=(12.0, 12.0, 0.0),
-        attitude_kd=(6.0, 6.0, 0.0), yaw_rate_kp=4.0, yaw_rate_kd=0.35,
-        max_horizontal_accel_m_s2=3.0, max_vertical_accel_m_s2=3.0,
-        max_tilt_rad=0.40, max_yaw_accel_rad_s2=8.0,
+        dt_s: float = 0.02, velocity_kp=(2.8, 2.8, 3.2),
+        velocity_ki=(0.35, 0.35, 0.45), velocity_integral_limit=(1.25, 1.25, 1.0),
+        position_kp=(1.15, 1.15, 1.55), attitude_kp=(14.0, 14.0, 0.0),
+        attitude_kd=(7.0, 7.0, 0.0), yaw_rate_kp=5.0, yaw_rate_kd=0.45,
+        max_horizontal_accel_m_s2=4.5, max_vertical_accel_m_s2=3.5,
+        max_tilt_rad=0.48, max_yaw_accel_rad_s2=10.0,
     ):
         params.validate()
         self.params = params
@@ -48,6 +49,10 @@ class VelocityYawReferenceController:
             )
         self.dt = float(dt_s)
         self.velocity_kp = np.asarray(velocity_kp, dtype=np.float64)
+        self.velocity_ki = np.asarray(velocity_ki, dtype=np.float64)
+        self.velocity_integral_limit = np.asarray(velocity_integral_limit, dtype=np.float64)
+        self.velocity_integral = np.zeros(3, dtype=np.float64)
+        self._previous_command = np.zeros(4, dtype=np.float64)
         self.position_kp = np.asarray(position_kp, dtype=np.float64)
         self.attitude_kp = np.asarray(attitude_kp, dtype=np.float64)
         self.attitude_kd = np.asarray(attitude_kd, dtype=np.float64)
@@ -57,7 +62,8 @@ class VelocityYawReferenceController:
         self.max_tilt, self.max_yaw_accel = float(max_tilt_rad), float(max_yaw_accel_rad_s2)
         if self.wind.shape != (3,) or any(
             x.shape != (3,) for x in
-            (self.velocity_kp, self.position_kp, self.attitude_kp, self.attitude_kd)
+            (self.velocity_kp, self.velocity_ki, self.velocity_integral_limit,
+             self.position_kp, self.attitude_kp, self.attitude_kd)
         ):
             raise ValueError("wind and controller gains must be 3-vectors")
         if self.dt <= 0 or min(
@@ -94,7 +100,21 @@ class VelocityYawReferenceController:
         commanded_velocity_world = self._body_yaw_velocity_to_world(command_body, yaw)
         position_error = target - position
         desired_velocity_world = commanded_velocity_world + self.position_kp * position_error
-        accel_world = self.velocity_kp * (desired_velocity_world - velocity)
+        velocity_error = desired_velocity_world - velocity
+
+        # Reset accumulated bias when the pilot changes direction/speed sharply;
+        # otherwise an old command's integral can fight the new command.
+        command = np.concatenate((command_body, [float(desired_yaw_rate_rad_s)]))
+        if np.linalg.norm(command - self._previous_command) > 0.35:
+            self.velocity_integral *= 0.35
+        self._previous_command = command
+
+        # Integrate only when the requested acceleration is not already
+        # saturated in the same direction (conditional anti-windup).
+        candidate_integral = np.clip(
+            self.velocity_integral + velocity_error * self.dt,
+            -self.velocity_integral_limit, self.velocity_integral_limit,
+        )
 
         # Privileged feed-forward compensation for the plant's body-axis drag.
         rot = rotation_matrix(attitude)
@@ -115,13 +135,40 @@ class VelocityYawReferenceController:
             -linear_drag * air_velocity_body
             -quadratic_drag * np.abs(air_velocity_body) * air_velocity_body
         )
-        accel_world -= (rot @ drag_body) / p.mass_kg
-        accel_world[:2] = np.clip(
-            accel_world[:2], -self.max_horizontal_accel, self.max_horizontal_accel
+        drag_accel_world = -(rot @ drag_body) / p.mass_kg
+        accel_without_integral = self.velocity_kp * velocity_error + drag_accel_world
+        accel_candidate = accel_without_integral + self.velocity_ki * candidate_integral
+
+        # Derive the available tilt/acceleration from this episode's actual
+        # thrust-to-weight margin. A controller must not request a tilt that
+        # leaves insufficient thrust to support the vehicle.
+        thrust_to_weight = self.max_collective_thrust_n / max(p.mass_kg * 9.80665, 1e-9)
+        if thrust_to_weight <= 1.0:
+            tilt_authority = 0.0
+        else:
+            tilt_authority = float(np.arccos(np.clip(1.04 / thrust_to_weight, -1.0, 1.0)))
+        effective_tilt = min(self.max_tilt, tilt_authority)
+        horizontal_limit = min(
+            self.max_horizontal_accel,
+            9.80665 * np.tan(max(effective_tilt, 0.0)),
         )
-        accel_world[2] = np.clip(
-            accel_world[2], -self.max_vertical_accel, self.max_vertical_accel
-        )
+        vertical_up_limit = max(0.0, self.max_collective_thrust_n / p.mass_kg - 9.80665)
+        vertical_limit = min(self.max_vertical_accel, max(vertical_up_limit, 0.15))
+
+        # Conditional anti-windup independently on horizontal and vertical axes.
+        if (np.linalg.norm(accel_candidate[:2]) > horizontal_limit
+                and float(np.dot(velocity_error[:2], accel_candidate[:2])) > 0.0):
+            candidate_integral[:2] = self.velocity_integral[:2]
+        if (abs(float(accel_candidate[2])) > vertical_limit
+                and velocity_error[2] * accel_candidate[2] > 0.0):
+            candidate_integral[2] = self.velocity_integral[2]
+        self.velocity_integral = candidate_integral
+        accel_world = accel_without_integral + self.velocity_ki * self.velocity_integral
+
+        horizontal_norm = float(np.linalg.norm(accel_world[:2]))
+        if horizontal_norm > horizontal_limit and horizontal_norm > 1e-9:
+            accel_world[:2] *= horizontal_limit / horizontal_norm
+        accel_world[2] = float(np.clip(accel_world[2], -self.max_vertical_accel, vertical_limit))
 
         cy, sy = np.cos(yaw), np.sin(yaw)
         accel_body_x = cy * accel_world[0] + sy * accel_world[1]
@@ -135,8 +182,18 @@ class VelocityYawReferenceController:
 
         # Roll/pitch stabilization plus independent world-vertical yaw-rate control.
         desired_attitude = np.array([desired_roll, desired_pitch, attitude[2]])
+        # Geometric SO(3) attitude error avoids treating Euler roll/pitch
+        # differences as independent when the vehicle is yawed or tilted.
+        desired_rotation = rotation_matrix(desired_attitude)
+        current_rotation = rotation_matrix(attitude)
+        relative_rotation = current_rotation.T @ desired_rotation
+        attitude_error = 0.5 * np.array([
+            relative_rotation[2, 1] - relative_rotation[1, 2],
+            relative_rotation[0, 2] - relative_rotation[2, 0],
+            relative_rotation[1, 0] - relative_rotation[0, 1],
+        ], dtype=np.float64)
         desired_angular_accel = (
-            self.attitude_kp * (desired_attitude - attitude) - self.attitude_kd * rates
+            self.attitude_kp * attitude_error - self.attitude_kd * rates
         )
         cos_pitch = max(abs(float(np.cos(attitude[1]))), 1e-3)
         cos_roll = max(abs(float(np.cos(attitude[0]))), 1e-3)
@@ -155,9 +212,24 @@ class VelocityYawReferenceController:
             )
         )
         body_r_error = desired_body_r - rates[2]
+        # Bound yaw acceleration by the available counter-rotating rotor
+        # reaction torque and the episode's actual yaw inertia.
+        max_thrust = self.max_collective_thrust_n
+        positive = np.asarray(p.spin_signs) > 0
+        negative = ~positive
+        per_rotor_max = (
+            self.max_collective_thrust_n
+            * np.asarray(p.motor_effectiveness, dtype=np.float64)
+            / max(float(np.sum(p.motor_effectiveness)), 1e-9)
+        )
+        positive_torque = float(np.sum(per_rotor_max[positive])) * p.torque_to_thrust_m
+        negative_torque = float(np.sum(per_rotor_max[negative])) * p.torque_to_thrust_m
+        yaw_torque_authority = min(positive_torque, negative_torque)
+        yaw_accel_authority = 0.80 * yaw_torque_authority / max(float(p.inertia_matrix[2, 2]), 1e-9)
+        effective_yaw_accel = min(self.max_yaw_accel, yaw_accel_authority)
         desired_angular_accel[2] = np.clip(
             self.yaw_rate_kp * body_r_error - self.yaw_rate_kd * rates[2],
-            -self.max_yaw_accel, self.max_yaw_accel,
+            -effective_yaw_accel, effective_yaw_accel,
         )
 
         inertia = p.inertia_matrix
