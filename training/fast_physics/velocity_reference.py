@@ -45,7 +45,7 @@ class VelocityYawReferenceController:
             self.max_collective_thrust_n = (
                 4.0 * params.thrust_coefficient_n_per_rad_s2
                 * (params.max_rotor_speed_rad_s * params.voltage_factor) ** 2
-                * max(params.motor_effectiveness)
+                * float(np.sum(params.motor_effectiveness))
             )
         self.dt = float(dt_s)
         self.velocity_kp = np.asarray(velocity_kp, dtype=np.float64)
@@ -214,7 +214,6 @@ class VelocityYawReferenceController:
         body_r_error = desired_body_r - rates[2]
         # Bound yaw acceleration by the available counter-rotating rotor
         # reaction torque and the episode's actual yaw inertia.
-        max_thrust = self.max_collective_thrust_n
         positive = np.asarray(p.spin_signs) > 0
         negative = ~positive
         per_rotor_max = (
