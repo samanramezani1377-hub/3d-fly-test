@@ -55,6 +55,14 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
         assert env.reference_weight == 1.0
         assert reset_info.get("reference_teacher_uses_privileged_simulator_state") is True
 
+        # Report the physical thrust margin separately from controller quality.
+        # A controller cannot hover if the sampled plant cannot produce weight.
+        params = env.inner.plant.params
+        teacher = env._velocity_reference
+        max_collective_thrust_n = float(teacher.max_collective_thrust_n)
+        thrust_to_weight_ratio = max_collective_thrust_n / (params.mass_kg * 9.80665)
+        physically_hover_capable = thrust_to_weight_ratio >= 1.04
+
         linear_errors: dict[int, list[float]] = {}
         yaw_errors: dict[int, list[float]] = {}
         crashed = False
@@ -104,6 +112,7 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
         max_yaw_command_error = max(yaw_means, default=float("inf"))
 
         checks = {
+            "physically_hover_capable_with_4pct_margin": physically_hover_capable,
             "no_crash": not crashed,
             "successful_takeoff": took_off,
             "all_26_translation_commands": len(linear_errors) == 26,
@@ -121,6 +130,9 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             "teacher_weight": 1.0,
             "randomization": reset_info.get("scenario", {}),
             "wind_m_s": reset_info.get("wind_m_s"),
+            "max_collective_thrust_n": max_collective_thrust_n,
+            "thrust_to_weight_ratio": thrust_to_weight_ratio,
+            "physically_hover_capable": physically_hover_capable,
             "steps": steps,
             "crashed": crashed,
             "took_off": took_off,
