@@ -209,7 +209,9 @@ def main() -> int:
         "episodes": episodes,
         "limitations": (
             "Finite deterministic randomized simulation sample only; it cannot prove "
-            "success under every physically possible condition or validate real hardware."
+            "success under every physically possible condition or validate real hardware. "
+            "Each episode also reports thrust-to-weight margin to distinguish an "
+            "underpowered randomized plant from a teacher-control failure."
         ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
