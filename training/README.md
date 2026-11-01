@@ -51,7 +51,7 @@ Current workflow configuration (keep this section aligned with the [full operati
 
 The workflow restores the selected 1M teacher-assisted bootstrap checkpoint from Actions run [41158518207](https://github.com/samanramezani1377-hub/3d-fly-test/actions/runs/41158518207), then chains each stage's best teacher-assisted checkpoint into its teacher-free phase and each teacher-free best checkpoint into the next stage.
 
-Before checkpoint restoration or PPO training, the workflow now runs `training/preflight_velocity_teacher.py`: 12 teacher-only randomized closed-loop episodes (3 per profile, all four profiles) at 100% teacher contribution and zero PPO contribution. It requires successful takeoff, no crashes, complete 26-direction/30-yaw-command coverage, velocity/yaw tracking within the documented evaluator limits, and neutral braking within 3.5 seconds. Any failed episode blocks the training job. The report is uploaded even on failure and copied into the published model output on success. This is a finite seeded Stage-5 sample, not proof over every possible condition or real hardware.
+Before checkpoint restoration or PPO training, the workflow runs `training/preflight_velocity_teacher.py`: three deterministic Stage-5 Smooth2-only teacher episodes at 100% teacher contribution and zero PPO contribution. It requires successful takeoff, no crashes, complete 26-direction/30-yaw-command coverage, velocity/yaw tracking within the evaluator limits, and neutral braking within 3.5 seconds. The report also records maximum collective thrust and thrust-to-weight ratio, so an underpowered randomized plant can be distinguished from a controller failure. Any failed episode blocks PPO training. This is a finite seeded sample, not proof over every possible condition or real hardware.
 
  It evaluates nose-relative 3D velocity commands, pure in-place yaw turns in both directions, and combined translation/yaw commands. The stage yaw-rate limits are 20, 35, 50, 70 and 90 degrees/second.
 
@@ -263,6 +263,12 @@ the only training workflow; no training or additional tests are launched by
 these code changes. All example vehicle parameters remain provisional
 simulation estimates and are not evidence of real-flight capability.
 
+
+### Strengthened Smooth2 velocity/yaw teacher (controller update)
+
+The privileged velocity teacher now includes bounded velocity-error integration with conditional anti-windup, stronger velocity/position and attitude feedback, and a geometric SO(3) attitude error instead of independent Euler-angle subtraction. Horizontal acceleration and tilt are limited dynamically from the sampled vehicle's available thrust-to-weight margin; yaw acceleration is bounded by estimated counter-rotating rotor torque authority and the episode yaw inertia. The quadratic fallback's maximum collective thrust uses the sum of individual motor effectiveness values.
+
+The teacher changes do not modify the Smooth2 CAD propeller geometry, BEMT equations, thrust coefficient calibration, or runtime rotor thrust model. The existing five-stage workflow remains the only training workflow. Its teacher-only preflight is still strict; it has not been weakened or moved to an easier curriculum stage. Run the existing manually dispatched workflow to compile the controller and execute the three seeded Stage-5 capability episodes before PPO is allowed to start. Inspect the new thrust-to-weight fields in the preflight report alongside tracking errors.
 
 ### Universal PPO teacher-guided residual control (pipeline v5)
 
