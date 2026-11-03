@@ -40,7 +40,7 @@ def parse_args(argv=None):
 
 
 def build_velocity_evaluation_sequence(episode_index: int, stage: int, limits_m_s=(1.5, 1.5, 0.75)):
-    """Exercise 26 translational combinations plus yaw-only turns and combined turns."""
+    """Exercise 26 translation commands, then four independent yaw-only turns."""
     limits = np.asarray(limits_m_s, dtype=np.float64)
     if limits.shape != (3,) or np.any(limits <= 0):
         raise ValueError("velocity evaluation limits must be three positive values")
@@ -67,7 +67,6 @@ def build_velocity_evaluation_sequence(episode_index: int, stage: int, limits_m_
     direction_pairs = direction_pairs[offset:] + direction_pairs[:offset]
     commands = []
     for index, vector in enumerate(direction_pairs):
-        yaw_rate = yaw_limit if index % 2 == 0 else -yaw_limit
         # Keep translation tracking independent of yaw dynamics; yaw is tested below.
         commands.append({"velocity_m_s": vector.tolist(), "yaw_rate_rad_s": 0.0, "duration_steps": 35})
         commands.append({"velocity_m_s": (-vector).tolist(), "yaw_rate_rad_s": 0.0, "duration_steps": 35})
