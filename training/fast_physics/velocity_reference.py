@@ -60,6 +60,7 @@ class VelocityYawReferenceController:
         self.max_horizontal_accel = float(max_horizontal_accel_m_s2)
         self.max_vertical_accel = float(max_vertical_accel_m_s2)
         self.max_tilt, self.max_yaw_accel = float(max_tilt_rad), float(max_yaw_accel_rad_s2)
+        self.last_diagnostics: dict[str, float | list[float]] = {}
         if self.wind.shape != (3,) or any(
             x.shape != (3,) for x in
             (self.velocity_kp, self.velocity_ki, self.velocity_integral_limit,
@@ -174,10 +175,16 @@ class VelocityYawReferenceController:
         self.velocity_integral = candidate_integral
         accel_world = accel_without_integral + self.velocity_ki * self.velocity_integral
 
+        raw_accel_world = accel_world.copy()
         horizontal_norm = float(np.linalg.norm(accel_world[:2]))
         if horizontal_norm > horizontal_limit and horizontal_norm > 1e-9:
             accel_world[:2] *= horizontal_limit / horizontal_norm
         accel_world[2] = float(np.clip(accel_world[2], -self.max_vertical_accel, vertical_limit))
+        horizontal_clip_fraction = (
+            max(0.0, 1.0 - horizontal_limit / horizontal_norm)
+            if horizontal_norm > horizontal_limit and horizontal_norm > 1e-9 else 0.0
+        )
+        vertical_was_clipped = not np.isclose(raw_accel_world[2], accel_world[2], atol=1e-9)
 
         cy, sy = np.cos(yaw), np.sin(yaw)
         accel_body_x = cy * accel_world[0] + sy * accel_world[1]
@@ -221,8 +228,15 @@ class VelocityYawReferenceController:
             )
         )
         body_r_error = desired_body_r - rates[2]
-        # Bound yaw acceleration by the available counter-rotating rotor
-        # reaction torque and the episode's actual yaw inertia.
+        # Bound yaw authority at the requested collective, not at an
+        # unconstrained all-motors-maximum operating point. Remaining thrust
+        # headroom determines how much differential rotor thrust is possible.
+        rot = rotation_matrix(attitude)
+        vertical_cosine = max(float(rot[2, 2]), 0.35)
+        collective = float(np.clip(
+            p.mass_kg * (9.80665 + accel_world[2]) / vertical_cosine,
+            0.0, self.max_collective_thrust_n,
+        ))
         positive = np.asarray(p.spin_signs) > 0
         negative = ~positive
         per_rotor_max = (
@@ -230,9 +244,13 @@ class VelocityYawReferenceController:
             * np.asarray(p.motor_effectiveness, dtype=np.float64)
             / max(float(np.sum(p.motor_effectiveness)), 1e-9)
         )
-        positive_torque = float(np.sum(per_rotor_max[positive])) * p.torque_to_thrust_m
-        negative_torque = float(np.sum(per_rotor_max[negative])) * p.torque_to_thrust_m
-        yaw_torque_authority = min(positive_torque, negative_torque)
+        positive_capacity = float(np.sum(per_rotor_max[positive]))
+        negative_capacity = float(np.sum(per_rotor_max[negative]))
+        positive_group = min(positive_capacity, collective)
+        negative_group = min(negative_capacity, collective)
+        positive_yaw_torque = max(0.0, 2.0 * positive_group - collective) * p.torque_to_thrust_m
+        negative_yaw_torque = max(0.0, 2.0 * negative_group - collective) * p.torque_to_thrust_m
+        yaw_torque_authority = min(positive_yaw_torque, negative_yaw_torque)
         yaw_accel_authority = 0.80 * yaw_torque_authority / max(float(p.inertia_matrix[2, 2]), 1e-9)
         effective_yaw_accel = min(self.max_yaw_accel, yaw_accel_authority)
         # body_r_error already contains the measured-rate feedback
@@ -250,11 +268,18 @@ class VelocityYawReferenceController:
             + np.cross(rates, angular_momentum)
             + p.angular_damping_nms * rates
         )
-        rot = rotation_matrix(attitude)
-        vertical_cosine = max(float(rot[2, 2]), 0.35)
-        collective = p.mass_kg * (9.80665 + accel_world[2]) / vertical_cosine
-        collective = float(np.clip(
-            collective, 0.0,
-            self.max_collective_thrust_n,
-        ))
+        self.last_diagnostics = {
+            "acceleration_requested_world_m_s2": raw_accel_world.astype(float).tolist(),
+            "acceleration_applied_world_m_s2": accel_world.astype(float).tolist(),
+            "horizontal_acceleration_limit_m_s2": float(horizontal_limit),
+            "vertical_acceleration_limit_m_s2": float(vertical_limit),
+            "horizontal_acceleration_clip_fraction": float(horizontal_clip_fraction),
+            "vertical_acceleration_clipped": float(vertical_was_clipped),
+            "desired_tilt_rad": [float(desired_roll), float(desired_pitch)],
+            "desired_tilt_limit_rad": float(self.max_tilt),
+            "yaw_torque_authority_nm": float(yaw_torque_authority),
+            "yaw_acceleration_authority_rad_s2": float(yaw_accel_authority),
+            "yaw_acceleration_limit_applied_rad_s2": float(effective_yaw_accel),
+            "collective_demand_n": float(collective),
+        }
         return np.array([collective, torque[0], torque[1], torque[2]], dtype=np.float64)
