@@ -19,11 +19,14 @@ class VelocityYawReferenceController:
 
     def __init__(
         self, params: VehicleParameters, *, wind_m_s=(0.0, 0.0, 0.0),
-        dt_s: float = 0.02, velocity_kp=(4.2, 4.2, 4.0),
+        dt_s: float = 0.02, velocity_kp=(3.0, 3.0, 4.0),
         velocity_ki=(0.55, 0.55, 0.65), velocity_integral_limit=(1.25, 1.25, 1.0),
         position_kp=(1.15, 1.15, 1.55), position_hold_velocity_limit_m_s=(1.5, 1.5, 0.75),
-        attitude_kp=(16.0, 16.0, 0.0),
-        attitude_kd=(8.5, 8.5, 0.0), yaw_rate_kp=6.5, yaw_rate_kd=0.45,
+        # Inner attitude loop must be clearly faster than the outer velocity loop
+        # (previous kp=16/kd=8.5 gave ~4 rad/s, the same bandwidth as velocity_kp,
+        # so actual tilt reached only ~55% of the requested tilt).
+        attitude_kp=(150.0, 150.0, 0.0),
+        attitude_kd=(25.0, 25.0, 0.0), yaw_rate_kp=6.5, yaw_rate_kd=0.45,
         max_horizontal_accel_m_s2=6.0, max_vertical_accel_m_s2=4.0,
         max_tilt_rad=0.55, max_yaw_accel_rad_s2=10.0,
     ):
@@ -285,6 +288,11 @@ class VelocityYawReferenceController:
             "velocity_feedback_gain": feedback_gain.astype(float).tolist(),
             "desired_tilt_rad": [float(desired_roll), float(desired_pitch)],
             "desired_tilt_limit_rad": float(effective_tilt),
+            "attitude_error_roll_pitch_rad": [float(attitude_error[0]), float(attitude_error[1])],
+            "measured_roll_pitch_rad": [float(attitude[0]), float(attitude[1])],
+            "desired_roll_pitch_rad": [float(desired_roll), float(desired_pitch)],
+            "requested_roll_pitch_angular_accel_rad_s2": [float(desired_angular_accel[0]), float(desired_angular_accel[1])],
+            "attitude_loop_natural_freq_rad_s": [float(np.sqrt(max(self.attitude_kp[0], 0.0))), float(np.sqrt(max(self.attitude_kp[1], 0.0)))],
             "current_thrust_axis_vertical_component": float(rot[2, 2]),
             "desired_thrust_axis_vertical_component": desired_thrust_axis_vertical,
             "position_hold_velocity_raw_m_s": position_hold_velocity_raw.astype(float).tolist(),

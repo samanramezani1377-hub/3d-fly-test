@@ -95,6 +95,8 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
         neutral_speed_at_3_5s = None
         steps = 0
         last_info = {}
+        takeoff_step = None
+        traces: list[dict] = []
 
         while steps < MAX_STEPS:
             # Any finite PPO action is ignored by the 100%-teacher blend.
@@ -130,6 +132,25 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
                 rotor_speed_fraction_samples.append(np.clip(rotor_omega / max_rotor_omega, 0.0, 1.5))
             crashed = crashed or bool(info.get("crashed", False))
             took_off = took_off or bool(info.get("has_taken_off", False))
+            if took_off and takeoff_step is None:
+                takeoff_step = steps
+            if steps % 5 == 0:
+                tc = info.get("teacher_controller", {}) if isinstance(info.get("teacher_controller"), dict) else {}
+                traces.append({
+                    "t_s": round(steps * 0.02, 3),
+                    "cmd": int(info.get("velocity_command_index", -1)),
+                    "des_v": [round(float(x), 4) for x in info.get("desired_velocity_body_m_s", [0, 0, 0])],
+                    "meas_v": [round(float(x), 4) for x in info.get("measured_velocity_body_yaw_m_s", [0, 0, 0])],
+                    "tilt_actual": round(float(info.get("actual_tilt_rad", 0.0)), 4),
+                    "tilt_desired": [round(float(x), 4) for x in tc.get("desired_tilt_rad", [0, 0])],
+                    "att_err": [round(float(x), 4) for x in tc.get("attitude_error_roll_pitch_rad", [0, 0])],
+                    "roll_pitch": [round(float(x), 4) for x in tc.get("measured_roll_pitch_rad", [0, 0])],
+                    "acc_req": [round(float(x), 3) for x in tc.get("acceleration_requested_world_m_s2", [0, 0, 0])],
+                    "collective_n": round(float(tc.get("collective_demand_n", 0.0)), 3),
+                    "altitude_m": round(float(info.get("altitude_m", 0.0)), 3),
+                    "rotor_frac_mean": round(float(np.mean(np.clip(rotor_omega / max_rotor_omega, 0.0, 1.5))), 4)
+                    if rotor_omega.shape == (4,) and max_rotor_omega > 0.0 else None,
+                })
 
             command_index = int(info.get("velocity_command_index", -1))
             if command_index >= 0:
@@ -217,6 +238,32 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
                 "mean_actual_tilt_rad": float(np.mean(actual_tilt)),
                 "horizontal_acceleration_clipped_fraction": float(np.mean(clip_fraction > 1e-9)) if len(clip_fraction) else None,
             }
+            # Extra diagnostics: is the failure tilt lag, rise time, overshoot or a wrong-axis error?
+            d0 = desired[0]
+            d_norm = float(np.linalg.norm(d0))
+            projection = (measured @ d0 / d_norm) if d_norm > 1e-9 else np.zeros(len(measured))
+            rise_idx = next((i for i, v in enumerate(projection) if d_norm > 1e-9 and v >= 0.63 * d_norm), None)
+            attitude_error = np.asarray([x.get("attitude_error_roll_pitch_rad", [0.0, 0.0]) for x in controller_samples], dtype=np.float64)
+            cross = measured - desired
+            if d_norm > 1e-9:
+                along = (cross @ d0 / d_norm)
+                perp = cross - np.outer(along, d0 / d_norm)
+                perp_norm = float(np.mean(np.linalg.norm(perp, axis=1)))
+                along_mean = float(np.mean(along))
+            else:
+                perp_norm, along_mean = float(np.mean(np.linalg.norm(cross, axis=1))), None
+            linear_command_details[str(command_index)].update({
+                "tilt_tracking_ratio_actual_over_desired": (
+                    float(np.mean(actual_tilt) / np.mean(np.linalg.norm(desired_tilt, axis=1)))
+                    if len(desired_tilt) and np.mean(np.linalg.norm(desired_tilt, axis=1)) > 1e-6 else None),
+                "mean_abs_attitude_error_rad": float(np.mean(np.linalg.norm(attitude_error, axis=1))) if len(attitude_error) else None,
+                "rise_time_63pct_s": None if rise_idx is None else float(rise_idx * 0.02),
+                "never_reached_63pct_of_command": d_norm > 1e-9 and rise_idx is None,
+                "peak_projected_speed_over_command": float(np.max(projection) / d_norm) if d_norm > 1e-9 else None,
+                "mean_error_along_command_m_s": along_mean,
+                "mean_error_perpendicular_to_command_m_s": perp_norm,
+                "mean_vertical_velocity_error_m_s": float(np.mean(cross[:, 2])),
+            })
 
         saturation_array = np.asarray(motor_saturation_samples, dtype=float)
         zero_array = np.asarray(motor_zero_samples, dtype=float)
@@ -315,11 +362,68 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             "wrench_allocation_report": allocation_report,
             "teacher_controller_report": controller_report,
             "checks": checks,
+            "failed_checks": sorted(k for k, v in checks.items() if not v),
             "passed": all(checks.values()),
             "crash_reasons": last_info.get("crash_reasons", []),
+            "takeoff_time_s": None if takeoff_step is None else takeoff_step * 0.02,
+            "teacher_gain_snapshot": {
+                "attitude_kp": teacher.attitude_kp.astype(float).tolist(),
+                "attitude_kd": teacher.attitude_kd.astype(float).tolist(),
+                "attitude_natural_freq_rad_s": float(np.sqrt(teacher.attitude_kp[0])),
+                "attitude_damping_ratio": float(teacher.attitude_kd[0] / (2.0 * np.sqrt(teacher.attitude_kp[0]))),
+                "velocity_kp": teacher.velocity_kp.astype(float).tolist(),
+                "velocity_ki": teacher.velocity_ki.astype(float).tolist(),
+                "max_horizontal_accel_m_s2": float(teacher.max_horizontal_accel),
+                "max_tilt_rad": float(teacher.max_tilt),
+                "motor_response_scale": reset_info.get("scenario", {}).get("motor_response_scale"),
+            },
+            "worst_linear_commands": sorted(
+                ({"command": int(k),
+                  "desired_velocity_body_m_s": v["desired_velocity_body_m_s"],
+                  "late_window_error_m_s": v["late_window_mean_tracking_error_after_20_steps_m_s"],
+                  "tilt_ratio": v.get("tilt_tracking_ratio_actual_over_desired"),
+                  "rise_time_63pct_s": v.get("rise_time_63pct_s"),
+                  "clipped_fraction": v.get("horizontal_acceleration_clipped_fraction")}
+                 for k, v in linear_command_details.items()
+                 if v.get("late_window_mean_tracking_error_after_20_steps_m_s") is not None),
+                key=lambda x: -x["late_window_error_m_s"])[:5],
+            "traces_downsampled_every_5_steps": traces,
         }
     finally:
         env.close()
+
+
+def compact_episode_summary(r: dict) -> dict:
+    """Short per-episode record for job logs; the full detail lives in report.json/traces.json."""
+    keys = ("vehicle_id", "episode_index", "seed", "neutral_tail_mode", "passed", "failed_checks", "error",
+            "steady_state_mean_velocity_tracking_error_m_s", "worst_direction_mean_error_m_s",
+            "steady_state_mean_yaw_rate_error_rad_s", "neutral_braking_seconds", "neutral_tail_final_speed_m_s",
+            "thrust_to_weight_ratio", "takeoff_time_s", "teacher_gain_snapshot", "worst_linear_commands")
+    out = {k: r.get(k) for k in keys if k in r}
+    report = r.get("teacher_controller_report") or {}
+    out["clip_fraction_horizontal"] = report.get("fraction_steps_horizontal_acceleration_clipped")
+    out["mean_actual_tilt_rad"] = report.get("mean_actual_tilt_rad")
+    out["mean_requested_horizontal_accel_m_s2"] = report.get("mean_requested_horizontal_acceleration_m_s2")
+    out["mean_actual_horizontal_accel_m_s2"] = report.get("mean_actual_physical_horizontal_acceleration_m_s2")
+    return out
+
+
+def write_step_summary(episodes: list[dict]) -> None:
+    import os
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    lines = ["## Teacher preflight", "", "| seed | tail | pass | vel err | worst dir | yaw err | brake s | failed checks |", "|---|---|---|---|---|---|---|---|"]
+    def f(x):
+        return "n/a" if x is None else f"{x:.3f}"
+    for e in episodes:
+        lines.append("| {} | {} | {} | {} | {} | {} | {} | {} |".format(
+            e.get("seed"), e.get("neutral_tail_mode"), "yes" if e.get("passed") else "NO",
+            f(e.get("steady_state_mean_velocity_tracking_error_m_s")), f(e.get("worst_direction_mean_error_m_s")),
+            f(e.get("steady_state_mean_yaw_rate_error_rad_s")), f(e.get("neutral_braking_seconds")),
+            ", ".join(e.get("failed_checks", [])) or "-"))
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
 
 
 def main() -> int:
@@ -358,7 +462,7 @@ def main() -> int:
                         "error": f"{type(exc).__name__}: {exc}",
                     }
                 episodes.append(result)
-                print(json.dumps(result, sort_keys=True), flush=True)
+                print(json.dumps(compact_episode_summary(result), sort_keys=True), flush=True)
 
     by_profile = {}
     for profile_id in sorted(EXPECTED_PROFILE_IDS):
@@ -394,7 +498,13 @@ def main() -> int:
         ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    traces_payload = {
+        f"seed{e.get('seed')}_{e.get('neutral_tail_mode')}": e.pop("traces_downsampled_every_5_steps", [])
+        for e in episodes
+    }
+    (args.output.parent / "traces.json").write_text(json.dumps(traces_payload), encoding="utf-8")
     args.output.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    write_step_summary(episodes)
     print(json.dumps({k: report[k] for k in ("test", "total_episodes", "profile_summary", "passed", "limitations")}, indent=2))
     if not report["passed"]:
         print("TEACHER PREFLIGHT FAILED: PPO training is blocked.", file=sys.stderr)
