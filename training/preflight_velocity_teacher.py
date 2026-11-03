@@ -70,6 +70,11 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
         neutral_started = None
         neutral_stable_steps = 0
         neutral_braking_seconds = None
+        motor_saturation_samples: list[float] = []
+        motor_zero_samples: list[float] = []
+        rotor_speed_fraction_samples: list[np.ndarray] = []
+        neutral_tail_speed_samples: list[float] = []
+        neutral_tail_yaw_samples: list[float] = []
         steps = 0
         last_info = {}
 
@@ -78,6 +83,12 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             obs, _, terminated, truncated, info = env.step(np.zeros(4, dtype=np.float32))
             steps += 1
             last_info = info
+            motor_saturation_samples.append(float(info.get("motor_saturation_fraction", 0.0)))
+            motor_zero_samples.append(float(info.get("motor_zero_command_fraction", 0.0)))
+            rotor_omega = np.asarray(info.get("rotor_omega_rad_s", []), dtype=float)
+            max_rotor_omega = float(params.max_rotor_speed_rad_s * params.voltage_factor)
+            if rotor_omega.shape == (4,) and max_rotor_omega > 0.0:
+                rotor_speed_fraction_samples.append(np.clip(rotor_omega / max_rotor_omega, 0.0, 1.5))
             crashed = crashed or bool(info.get("crashed", False))
             took_off = took_off or bool(info.get("has_taken_off", False))
 
@@ -94,6 +105,8 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
                     neutral_started = steps
                 velocity = np.asarray(info.get("state_velocity_m_s", [999, 999, 999]), dtype=float)
                 yaw_rate = abs(float(info.get("measured_yaw_rate_rad_s", 999.0)))
+                neutral_tail_speed_samples.append(float(np.linalg.norm(velocity)))
+                neutral_tail_yaw_samples.append(yaw_rate)
                 if np.linalg.norm(velocity) <= 0.25 and yaw_rate <= 0.15:
                     neutral_stable_steps += 1
                 else:
@@ -111,6 +124,22 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
         max_direction_error = max(linear_means, default=float("inf"))
         max_yaw_command_error = max(yaw_means, default=float("inf"))
 
+        saturation_array = np.asarray(motor_saturation_samples, dtype=float)
+        zero_array = np.asarray(motor_zero_samples, dtype=float)
+        rotor_speed_array = np.asarray(rotor_speed_fraction_samples, dtype=float)
+        neutral_tail_final_speed = neutral_tail_speed_samples[-1] if neutral_tail_speed_samples else None
+        neutral_tail_final_yaw_rate = neutral_tail_yaw_samples[-1] if neutral_tail_yaw_samples else None
+        motor_authority_report = {
+            "samples": int(len(saturation_array)),
+            "mean_motor_command_saturation_fraction": float(np.mean(saturation_array)) if saturation_array.size else None,
+            "peak_motor_command_saturation_fraction": float(np.max(saturation_array)) if saturation_array.size else None,
+            "fraction_of_steps_with_any_motor_at_limit": float(np.mean(np.any(rotor_speed_array >= 0.995, axis=1))) if rotor_speed_array.size else None,
+            "mean_rotor_speed_fraction_of_voltage_limited_max": float(np.mean(rotor_speed_array)) if rotor_speed_array.size else None,
+            "peak_rotor_speed_fraction_of_voltage_limited_max": float(np.max(rotor_speed_array)) if rotor_speed_array.size else None,
+            "per_rotor_peak_speed_fraction": np.max(rotor_speed_array, axis=0).astype(float).tolist() if rotor_speed_array.size else None,
+            "mean_zero_motor_command_fraction": float(np.mean(zero_array)) if zero_array.size else None,
+            "interpretation": "diagnostic_only_not_a_pass_fail_gate; rotor speed is normalized by max_rotor_speed_rad_s times episode voltage_factor",
+        }
         checks = {
             "physically_hover_capable_with_4pct_margin": physically_hover_capable,
             "no_crash": not crashed,
@@ -143,6 +172,10 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             "mean_yaw_rate_error_rad_s": mean_yaw_error,
             "worst_yaw_command_mean_error_rad_s": max_yaw_command_error,
             "neutral_braking_seconds": neutral_braking_seconds,
+            "neutral_tail_steps_observed": len(neutral_tail_speed_samples),
+            "neutral_tail_final_speed_m_s": neutral_tail_final_speed,
+            "neutral_tail_final_yaw_rate_rad_s": neutral_tail_final_yaw_rate,
+            "motor_authority_report": motor_authority_report,
             "checks": checks,
             "passed": all(checks.values()),
             "crash_reasons": last_info.get("crash_reasons", []),
