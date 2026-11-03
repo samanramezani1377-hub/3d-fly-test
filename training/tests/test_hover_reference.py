@@ -135,3 +135,38 @@ def test_oracle_reference_cancels_known_fixed_wind_drag_for_every_profile():
             )
         finally:
             env.close()
+
+
+def test_velocity_sequence_neutral_tail_separates_pure_braking_from_position_return():
+    profile = next(
+        p for p in load_vehicle_profiles(DEFAULT_VEHICLE_FAMILY)
+        if p["vehicle_id"] == "smooth2-a2212-custom-prop"
+    )
+    for mode, should_reset_target in (("braking", True), ("position_return", False)):
+        env = VehicleFamilyEnv(
+            vehicle_id=profile["vehicle_id"], randomize=False,
+            curriculum_stage=5, velocity_control=True,
+        )
+        try:
+            env.reset(seed=7310, options={
+                "velocity_command_sequence": [{
+                    "velocity_m_s": [0.5, 0.0, 0.0],
+                    "yaw_rate_rad_s": 0.0,
+                    "duration_steps": 1,
+                }],
+                "target_position": [0.0, 0.0, 2.0],
+                "neutral_tail_mode": mode,
+            })
+            env.inner.plant.position[:] = [1.25, -0.5, 2.4]
+            original_target = env.inner.target.copy()
+            env.inner.desired_velocity_body[:] = [0.5, 0.0, 0.0]
+            env.inner._velocity_sequence_index = len(env.inner._velocity_command_sequence)
+            env.inner._command_steps_remaining = 0
+            env.inner._update_velocity_command()
+            if should_reset_target:
+                np.testing.assert_allclose(env.inner.target, env.inner.plant.position)
+            else:
+                np.testing.assert_allclose(env.inner.target, original_target)
+            assert env.inner.neutral_tail_mode == mode
+        finally:
+            env.close()

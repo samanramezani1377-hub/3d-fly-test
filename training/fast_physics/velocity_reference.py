@@ -19,12 +19,12 @@ class VelocityYawReferenceController:
 
     def __init__(
         self, params: VehicleParameters, *, wind_m_s=(0.0, 0.0, 0.0),
-        dt_s: float = 0.02, velocity_kp=(5.0, 5.0, 4.5),
-        velocity_ki=(0.40, 0.40, 0.50), velocity_integral_limit=(0.85, 0.85, 0.70),
+        dt_s: float = 0.02, velocity_kp=(4.2, 4.2, 4.0),
+        velocity_ki=(0.55, 0.55, 0.65), velocity_integral_limit=(1.25, 1.25, 1.0),
         position_kp=(1.15, 1.15, 1.55), attitude_kp=(16.0, 16.0, 0.0),
         attitude_kd=(8.5, 8.5, 0.0), yaw_rate_kp=6.5, yaw_rate_kd=0.45,
-        max_horizontal_accel_m_s2=8.0, max_vertical_accel_m_s2=4.0,
-        max_tilt_rad=0.68, max_yaw_accel_rad_s2=10.0,
+        max_horizontal_accel_m_s2=6.0, max_vertical_accel_m_s2=4.0,
+        max_tilt_rad=0.55, max_yaw_accel_rad_s2=10.0,
     ):
         params.validate()
         self.params = params
@@ -149,7 +149,7 @@ class VelocityYawReferenceController:
         # teacher a deliberate braking/reversal response instead of relying on
         # the same cruise gain in both directions.
         braking_axes = (velocity_error * velocity) < -0.015
-        feedback_gain = self.velocity_kp * np.where(braking_axes, 1.45, 1.0)
+        feedback_gain = self.velocity_kp * np.where(braking_axes, 1.20, 1.0)
         accel_without_integral = feedback_gain * velocity_error + drag_accel_world
         accel_candidate = accel_without_integral + self.velocity_ki * candidate_integral
 
@@ -261,6 +261,8 @@ class VelocityYawReferenceController:
         )
         self.last_diagnostics = {
             "acceleration_requested_world_m_s2": raw_accel_world.astype(float).tolist(),
+            "acceleration_after_software_limits_world_m_s2": accel_world.astype(float).tolist(),
+            # Compatibility alias: this is software-limited demand, not physical plant acceleration.
             "acceleration_applied_world_m_s2": accel_world.astype(float).tolist(),
             "horizontal_acceleration_limit_m_s2": float(horizontal_limit),
             "vertical_acceleration_limit_m_s2": float(vertical_limit),

@@ -50,10 +50,12 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile \
+            training/fast_physics/env.py \
             training/fast_physics/velocity_reference.py \
             training/fast_physics/ppo_action.py \
             training/train_universal_ppo.py \
             training/preflight_velocity_teacher.py
+          python -m pytest training/tests/test_hover_reference.py -q -k neutral_tail_separates_pure_braking_from_position_return
           python training/preflight_velocity_teacher.py \
             --vehicle-family vehicle_models/family/vehicle_profiles.json \
             --vehicle-id smooth2-a2212-custom-prop \

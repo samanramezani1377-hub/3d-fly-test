@@ -77,6 +77,7 @@ class AdaptiveDroneEnv(gym.Env):
         self._velocity_command_sequence = None
         self._velocity_sequence_index = 0
         self._active_velocity_command_index = -1
+        self.neutral_tail_mode = "braking"
         self.active_randomization = (
             randomization_for_stage(self.randomization, curriculum_stage)
             if curriculum_stage is not None else self.randomization
@@ -218,7 +219,10 @@ class AdaptiveDroneEnv(gym.Env):
                 previous_velocity = self.desired_velocity_body.copy()
                 self._active_velocity_command_index = -1
                 self.desired_velocity_body[:] = 0.0
-                self._reset_target_axes_on_translation_stop(previous_velocity)
+                if self.neutral_tail_mode == "braking":
+                    # Isolate velocity braking from a simultaneous return to the old mission origin.
+                    self.target[:] = self.plant.position
+                # position_return deliberately preserves the original target.
                 self.desired_yaw_rate_rad_s = 0.0
                 self._command_steps_remaining = self.max_steps + 1
             return
@@ -302,6 +306,9 @@ class AdaptiveDroneEnv(gym.Env):
         self.desired_velocity_body[:] = 0.0
         self.desired_yaw_rate_rad_s = 0.0
         self._command_steps_remaining = 100
+        self.neutral_tail_mode = str((options or {}).get("neutral_tail_mode", "braking"))
+        if self.neutral_tail_mode not in {"braking", "position_return"}:
+            raise ValueError("neutral_tail_mode must be braking or position_return")
         raw_sequence = (options or {}).get("velocity_command_sequence")
         self._velocity_command_sequence = None
         self._velocity_sequence_index = 0
@@ -532,6 +539,9 @@ class AdaptiveDroneEnv(gym.Env):
             "velocity_command_index": self._active_velocity_command_index,
             "velocity_command_sequence_length": len(self._velocity_command_sequence) if self._velocity_command_sequence is not None else 0,
             "velocity_command_sequence_complete": bool(self._velocity_command_sequence is not None and self._velocity_sequence_index >= len(self._velocity_command_sequence) and np.linalg.norm(self.desired_velocity_body) <= 1e-6 and abs(self.desired_yaw_rate_rad_s) <= 1e-6),
+            "neutral_tail_mode": self.neutral_tail_mode,
+            "actual_linear_acceleration_world_m_s2": np.asarray(telemetry.get("linear_acceleration_world_m_s2", [0.0, 0.0, 0.0]), dtype=float).tolist(),
+            "actual_tilt_rad": float(tilt),
             "attitude_rad": safe_state[6:9].astype(float).tolist(),
             "angular_velocity_rad_s": safe_state[9:12].astype(float).tolist(),
             "state_finite": state_finite,

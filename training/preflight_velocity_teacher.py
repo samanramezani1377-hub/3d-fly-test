@@ -29,7 +29,8 @@ MAX_STEPS = 1800  # Reserve enough simulation time for takeoff, all commands and
 
 
 def run_episode(profile_id: str, episode_index: int, seed: int,
-                family_path: Path, randomization_path: Path) -> dict:
+                family_path: Path, randomization_path: Path,
+                neutral_tail_mode: str = "braking") -> dict:
     base = VehicleFamilyEnv(
         vehicle_family_path=family_path,
         randomization_path=randomization_path,
@@ -50,6 +51,7 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             options={
                 "velocity_command_sequence": sequence,
                 "target_position": [0.0, 0.0, 2.0 + 0.1 * (episode_index % 3)],
+                "neutral_tail_mode": neutral_tail_mode,
             },
         )
         assert env.reference_weight == 1.0
@@ -65,6 +67,8 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
 
         linear_errors: dict[int, list[float]] = {}
         yaw_errors: dict[int, list[float]] = {}
+        linear_steady_errors: dict[int, list[float]] = {}
+        yaw_steady_errors: dict[int, list[float]] = {}
         crashed = False
         took_off = False
         neutral_started = None
@@ -75,9 +79,12 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
         rotor_speed_fraction_samples: list[np.ndarray] = []
         neutral_tail_speed_samples: list[float] = []
         neutral_tail_yaw_samples: list[float] = []
+        neutral_tail_position_error_samples: list[float] = []
         allocator_samples: list[dict] = []
         teacher_controller_samples: list[dict] = []
         actual_body_angular_acceleration_samples: list[np.ndarray] = []
+        actual_linear_acceleration_samples: list[np.ndarray] = []
+        actual_tilt_samples: list[float] = []
         measured_yaw_acceleration_samples: list[float] = []
         previous_measured_yaw_rate = None
         neutral_speed_at_1s = None
@@ -100,6 +107,12 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             )
             if actual_angular_acceleration.shape == (3,) and np.all(np.isfinite(actual_angular_acceleration)):
                 actual_body_angular_acceleration_samples.append(actual_angular_acceleration)
+            actual_linear_acceleration = np.asarray(info.get("actual_linear_acceleration_world_m_s2", []), dtype=float)
+            if actual_linear_acceleration.shape == (3,) and np.all(np.isfinite(actual_linear_acceleration)):
+                actual_linear_acceleration_samples.append(actual_linear_acceleration)
+            current_tilt = float(info.get("actual_tilt_rad", np.nan))
+            if np.isfinite(current_tilt):
+                actual_tilt_samples.append(current_tilt)
             current_measured_yaw_rate = float(info.get("measured_yaw_rate_rad_s", 0.0))
             if previous_measured_yaw_rate is not None:
                 measured_yaw_acceleration_samples.append(
@@ -120,8 +133,14 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
                 velocity_error = float(info.get("velocity_tracking_error_m_s", float("inf")))
                 yaw_error = abs(float(info.get("yaw_rate_tracking_error_rad_s", float("inf"))))
                 if command_index < 26:
-                    linear_errors.setdefault(command_index, []).append(velocity_error)
-                yaw_errors.setdefault(command_index, []).append(yaw_error)
+                    values = linear_errors.setdefault(command_index, [])
+                    values.append(velocity_error)
+                    if len(values) > 20:
+                        linear_steady_errors.setdefault(command_index, []).append(velocity_error)
+                values = yaw_errors.setdefault(command_index, [])
+                values.append(yaw_error)
+                if len(values) > 20:
+                    yaw_steady_errors.setdefault(command_index, []).append(yaw_error)
 
             if info.get("velocity_command_sequence_complete"):
                 if neutral_started is None:
@@ -129,16 +148,19 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
                 velocity = np.asarray(info.get("state_velocity_m_s", [999, 999, 999]), dtype=float)
                 yaw_rate = abs(float(info.get("measured_yaw_rate_rad_s", 999.0)))
                 neutral_speed = float(np.linalg.norm(velocity))
+                neutral_position_error = float(info.get("position_error_m", 999.0))
                 neutral_elapsed = (steps - neutral_started) * 0.02
                 neutral_tail_speed_samples.append(neutral_speed)
                 neutral_tail_yaw_samples.append(yaw_rate)
+                neutral_tail_position_error_samples.append(neutral_position_error)
                 if neutral_elapsed >= 1.0 and neutral_speed_at_1s is None:
                     neutral_speed_at_1s = neutral_speed
                 if neutral_elapsed >= 2.0 and neutral_speed_at_2s is None:
                     neutral_speed_at_2s = neutral_speed
                 if neutral_elapsed >= 3.5 and neutral_speed_at_3_5s is None:
                     neutral_speed_at_3_5s = neutral_speed
-                if neutral_speed <= 0.25 and yaw_rate <= 0.15:
+                position_is_settled = neutral_tail_mode == "braking" or neutral_position_error <= 0.25
+                if neutral_speed <= 0.25 and yaw_rate <= 0.15 and position_is_settled:
                     neutral_stable_steps += 1
                 else:
                     neutral_stable_steps = 0
@@ -150,10 +172,12 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
 
         linear_means = [float(np.mean(v)) for v in linear_errors.values() if v]
         yaw_means = [float(np.mean(v)) for v in yaw_errors.values() if v]
-        mean_velocity_error = float(np.mean([x for values in linear_errors.values() for x in values])) if linear_errors else float("inf")
-        mean_yaw_error = float(np.mean([x for values in yaw_errors.values() for x in values])) if yaw_errors else float("inf")
-        max_direction_error = max(linear_means, default=float("inf"))
-        max_yaw_command_error = max(yaw_means, default=float("inf"))
+        transient_mean_velocity_error = float(np.mean([x for values in linear_errors.values() for x in values])) if linear_errors else float("inf")
+        transient_mean_yaw_error = float(np.mean([x for values in yaw_errors.values() for x in values])) if yaw_errors else float("inf")
+        mean_velocity_error = float(np.mean([x for values in linear_steady_errors.values() for x in values])) if linear_steady_errors else float("inf")
+        mean_yaw_error = float(np.mean([x for values in yaw_steady_errors.values() for x in values])) if yaw_steady_errors else float("inf")
+        max_direction_error = max((float(np.mean(v)) for v in linear_steady_errors.values() if v), default=float("inf"))
+        max_yaw_command_error = max((float(np.mean(v)) for v in yaw_steady_errors.values() if v), default=float("inf"))
 
         saturation_array = np.asarray(motor_saturation_samples, dtype=float)
         zero_array = np.asarray(motor_zero_samples, dtype=float)
@@ -186,7 +210,12 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             "fraction_steps_horizontal_acceleration_clipped": float(np.mean([x["horizontal_acceleration_clip_fraction"] > 1e-6 for x in teacher_controller_samples])) if teacher_controller_samples else None,
             "peak_horizontal_acceleration_clip_fraction": float(np.max([x["horizontal_acceleration_clip_fraction"] for x in teacher_controller_samples])) if teacher_controller_samples else None,
             "mean_requested_horizontal_acceleration_m_s2": float(np.mean([np.linalg.norm(x["acceleration_requested_world_m_s2"][:2]) for x in teacher_controller_samples])) if teacher_controller_samples else None,
-            "mean_applied_horizontal_acceleration_m_s2": float(np.mean([np.linalg.norm(x["acceleration_applied_world_m_s2"][:2]) for x in teacher_controller_samples])) if teacher_controller_samples else None,
+            "mean_after_software_limit_horizontal_acceleration_m_s2": float(np.mean([np.linalg.norm(x["acceleration_after_software_limits_world_m_s2"][:2]) for x in teacher_controller_samples])) if teacher_controller_samples else None,
+            "mean_actual_physical_horizontal_acceleration_m_s2": float(np.mean([np.linalg.norm(x[:2]) for x in actual_linear_acceleration_samples])) if actual_linear_acceleration_samples else None,
+            "peak_actual_physical_horizontal_acceleration_m_s2": float(np.max([np.linalg.norm(x[:2]) for x in actual_linear_acceleration_samples])) if actual_linear_acceleration_samples else None,
+            "mean_actual_physical_vertical_acceleration_m_s2": float(np.mean([x[2] for x in actual_linear_acceleration_samples])) if actual_linear_acceleration_samples else None,
+            "mean_actual_tilt_rad": float(np.mean(actual_tilt_samples)) if actual_tilt_samples else None,
+            "peak_actual_tilt_rad": float(np.max(actual_tilt_samples)) if actual_tilt_samples else None,
             "fraction_steps_vertical_acceleration_clipped": float(np.mean([bool(x["vertical_acceleration_clipped"]) for x in teacher_controller_samples])) if teacher_controller_samples else None,
             "peak_yaw_acceleration_authority_rad_s2": float(np.max([x["yaw_acceleration_authority_rad_s2"] for x in teacher_controller_samples])) if teacher_controller_samples else None,
             "minimum_yaw_acceleration_authority_rad_s2": float(np.min([x["yaw_acceleration_authority_rad_s2"] for x in teacher_controller_samples])) if teacher_controller_samples else None,
@@ -205,13 +234,15 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             "worst_direction_error_le_0_85_m_s": max_direction_error <= 0.85,
             "mean_yaw_error_le_0_30_rad_s": mean_yaw_error <= 0.30,
             "worst_yaw_command_error_le_0_50_rad_s": max_yaw_command_error <= 0.50,
-            "neutral_braking_le_3_5_s": neutral_braking_seconds is not None and neutral_braking_seconds <= 3.5,
+            "neutral_braking_le_3_5_s": (neutral_braking_seconds is not None and neutral_braking_seconds <= 3.5) if neutral_tail_mode == "braking" else True,
+            "position_return_settled_le_8_s": (neutral_braking_seconds is not None and neutral_braking_seconds <= 8.0) if neutral_tail_mode == "position_return" else True,
         }
         return {
             "vehicle_id": profile_id,
             "episode_index": episode_index,
             "seed": seed,
             "teacher_weight": 1.0,
+            "neutral_tail_mode": neutral_tail_mode,
             "randomization": reset_info.get("scenario", {}),
             "wind_m_s": reset_info.get("wind_m_s"),
             "max_collective_thrust_n": max_collective_thrust_n,
@@ -223,8 +254,12 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             "translation_command_coverage": len(linear_errors),
             "yaw_command_coverage": len(yaw_errors),
             "mean_velocity_tracking_error_m_s": mean_velocity_error,
+            "transient_mean_velocity_tracking_error_m_s": transient_mean_velocity_error,
+            "steady_state_mean_velocity_tracking_error_m_s": mean_velocity_error,
             "worst_direction_mean_error_m_s": max_direction_error,
             "mean_yaw_rate_error_rad_s": mean_yaw_error,
+            "transient_mean_yaw_rate_error_rad_s": transient_mean_yaw_error,
+            "steady_state_mean_yaw_rate_error_rad_s": mean_yaw_error,
             "worst_yaw_command_mean_error_rad_s": max_yaw_command_error,
             "neutral_braking_seconds": neutral_braking_seconds,
             "neutral_tail_steps_observed": len(neutral_tail_speed_samples),
@@ -234,6 +269,8 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             "neutral_tail_speed_at_3_5s_m_s": neutral_speed_at_3_5s,
             "neutral_tail_minimum_speed_m_s": float(np.min(neutral_tail_speed_samples)) if neutral_tail_speed_samples else None,
             "neutral_tail_final_yaw_rate_rad_s": neutral_tail_final_yaw_rate,
+            "neutral_tail_final_position_error_m": neutral_tail_position_error_samples[-1] if neutral_tail_position_error_samples else None,
+            "neutral_tail_max_position_error_m": float(np.max(neutral_tail_position_error_samples)) if neutral_tail_position_error_samples else None,
             "motor_authority_report": motor_authority_report,
             "wrench_allocation_report": allocation_report,
             "teacher_controller_report": controller_report,
@@ -262,32 +299,38 @@ def main() -> int:
     for profile_index, profile in enumerate(sorted(profiles, key=lambda p: p["vehicle_id"])):
         for episode_index in range(EPISODES_PER_PROFILE):
             seed = 810000 + profile_index * 100 + episode_index
-            try:
-                result = run_episode(
-                    profile["vehicle_id"], episode_index, seed,
-                    args.vehicle_family, args.randomization_config,
-                )
-            except Exception as exc:
-                result = {
-                    "vehicle_id": profile["vehicle_id"],
-                    "episode_index": episode_index,
-                    "seed": seed,
-                    "teacher_weight": 1.0,
-                    "passed": False,
-                    "checks": {"episode_completed_without_exception": False},
-                    "error": f"{type(exc).__name__}: {exc}",
-                }
-            episodes.append(result)
-            print(json.dumps(result, sort_keys=True), flush=True)
+            for neutral_tail_mode in ("braking", "position_return"):
+                try:
+                    result = run_episode(
+                        profile["vehicle_id"], episode_index, seed,
+                        args.vehicle_family, args.randomization_config,
+                        neutral_tail_mode=neutral_tail_mode,
+                    )
+                except Exception as exc:
+                    result = {
+                        "vehicle_id": profile["vehicle_id"],
+                        "episode_index": episode_index,
+                        "seed": seed,
+                        "teacher_weight": 1.0,
+                        "neutral_tail_mode": neutral_tail_mode,
+                        "passed": False,
+                        "checks": {"episode_completed_without_exception": False},
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
+                episodes.append(result)
+                print(json.dumps(result, sort_keys=True), flush=True)
 
     by_profile = {}
     for profile_id in sorted(EXPECTED_PROFILE_IDS):
         selected = [item for item in episodes if item["vehicle_id"] == profile_id]
-        by_profile[profile_id] = {
-            "episodes": len(selected),
-            "passed": sum(item["passed"] for item in selected),
-            "failed": sum(not item["passed"] for item in selected),
-        }
+        by_profile[profile_id] = {}
+        for mode in ("braking", "position_return"):
+            selected = [item for item in episodes if item["vehicle_id"] == profile_id and item.get("neutral_tail_mode") == mode]
+            by_profile[profile_id][mode] = {
+                "episodes": len(selected),
+                "passed": sum(item["passed"] for item in selected),
+                "failed": sum(not item["passed"] for item in selected),
+            }
 
     report = {
         "test": "teacher_only_velocity_yaw_capability_preflight",
@@ -299,13 +342,15 @@ def main() -> int:
         "total_episodes": len(episodes),
         "vehicle_scope": ["smooth2-a2212-custom-prop"],
         "profile_summary": by_profile,
-        "passed": len(episodes) == 3 and all(item["passed"] for item in episodes),
+        "passed": len(episodes) == 6 and all(item["passed"] for item in episodes),
         "episodes": episodes,
         "limitations": (
             "Finite deterministic randomized simulation sample only; it cannot prove "
             "success under every physically possible condition or validate real hardware. "
-            "Each episode also reports thrust-to-weight margin to distinguish an "
-            "underpowered randomized plant from a teacher-control failure."
+            "Each randomized seed is evaluated twice: pure braking resets the virtual "
+            "position target to the current position, while position_return "
+            "retains the original target. Reports distinguish transient, "
+            "steady-state, software-limited and actual physical acceleration."
         ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

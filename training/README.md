@@ -328,3 +328,10 @@ No new workflow or test suite is added. The existing PR validation path remains 
 **Current source of truth:** [Single-stage takeoff/hover training guide](../docs/UNIVERSAL_PPO_SINGLE_STAGE_GUIDE.md). The existing GitHub Actions workflow now runs stage 1 only, with 2,000,000 aggregate transitions and 32 parallel environments. Stages 2–5 remain implemented but dormant. Throughput is logged per PPO rollout as `[PPO_SPEED]` in the same Actions job log and `single-stage-training.log`.
 
 Older sections below describe earlier experimental configurations and historical defaults. For the current manual GitHub Actions run, follow the linked guide and the arguments in `.github/workflows/universal-ppo-five-stage.yml`; do not use the legacy five-stage command examples as the current workflow settings.
+
+
+### Velocity Teacher preflight diagnostics
+
+The teacher capability gate evaluates each deterministic randomized Smooth2 seed in two separate neutral-tail modes. `braking` moves the virtual position target to the aircraft's current position when the command sequence ends, so the stop-time metric measures velocity/yaw braking rather than a simultaneous return to the mission origin. `position_return` retains the original target and separately measures settling back to it. These are independent reports in the same preflight job; no additional workflow is created.
+
+Acceleration telemetry is reported in three distinct stages: raw controller-requested acceleration, acceleration after software limits, and actual physical acceleration from the dynamics step. The legacy `acceleration_applied_world_m_s2` diagnostic is retained as a compatibility alias for the software-limited request; it is not physical plant acceleration. Tracking reports separate the full-command transient average from the final steady-state portion of each command. PPO checkpoint selection remains outside this Teacher-only gate and continues to use teacher-disabled evaluations.
