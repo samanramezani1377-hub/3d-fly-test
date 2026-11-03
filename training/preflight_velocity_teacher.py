@@ -77,6 +77,12 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
         neutral_tail_yaw_samples: list[float] = []
         allocator_samples: list[dict] = []
         teacher_controller_samples: list[dict] = []
+        actual_body_angular_acceleration_samples: list[np.ndarray] = []
+        measured_yaw_acceleration_samples: list[float] = []
+        previous_measured_yaw_rate = None
+        neutral_speed_at_1s = None
+        neutral_speed_at_2s = None
+        neutral_speed_at_3_5s = None
         steps = 0
         last_info = {}
 
@@ -89,6 +95,17 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
                 allocator_samples.append(info["wrench_allocation"])
             if isinstance(info.get("teacher_controller"), dict):
                 teacher_controller_samples.append(info["teacher_controller"])
+            actual_angular_acceleration = np.asarray(
+                info.get("angular_acceleration_body_rad_s2", []), dtype=float
+            )
+            if actual_angular_acceleration.shape == (3,) and np.all(np.isfinite(actual_angular_acceleration)):
+                actual_body_angular_acceleration_samples.append(actual_angular_acceleration)
+            current_measured_yaw_rate = float(info.get("measured_yaw_rate_rad_s", 0.0))
+            if previous_measured_yaw_rate is not None:
+                measured_yaw_acceleration_samples.append(
+                    (current_measured_yaw_rate - previous_measured_yaw_rate) / 0.02
+                )
+            previous_measured_yaw_rate = current_measured_yaw_rate
             motor_saturation_samples.append(float(info.get("motor_saturation_fraction", 0.0)))
             motor_zero_samples.append(float(info.get("motor_zero_command_fraction", 0.0)))
             rotor_omega = np.asarray(info.get("rotor_omega_rad_s", []), dtype=float)
@@ -111,9 +128,17 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
                     neutral_started = steps
                 velocity = np.asarray(info.get("state_velocity_m_s", [999, 999, 999]), dtype=float)
                 yaw_rate = abs(float(info.get("measured_yaw_rate_rad_s", 999.0)))
-                neutral_tail_speed_samples.append(float(np.linalg.norm(velocity)))
+                neutral_speed = float(np.linalg.norm(velocity))
+                neutral_elapsed = (steps - neutral_started) * 0.02
+                neutral_tail_speed_samples.append(neutral_speed)
                 neutral_tail_yaw_samples.append(yaw_rate)
-                if np.linalg.norm(velocity) <= 0.25 and yaw_rate <= 0.15:
+                if neutral_elapsed >= 1.0 and neutral_speed_at_1s is None:
+                    neutral_speed_at_1s = neutral_speed
+                if neutral_elapsed >= 2.0 and neutral_speed_at_2s is None:
+                    neutral_speed_at_2s = neutral_speed
+                if neutral_elapsed >= 3.5 and neutral_speed_at_3_5s is None:
+                    neutral_speed_at_3_5s = neutral_speed
+                if neutral_speed <= 0.25 and yaw_rate <= 0.15:
                     neutral_stable_steps += 1
                 else:
                     neutral_stable_steps = 0
@@ -160,9 +185,15 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             "samples": len(teacher_controller_samples),
             "fraction_steps_horizontal_acceleration_clipped": float(np.mean([x["horizontal_acceleration_clip_fraction"] > 1e-6 for x in teacher_controller_samples])) if teacher_controller_samples else None,
             "peak_horizontal_acceleration_clip_fraction": float(np.max([x["horizontal_acceleration_clip_fraction"] for x in teacher_controller_samples])) if teacher_controller_samples else None,
+            "mean_requested_horizontal_acceleration_m_s2": float(np.mean([np.linalg.norm(x["acceleration_requested_world_m_s2"][:2]) for x in teacher_controller_samples])) if teacher_controller_samples else None,
+            "mean_applied_horizontal_acceleration_m_s2": float(np.mean([np.linalg.norm(x["acceleration_applied_world_m_s2"][:2]) for x in teacher_controller_samples])) if teacher_controller_samples else None,
             "fraction_steps_vertical_acceleration_clipped": float(np.mean([bool(x["vertical_acceleration_clipped"]) for x in teacher_controller_samples])) if teacher_controller_samples else None,
             "peak_yaw_acceleration_authority_rad_s2": float(np.max([x["yaw_acceleration_authority_rad_s2"] for x in teacher_controller_samples])) if teacher_controller_samples else None,
             "minimum_yaw_acceleration_authority_rad_s2": float(np.min([x["yaw_acceleration_authority_rad_s2"] for x in teacher_controller_samples])) if teacher_controller_samples else None,
+            "mean_abs_requested_yaw_torque_nm": float(np.mean([abs(x["requested_body_torque_nm"][2]) for x in teacher_controller_samples])) if teacher_controller_samples else None,
+            "mean_abs_requested_body_r_acceleration_rad_s2": float(np.mean([abs(x["requested_body_angular_acceleration_rad_s2"][2]) for x in teacher_controller_samples])) if teacher_controller_samples else None,
+            "mean_abs_actual_body_r_acceleration_rad_s2": float(np.mean([abs(x[2]) for x in actual_body_angular_acceleration_samples])) if actual_body_angular_acceleration_samples else None,
+            "mean_abs_measured_yaw_acceleration_rad_s2": float(np.mean(np.abs(measured_yaw_acceleration_samples))) if measured_yaw_acceleration_samples else None,
         }
         checks = {
             "physically_hover_capable_with_4pct_margin": physically_hover_capable,
@@ -198,6 +229,10 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             "neutral_braking_seconds": neutral_braking_seconds,
             "neutral_tail_steps_observed": len(neutral_tail_speed_samples),
             "neutral_tail_final_speed_m_s": neutral_tail_final_speed,
+            "neutral_tail_speed_at_1s_m_s": neutral_speed_at_1s,
+            "neutral_tail_speed_at_2s_m_s": neutral_speed_at_2s,
+            "neutral_tail_speed_at_3_5s_m_s": neutral_speed_at_3_5s,
+            "neutral_tail_minimum_speed_m_s": float(np.min(neutral_tail_speed_samples)) if neutral_tail_speed_samples else None,
             "neutral_tail_final_yaw_rate_rad_s": neutral_tail_final_yaw_rate,
             "motor_authority_report": motor_authority_report,
             "wrench_allocation_report": allocation_report,
