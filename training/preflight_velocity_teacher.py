@@ -69,6 +69,9 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
         yaw_errors: dict[int, list[float]] = {}
         linear_steady_errors: dict[int, list[float]] = {}
         yaw_steady_errors: dict[int, list[float]] = {}
+        # Preserve per-command vectors and actuator response. Episode means alone
+        # cannot distinguish a weak axis, reversal lag, tilt lag or wind interaction.
+        linear_command_samples: dict[int, list[dict]] = {}
         crashed = False
         took_off = False
         neutral_started = None
@@ -137,6 +140,13 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
                     values.append(velocity_error)
                     if len(values) > 20:
                         linear_steady_errors.setdefault(command_index, []).append(velocity_error)
+                    linear_command_samples.setdefault(command_index, []).append({
+                        "desired_velocity_body_m_s": info.get("desired_velocity_body_m_s", [0.0, 0.0, 0.0]),
+                        "measured_velocity_body_yaw_m_s": info.get("measured_velocity_body_yaw_m_s", [0.0, 0.0, 0.0]),
+                        "actual_linear_acceleration_world_m_s2": info.get("actual_linear_acceleration_world_m_s2", [0.0, 0.0, 0.0]),
+                        "actual_tilt_rad": info.get("actual_tilt_rad", 0.0),
+                        "teacher_controller": info.get("teacher_controller", {}),
+                    })
                 else:
                     values = yaw_errors.setdefault(command_index, [])
                     values.append(yaw_error)
@@ -179,6 +189,34 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
         mean_yaw_error = float(np.mean([x for values in yaw_steady_errors.values() for x in values])) if yaw_steady_errors else float("inf")
         max_direction_error = max((float(np.mean(v)) for v in linear_steady_errors.values() if v), default=float("inf"))
         max_yaw_command_error = max((float(np.mean(v)) for v in yaw_steady_errors.values() if v), default=float("inf"))
+
+        linear_command_details = {}
+        for command_index, samples in sorted(linear_command_samples.items()):
+            desired = np.asarray([x["desired_velocity_body_m_s"] for x in samples], dtype=np.float64)
+            measured = np.asarray([x["measured_velocity_body_yaw_m_s"] for x in samples], dtype=np.float64)
+            actual_accel = np.asarray([x["actual_linear_acceleration_world_m_s2"] for x in samples], dtype=np.float64)
+            actual_tilt = np.asarray([x["actual_tilt_rad"] for x in samples], dtype=np.float64)
+            tracking = np.linalg.norm(measured - desired, axis=1)
+            controller_samples = [x["teacher_controller"] for x in samples if isinstance(x.get("teacher_controller"), dict)]
+            requested_accel = np.asarray([x.get("acceleration_requested_world_m_s2", [0.0, 0.0, 0.0]) for x in controller_samples], dtype=np.float64)
+            limited_accel = np.asarray([x.get("acceleration_after_software_limits_world_m_s2", [0.0, 0.0, 0.0]) for x in controller_samples], dtype=np.float64)
+            desired_tilt = np.asarray([x.get("desired_tilt_rad", [0.0, 0.0]) for x in controller_samples], dtype=np.float64)
+            clip_fraction = np.asarray([x.get("horizontal_acceleration_clip_fraction", 0.0) for x in controller_samples], dtype=np.float64)
+            linear_command_details[str(command_index)] = {
+                "samples": int(len(samples)),
+                "desired_velocity_body_m_s": desired[0].astype(float).tolist(),
+                "mean_measured_velocity_body_yaw_m_s": np.mean(measured, axis=0).astype(float).tolist(),
+                "mean_signed_velocity_error_body_m_s": np.mean(measured - desired, axis=0).astype(float).tolist(),
+                "mean_tracking_error_m_s": float(np.mean(tracking)),
+                "p90_tracking_error_m_s": float(np.percentile(tracking, 90)),
+                "late_window_mean_tracking_error_after_20_steps_m_s": float(np.mean(tracking[20:])) if len(tracking) > 20 else None,
+                "mean_actual_horizontal_acceleration_m_s2": float(np.mean(np.linalg.norm(actual_accel[:, :2], axis=1))),
+                "mean_requested_horizontal_acceleration_m_s2": float(np.mean(np.linalg.norm(requested_accel[:, :2], axis=1))) if len(requested_accel) else None,
+                "mean_software_limited_horizontal_acceleration_m_s2": float(np.mean(np.linalg.norm(limited_accel[:, :2], axis=1))) if len(limited_accel) else None,
+                "mean_desired_tilt_rad": float(np.mean(np.linalg.norm(desired_tilt, axis=1))) if len(desired_tilt) else None,
+                "mean_actual_tilt_rad": float(np.mean(actual_tilt)),
+                "horizontal_acceleration_clipped_fraction": float(np.mean(clip_fraction > 1e-9)) if len(clip_fraction) else None,
+            }
 
         saturation_array = np.asarray(motor_saturation_samples, dtype=float)
         zero_array = np.asarray(motor_zero_samples, dtype=float)
@@ -258,6 +296,7 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             "transient_mean_velocity_tracking_error_m_s": transient_mean_velocity_error,
             "steady_state_mean_velocity_tracking_error_m_s": mean_velocity_error,
             "worst_direction_mean_error_m_s": max_direction_error,
+            "linear_command_details": linear_command_details,
             "mean_yaw_rate_error_rad_s": mean_yaw_error,
             "transient_mean_yaw_rate_error_rad_s": transient_mean_yaw_error,
             "steady_state_mean_yaw_rate_error_rad_s": mean_yaw_error,
