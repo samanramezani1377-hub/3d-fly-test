@@ -25,7 +25,7 @@ from train_universal_ppo import build_velocity_evaluation_sequence
 EXPECTED_PROFILE_IDS = {"smooth2-a2212-custom-prop"}
 EPISODES_PER_PROFILE = 3
 STAGE = 5
-MAX_STEPS = 1500
+MAX_STEPS = 1800  # Reserve enough simulation time for takeoff, all commands and braking.
 
 
 def run_episode(profile_id: str, episode_index: int, seed: int,
