@@ -9,7 +9,42 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "training"))
 
 from fast_physics.hover_reference import HoverReferenceController
+from fast_physics.velocity_reference import VelocityYawReferenceController
 from fast_physics.vehicle_family import DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv, load_vehicle_profiles
+
+
+def test_velocity_teacher_uses_stronger_feedback_when_braking_or_reversing():
+    profile = load_vehicle_profiles(DEFAULT_VEHICLE_FAMILY)[0]
+    env = VehicleFamilyEnv(
+        vehicle_family_path=DEFAULT_VEHICLE_FAMILY,
+        vehicle_id=profile["vehicle_id"],
+        randomize=False,
+        curriculum_stage=5,
+        velocity_control=True,
+    )
+    try:
+        env.reset(seed=7301)
+        params = env.inner.plant.params
+        controller = VelocityYawReferenceController(params, dt_s=env.inner.dt)
+        state = np.zeros(12, dtype=np.float64)
+        state[3] = 1.2
+        controller.desired_wrench(
+            state, target_position=np.zeros(3),
+            desired_velocity_body=np.zeros(3), desired_yaw_rate_rad_s=0.0,
+        )
+        diag = controller.last_diagnostics
+        assert diag["braking_active_axes"][0]
+        assert diag["acceleration_requested_world_m_s2"][0] < 0.0
+        assert diag["velocity_feedback_gain"][0] > 1.0
+
+        controller.desired_wrench(
+            state, target_position=np.zeros(3),
+            desired_velocity_body=np.array([-0.5, 0.0, 0.0]),
+            desired_yaw_rate_rad_s=0.0,
+        )
+        assert controller.last_diagnostics["braking_active_axes"][0]
+    finally:
+        env.close()
 
 
 def test_oracle_reference_controller_can_hold_nominal_hover_for_every_profile():

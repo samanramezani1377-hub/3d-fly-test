@@ -15,16 +15,16 @@ from .propeller import BladeElementPropeller
 
 
 class VelocityYawReferenceController:
-    """Cascaded velocity/position-to-attitude controller with yaw-rate feedback."""
+    """Cascaded velocity/position-to-attitude controller with active braking."""
 
     def __init__(
         self, params: VehicleParameters, *, wind_m_s=(0.0, 0.0, 0.0),
-        dt_s: float = 0.02, velocity_kp=(4.2, 4.2, 4.0),
-        velocity_ki=(0.55, 0.55, 0.65), velocity_integral_limit=(1.25, 1.25, 1.0),
+        dt_s: float = 0.02, velocity_kp=(5.0, 5.0, 4.5),
+        velocity_ki=(0.40, 0.40, 0.50), velocity_integral_limit=(0.85, 0.85, 0.70),
         position_kp=(1.15, 1.15, 1.55), attitude_kp=(16.0, 16.0, 0.0),
         attitude_kd=(8.5, 8.5, 0.0), yaw_rate_kp=6.5, yaw_rate_kd=0.45,
-        max_horizontal_accel_m_s2=6.0, max_vertical_accel_m_s2=4.0,
-        max_tilt_rad=0.55, max_yaw_accel_rad_s2=10.0,
+        max_horizontal_accel_m_s2=8.0, max_vertical_accel_m_s2=4.0,
+        max_tilt_rad=0.68, max_yaw_accel_rad_s2=10.0,
     ):
         params.validate()
         self.params = params
@@ -60,7 +60,7 @@ class VelocityYawReferenceController:
         self.max_horizontal_accel = float(max_horizontal_accel_m_s2)
         self.max_vertical_accel = float(max_vertical_accel_m_s2)
         self.max_tilt, self.max_yaw_accel = float(max_tilt_rad), float(max_yaw_accel_rad_s2)
-        self.last_diagnostics: dict[str, float | list[float]] = {}
+        self.last_diagnostics: dict[str, float | list[float] | list[bool]] = {}
         if self.wind.shape != (3,) or any(
             x.shape != (3,) for x in
             (self.velocity_kp, self.velocity_ki, self.velocity_integral_limit,
@@ -101,10 +101,9 @@ class VelocityYawReferenceController:
         commanded_velocity_world = self._body_yaw_velocity_to_world(command_body, yaw)
         position_error = target - position
         position_hold_velocity = self.position_kp * position_error
-        # A fixed position target must not fight an explicit translation
-        # command. Hold position only on axes where the pilot requested no
-        # motion; retain altitude hold during horizontal flight and horizontal
-        # hold during vertical flight / in-place yaw turns.
+        # Explicit translation owns its commanded axes. When a translation
+        # command ends, the environment moves the virtual target to the current
+        # position so this term does not pull the aircraft back along its old path.
         if float(np.linalg.norm(command_body[:2])) > 0.08:
             position_hold_velocity[:2] = 0.0
         if abs(float(command_body[2])) > 0.08:
@@ -112,15 +111,13 @@ class VelocityYawReferenceController:
         desired_velocity_world = commanded_velocity_world + position_hold_velocity
         velocity_error = desired_velocity_world - velocity
 
-        # Reset accumulated bias when the pilot changes direction/speed sharply;
-        # otherwise an old command's integral can fight the new command.
+        # Reset accumulated bias on a meaningful command transition; in
+        # particular, do not let a previous cruise integral fight a stop/reversal.
         command = np.concatenate((command_body, [float(desired_yaw_rate_rad_s)]))
-        if np.linalg.norm(command - self._previous_command) > 0.35:
+        if np.linalg.norm(command - self._previous_command) > 0.25:
             self.velocity_integral *= 0.0
         self._previous_command = command
 
-        # Integrate only when the requested acceleration is not already
-        # saturated in the same direction (conditional anti-windup).
         candidate_integral = np.clip(
             self.velocity_integral + velocity_error * self.dt,
             -self.velocity_integral_limit, self.velocity_integral_limit,
@@ -146,12 +143,18 @@ class VelocityYawReferenceController:
             -quadratic_drag * np.abs(air_velocity_body) * air_velocity_body
         )
         drag_accel_world = -(rot @ drag_body) / p.mass_kg
-        accel_without_integral = self.velocity_kp * velocity_error + drag_accel_world
+
+        # Increase velocity feedback specifically when the requested velocity
+        # is below the current velocity or points against it. This gives the
+        # teacher a deliberate braking/reversal response instead of relying on
+        # the same cruise gain in both directions.
+        braking_axes = (velocity_error * velocity) < -0.015
+        feedback_gain = self.velocity_kp * np.where(braking_axes, 1.45, 1.0)
+        accel_without_integral = feedback_gain * velocity_error + drag_accel_world
         accel_candidate = accel_without_integral + self.velocity_ki * candidate_integral
 
-        # Derive the available tilt/acceleration from this episode's actual
-        # thrust-to-weight margin. A controller must not request a tilt that
-        # leaves insufficient thrust to support the vehicle.
+        # Derive available tilt/acceleration from this episode's actual thrust
+        # margin; never demand tilt that removes the thrust needed to stay up.
         thrust_to_weight = self.max_collective_thrust_n / max(p.mass_kg * 9.80665, 1e-9)
         if thrust_to_weight <= 1.0:
             tilt_authority = 0.0
@@ -190,16 +193,13 @@ class VelocityYawReferenceController:
         accel_body_x = cy * accel_world[0] + sy * accel_world[1]
         accel_body_y = -sy * accel_world[0] + cy * accel_world[1]
         desired_pitch = float(np.clip(
-            np.arctan2(accel_body_x, 9.80665), -self.max_tilt, self.max_tilt
+            np.arctan2(accel_body_x, 9.80665), -effective_tilt, effective_tilt
         ))
         desired_roll = float(np.clip(
-            -np.arctan2(accel_body_y, 9.80665), -self.max_tilt, self.max_tilt
+            -np.arctan2(accel_body_y, 9.80665), -effective_tilt, effective_tilt
         ))
 
-        # Roll/pitch stabilization plus independent world-vertical yaw-rate control.
         desired_attitude = np.array([desired_roll, desired_pitch, attitude[2]])
-        # Geometric SO(3) attitude error avoids treating Euler roll/pitch
-        # differences as independent when the vehicle is yawed or tilted.
         desired_rotation = rotation_matrix(desired_attitude)
         current_rotation = rotation_matrix(attitude)
         relative_rotation = current_rotation.T @ desired_rotation
@@ -217,9 +217,6 @@ class VelocityYawReferenceController:
             np.sin(attitude[0]) / cos_pitch * rates[1]
             + np.cos(attitude[0]) / cos_pitch * rates[2]
         )
-        # Convert the requested world-vertical Euler yaw rate into the body-r
-        # rate required at the current roll/pitch. Controlling r directly as
-        # though it were yaw-dot is only correct when the vehicle is level.
         desired_body_r = (
             cos_pitch / cos_roll
             * (
@@ -228,13 +225,9 @@ class VelocityYawReferenceController:
             )
         )
         body_r_error = desired_body_r - rates[2]
-        # Bound yaw authority at the requested collective, not at an
-        # unconstrained all-motors-maximum operating point. Remaining thrust
-        # headroom determines how much differential rotor thrust is possible.
-        rot = rotation_matrix(attitude)
-        vertical_cosine = max(float(rot[2, 2]), 0.35)
         collective = float(np.clip(
-            p.mass_kg * (9.80665 + accel_world[2]) / vertical_cosine,
+            p.mass_kg * (9.80665 + accel_world[2])
+            / max(float(rot[2, 2]), 0.35),
             0.0, self.max_collective_thrust_n,
         ))
         positive = np.asarray(p.spin_signs) > 0
@@ -253,9 +246,6 @@ class VelocityYawReferenceController:
         yaw_torque_authority = min(positive_yaw_torque, negative_yaw_torque)
         yaw_accel_authority = 0.80 * yaw_torque_authority / max(float(p.inertia_matrix[2, 2]), 1e-9)
         effective_yaw_accel = min(self.max_yaw_accel, yaw_accel_authority)
-        # body_r_error already contains the measured-rate feedback
-        # (desired_body_r - rates[2]). Applying an additional -kd*r term here
-        # double-counts damping and suppresses commanded yaw-rate tracking.
         yaw_acceleration_command = self.yaw_rate_kp * body_r_error
         desired_angular_accel[2] = np.clip(
             yaw_acceleration_command,
@@ -275,9 +265,11 @@ class VelocityYawReferenceController:
             "horizontal_acceleration_limit_m_s2": float(horizontal_limit),
             "vertical_acceleration_limit_m_s2": float(vertical_limit),
             "horizontal_acceleration_clip_fraction": float(horizontal_clip_fraction),
-            "vertical_acceleration_clipped": float(vertical_was_clipped),
+            "vertical_acceleration_clipped": bool(vertical_was_clipped),
+            "braking_active_axes": braking_axes.astype(bool).tolist(),
+            "velocity_feedback_gain": feedback_gain.astype(float).tolist(),
             "desired_tilt_rad": [float(desired_roll), float(desired_pitch)],
-            "desired_tilt_limit_rad": float(self.max_tilt),
+            "desired_tilt_limit_rad": float(effective_tilt),
             "desired_velocity_world_m_s": desired_velocity_world.astype(float).tolist(),
             "velocity_error_world_m_s": velocity_error.astype(float).tolist(),
             "desired_body_r_rad_s": float(desired_body_r),
