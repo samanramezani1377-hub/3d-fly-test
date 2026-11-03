@@ -232,9 +232,15 @@ class VelocityYawReferenceController:
             )
         )
         body_r_error = desired_body_r - rates[2]
+        # Collective thrust must compensate for the ATTITUDE WE ARE ASKING
+        # the vehicle to reach. Using the current attitude here under-thrusts
+        # whenever the requested tilt is larger than the measured tilt (the
+        # normal case during acceleration), coupling horizontal tracking error
+        # into an avoidable vertical-thrust deficit.
+        desired_thrust_axis_vertical = float(desired_rotation[2, 2])
         collective = float(np.clip(
             p.mass_kg * (9.80665 + accel_world[2])
-            / max(float(rot[2, 2]), 0.35),
+            / max(desired_thrust_axis_vertical, 0.35),
             0.0, self.max_collective_thrust_n,
         ))
         positive = np.asarray(p.spin_signs) > 0
@@ -279,6 +285,8 @@ class VelocityYawReferenceController:
             "velocity_feedback_gain": feedback_gain.astype(float).tolist(),
             "desired_tilt_rad": [float(desired_roll), float(desired_pitch)],
             "desired_tilt_limit_rad": float(effective_tilt),
+            "current_thrust_axis_vertical_component": float(rot[2, 2]),
+            "desired_thrust_axis_vertical_component": desired_thrust_axis_vertical,
             "position_hold_velocity_raw_m_s": position_hold_velocity_raw.astype(float).tolist(),
             "position_hold_velocity_limited_m_s": position_hold_velocity.astype(float).tolist(),
             "desired_velocity_world_m_s": desired_velocity_world.astype(float).tolist(),
