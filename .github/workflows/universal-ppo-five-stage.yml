@@ -283,8 +283,7 @@ jobs:
           PY
 
       - name: Publish Smooth2-only curriculum outputs
-        if: ${{ !inputs.preflight_only }}
-        if: success()
+        if: ${{ !inputs.preflight_only && success() }}
         run: |
           set -euo pipefail
           target="training/models/smooth2-only-five-stage"
@@ -365,8 +364,7 @@ jobs:
           fi
 
       - name: Print Smooth2-only training summaries
-        if: ${{ !inputs.preflight_only }}
-        if: always()
+        if: ${{ !inputs.preflight_only && always() }}
         run: |
           for log in universal-velocity-ppo-stage-*.log; do
             echo "===== $log ====="
@@ -378,8 +376,7 @@ jobs:
           done
 
       - name: Upload Smooth2-only curriculum backup
-        if: ${{ !inputs.preflight_only }}
-        if: always()
+        if: ${{ !inputs.preflight_only && always() }}
         uses: actions/upload-artifact@v4
         with:
           name: smooth2-only-five-stage-backup
