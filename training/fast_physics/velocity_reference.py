@@ -19,11 +19,11 @@ class VelocityYawReferenceController:
 
     def __init__(
         self, params: VehicleParameters, *, wind_m_s=(0.0, 0.0, 0.0),
-        dt_s: float = 0.02, velocity_kp=(2.8, 2.8, 3.2),
-        velocity_ki=(0.35, 0.35, 0.45), velocity_integral_limit=(1.25, 1.25, 1.0),
-        position_kp=(1.15, 1.15, 1.55), attitude_kp=(14.0, 14.0, 0.0),
-        attitude_kd=(7.0, 7.0, 0.0), yaw_rate_kp=5.0, yaw_rate_kd=0.45,
-        max_horizontal_accel_m_s2=4.5, max_vertical_accel_m_s2=3.5,
+        dt_s: float = 0.02, velocity_kp=(4.2, 4.2, 4.0),
+        velocity_ki=(0.55, 0.55, 0.65), velocity_integral_limit=(1.25, 1.25, 1.0),
+        position_kp=(1.15, 1.15, 1.55), attitude_kp=(16.0, 16.0, 0.0),
+        attitude_kd=(8.5, 8.5, 0.0), yaw_rate_kp=6.5, yaw_rate_kd=0.45,
+        max_horizontal_accel_m_s2=5.0, max_vertical_accel_m_s2=3.5,
         max_tilt_rad=0.48, max_yaw_accel_rad_s2=10.0,
     ):
         params.validate()
@@ -115,7 +115,7 @@ class VelocityYawReferenceController:
         # otherwise an old command's integral can fight the new command.
         command = np.concatenate((command_body, [float(desired_yaw_rate_rad_s)]))
         if np.linalg.norm(command - self._previous_command) > 0.35:
-            self.velocity_integral *= 0.35
+            self.velocity_integral *= 0.0
         self._previous_command = command
 
         # Integrate only when the requested acceleration is not already
