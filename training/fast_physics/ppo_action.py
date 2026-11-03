@@ -262,7 +262,18 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
             )
         else:
             wrench = policy_wrench
-        return wrench_to_motor_commands(wrench, self._cached_params)
+        # The teacher computes its wrench from the randomized episode plant.
+        # Allocate that blended wrench with the same episode parameters; using
+        # the nominal profile here silently applies the wrong thrust curve,
+        # voltage limit, motor effectiveness and yaw torque ratio to the oracle.
+        # Teacher-free PPO inference keeps the nominal allocator so randomized
+        # actuator uncertainty remains a genuine policy-learning problem.
+        allocation_params = (
+            self.env.inner.plant.params
+            if self.reference_weight > 0.0
+            else self._cached_params
+        )
+        return wrench_to_motor_commands(wrench, allocation_params)
 
 
 # Backwards-compatible import name for old tooling; semantics are body-wrench.
