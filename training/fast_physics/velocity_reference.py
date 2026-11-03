@@ -99,7 +99,16 @@ class VelocityYawReferenceController:
         # Horizontal commands rotate with the nose; vertical is world-up.
         commanded_velocity_world = self._body_yaw_velocity_to_world(command_body, yaw)
         position_error = target - position
-        desired_velocity_world = commanded_velocity_world + self.position_kp * position_error
+        position_hold_velocity = self.position_kp * position_error
+        # A fixed position target must not fight an explicit translation
+        # command. Hold position only on axes where the pilot requested no
+        # motion; retain altitude hold during horizontal flight and horizontal
+        # hold during vertical flight / in-place yaw turns.
+        if float(np.linalg.norm(command_body[:2])) > 0.08:
+            position_hold_velocity[:2] = 0.0
+        if abs(float(command_body[2])) > 0.08:
+            position_hold_velocity[2] = 0.0
+        desired_velocity_world = commanded_velocity_world + position_hold_velocity
         velocity_error = desired_velocity_world - velocity
 
         # Reset accumulated bias when the pilot changes direction/speed sharply;
@@ -226,8 +235,11 @@ class VelocityYawReferenceController:
         yaw_torque_authority = min(positive_torque, negative_torque)
         yaw_accel_authority = 0.80 * yaw_torque_authority / max(float(p.inertia_matrix[2, 2]), 1e-9)
         effective_yaw_accel = min(self.max_yaw_accel, yaw_accel_authority)
+        # body_r_error already contains the measured-rate feedback
+        # (desired_body_r - rates[2]). Applying an additional -kd*r term here
+        # double-counts damping and suppresses commanded yaw-rate tracking.
         desired_angular_accel[2] = np.clip(
-            self.yaw_rate_kp * body_r_error - self.yaw_rate_kd * rates[2],
+            self.yaw_rate_kp * body_r_error,
             -effective_yaw_accel, effective_yaw_accel,
         )
 
