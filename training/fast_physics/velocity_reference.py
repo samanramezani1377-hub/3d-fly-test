@@ -23,8 +23,8 @@ class VelocityYawReferenceController:
         velocity_ki=(0.55, 0.55, 0.65), velocity_integral_limit=(1.25, 1.25, 1.0),
         position_kp=(1.15, 1.15, 1.55), attitude_kp=(16.0, 16.0, 0.0),
         attitude_kd=(8.5, 8.5, 0.0), yaw_rate_kp=6.5, yaw_rate_kd=0.45,
-        max_horizontal_accel_m_s2=5.0, max_vertical_accel_m_s2=3.5,
-        max_tilt_rad=0.48, max_yaw_accel_rad_s2=10.0,
+        max_horizontal_accel_m_s2=6.0, max_vertical_accel_m_s2=4.0,
+        max_tilt_rad=0.55, max_yaw_accel_rad_s2=10.0,
     ):
         params.validate()
         self.params = params
@@ -256,8 +256,9 @@ class VelocityYawReferenceController:
         # body_r_error already contains the measured-rate feedback
         # (desired_body_r - rates[2]). Applying an additional -kd*r term here
         # double-counts damping and suppresses commanded yaw-rate tracking.
+        yaw_acceleration_command = self.yaw_rate_kp * body_r_error
         desired_angular_accel[2] = np.clip(
-            self.yaw_rate_kp * body_r_error,
+            yaw_acceleration_command,
             -effective_yaw_accel, effective_yaw_accel,
         )
 
@@ -277,6 +278,13 @@ class VelocityYawReferenceController:
             "vertical_acceleration_clipped": float(vertical_was_clipped),
             "desired_tilt_rad": [float(desired_roll), float(desired_pitch)],
             "desired_tilt_limit_rad": float(self.max_tilt),
+            "desired_velocity_world_m_s": desired_velocity_world.astype(float).tolist(),
+            "velocity_error_world_m_s": velocity_error.astype(float).tolist(),
+            "desired_body_r_rad_s": float(desired_body_r),
+            "body_r_error_rad_s": float(body_r_error),
+            "yaw_acceleration_command_before_limit_rad_s2": float(yaw_acceleration_command),
+            "requested_body_angular_acceleration_rad_s2": desired_angular_accel.astype(float).tolist(),
+            "requested_body_torque_nm": torque.astype(float).tolist(),
             "yaw_torque_authority_nm": float(yaw_torque_authority),
             "yaw_acceleration_authority_rad_s2": float(yaw_accel_authority),
             "yaw_acceleration_limit_applied_rad_s2": float(effective_yaw_accel),
