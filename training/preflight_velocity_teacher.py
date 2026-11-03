@@ -75,6 +75,8 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
         rotor_speed_fraction_samples: list[np.ndarray] = []
         neutral_tail_speed_samples: list[float] = []
         neutral_tail_yaw_samples: list[float] = []
+        allocator_samples: list[dict] = []
+        teacher_controller_samples: list[dict] = []
         steps = 0
         last_info = {}
 
@@ -83,6 +85,10 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             obs, _, terminated, truncated, info = env.step(np.zeros(4, dtype=np.float32))
             steps += 1
             last_info = info
+            if isinstance(info.get("wrench_allocation"), dict):
+                allocator_samples.append(info["wrench_allocation"])
+            if isinstance(info.get("teacher_controller"), dict):
+                teacher_controller_samples.append(info["teacher_controller"])
             motor_saturation_samples.append(float(info.get("motor_saturation_fraction", 0.0)))
             motor_zero_samples.append(float(info.get("motor_zero_command_fraction", 0.0)))
             rotor_omega = np.asarray(info.get("rotor_omega_rad_s", []), dtype=float)
@@ -140,6 +146,24 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             "mean_zero_motor_command_fraction": float(np.mean(zero_array)) if zero_array.size else None,
             "interpretation": "diagnostic_only_not_a_pass_fail_gate; rotor speed is normalized by max_rotor_speed_rad_s times episode voltage_factor",
         }
+        allocation_report = {
+            "samples": len(allocator_samples),
+            "mean_torque_scale": float(np.mean([x["torque_scale"] for x in allocator_samples])) if allocator_samples else None,
+            "minimum_torque_scale": float(np.min([x["torque_scale"] for x in allocator_samples])) if allocator_samples else None,
+            "fraction_steps_with_torque_desaturation": float(np.mean([x["torque_scale"] < 0.999 for x in allocator_samples])) if allocator_samples else None,
+            "mean_collective_scale": float(np.mean([x["collective_scale"] for x in allocator_samples])) if allocator_samples else None,
+            "maximum_requested_torque_nm": np.max(np.abs(np.asarray([x["requested_torque_nm"] for x in allocator_samples], dtype=float)), axis=0).tolist() if allocator_samples else None,
+            "maximum_allocated_torque_nm": np.max(np.abs(np.asarray([x["allocated_torque_nm"] for x in allocator_samples], dtype=float)), axis=0).tolist() if allocator_samples else None,
+            "maximum_motor_command": float(np.max([x["max_motor_command"] for x in allocator_samples])) if allocator_samples else None,
+        }
+        controller_report = {
+            "samples": len(teacher_controller_samples),
+            "fraction_steps_horizontal_acceleration_clipped": float(np.mean([x["horizontal_acceleration_clip_fraction"] > 1e-6 for x in teacher_controller_samples])) if teacher_controller_samples else None,
+            "peak_horizontal_acceleration_clip_fraction": float(np.max([x["horizontal_acceleration_clip_fraction"] for x in teacher_controller_samples])) if teacher_controller_samples else None,
+            "fraction_steps_vertical_acceleration_clipped": float(np.mean([bool(x["vertical_acceleration_clipped"]) for x in teacher_controller_samples])) if teacher_controller_samples else None,
+            "peak_yaw_acceleration_authority_rad_s2": float(np.max([x["yaw_acceleration_authority_rad_s2"] for x in teacher_controller_samples])) if teacher_controller_samples else None,
+            "minimum_yaw_acceleration_authority_rad_s2": float(np.min([x["yaw_acceleration_authority_rad_s2"] for x in teacher_controller_samples])) if teacher_controller_samples else None,
+        }
         checks = {
             "physically_hover_capable_with_4pct_margin": physically_hover_capable,
             "no_crash": not crashed,
@@ -176,6 +200,8 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             "neutral_tail_final_speed_m_s": neutral_tail_final_speed,
             "neutral_tail_final_yaw_rate_rad_s": neutral_tail_final_yaw_rate,
             "motor_authority_report": motor_authority_report,
+            "wrench_allocation_report": allocation_report,
+            "teacher_controller_report": controller_report,
             "checks": checks,
             "passed": all(checks.values()),
             "crash_reasons": last_info.get("crash_reasons", []),
