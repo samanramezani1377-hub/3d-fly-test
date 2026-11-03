@@ -61,7 +61,7 @@ jobs:
             training/fast_physics/ppo_action.py \
             training/train_universal_ppo.py \
             training/preflight_velocity_teacher.py
-          python -m pytest training/tests/test_hover_reference.py -q -k "neutral_tail_separates_pure_braking_from_position_return or caps_position_hold_velocity"
+          python -m pytest training/tests/test_hover_reference.py -q -k "neutral_tail_separates_pure_braking_from_position_return or caps_position_hold_velocity or compensates_collective_for_desired_tilt"
           python training/preflight_velocity_teacher.py \
             --vehicle-family vehicle_models/family/vehicle_profiles.json \
             --vehicle-id smooth2-a2212-custom-prop \
