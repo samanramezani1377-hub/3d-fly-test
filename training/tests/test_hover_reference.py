@@ -207,3 +207,35 @@ def test_velocity_teacher_caps_position_hold_velocity_for_large_position_error()
         np.testing.assert_allclose(hold, [1.5, -1.5, 0.75])
     finally:
         env.close()
+
+
+def test_velocity_teacher_compensates_collective_for_desired_tilt():
+    profile = next(
+        p for p in load_vehicle_profiles(DEFAULT_VEHICLE_FAMILY)
+        if p["vehicle_id"] == "smooth2-a2212-custom-prop"
+    )
+    env = VehicleFamilyEnv(
+        vehicle_id=profile["vehicle_id"], randomize=False,
+        curriculum_stage=5, velocity_control=True,
+    )
+    try:
+        env.reset(seed=7312)
+        params = env.inner.plant.params
+        controller = VelocityYawReferenceController(params, dt_s=env.inner.dt)
+        state = np.zeros(12, dtype=np.float64)
+        wrench = controller.desired_wrench(
+            state, target_position=np.zeros(3),
+            desired_velocity_body=np.array([1.0, 0.0, 0.0]),
+            desired_yaw_rate_rad_s=0.0,
+        )
+        diag = controller.last_diagnostics
+        current_projection = float(diag["current_thrust_axis_vertical_component"])
+        desired_projection = float(diag["desired_thrust_axis_vertical_component"])
+        assert desired_projection < current_projection
+        expected_collective = (
+            params.mass_kg * 9.80665 / desired_projection
+        )
+        np.testing.assert_allclose(wrench[0], expected_collective, rtol=1e-6, atol=1e-8)
+        assert wrench[0] > params.mass_kg * 9.80665
+    finally:
+        env.close()
