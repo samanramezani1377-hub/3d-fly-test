@@ -211,7 +211,8 @@ class AdaptiveDroneEnv(gym.Env):
                 previous_velocity = self.desired_velocity_body.copy()
                 self.desired_velocity_body = np.asarray(item["velocity_m_s"], dtype=np.float32)
                 self.desired_yaw_rate_rad_s = float(item["yaw_rate_rad_s"])
-                self._reset_target_axes_on_translation_stop(previous_velocity)
+                if self.neutral_tail_mode == "braking":
+                    self._reset_target_axes_on_translation_stop(previous_velocity)
                 self._command_steps_remaining = max(int(item["duration_steps"]) - 1, 0)
                 self._velocity_sequence_index += 1
             else:

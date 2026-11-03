@@ -149,17 +149,28 @@ def test_velocity_sequence_neutral_tail_separates_pure_braking_from_position_ret
         )
         try:
             env.reset(seed=7310, options={
-                "velocity_command_sequence": [{
-                    "velocity_m_s": [0.5, 0.0, 0.0],
-                    "yaw_rate_rad_s": 0.0,
-                    "duration_steps": 1,
-                }],
+                "velocity_command_sequence": [
+                    {"velocity_m_s": [0.5, 0.0, 0.0], "yaw_rate_rad_s": 0.0, "duration_steps": 1},
+                    {"velocity_m_s": [0.0, 0.0, 0.0], "yaw_rate_rad_s": 0.2, "duration_steps": 1},
+                ],
                 "target_position": [0.0, 0.0, 2.0],
                 "neutral_tail_mode": mode,
             })
             env.inner.plant.position[:] = [1.25, -0.5, 2.4]
             original_target = env.inner.target.copy()
             env.inner.desired_velocity_body[:] = [0.5, 0.0, 0.0]
+            # Advance into a yaw-only command: braking mode resets the old
+            # translation target, while position_return must preserve it.
+            env.inner._velocity_sequence_index = 1
+            env.inner._command_steps_remaining = 0
+            env.inner._update_velocity_command()
+            if should_reset_target:
+                np.testing.assert_allclose(env.inner.target, env.inner.plant.position)
+            else:
+                np.testing.assert_allclose(env.inner.target, original_target)
+
+            # The final neutral tail must retain the same mode semantics.
+            env.inner.desired_velocity_body[:] = [0.0, 0.0, 0.0]
             env.inner._velocity_sequence_index = len(env.inner._velocity_command_sequence)
             env.inner._command_steps_remaining = 0
             env.inner._update_velocity_command()
