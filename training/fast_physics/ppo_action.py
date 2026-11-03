@@ -111,7 +111,9 @@ def _rotor_thrust_limits_and_inverse(params: VehicleParameters):
     return params.thrust_coefficient_n_per_rad_s2 * effectiveness * max_omega ** 2, None, None, None, effectiveness
 
 
-def wrench_to_motor_commands(wrench, params: VehicleParameters) -> np.ndarray:
+def wrench_to_motor_commands(
+    wrench, params: VehicleParameters, *, return_diagnostics: bool = False
+) -> np.ndarray | tuple[np.ndarray, dict]:
     """Allocate wrench and invert the same Smooth2 BEMT static thrust curve used by the plant."""
     wrench = np.asarray(wrench, dtype=np.float64)
     if wrench.shape != (4,) or not np.all(np.isfinite(wrench)):
@@ -176,8 +178,33 @@ def wrench_to_motor_commands(wrench, params: VehicleParameters) -> np.ndarray:
         )
     else:
         omega = np.sqrt(rotor_thrust / (params.thrust_coefficient_n_per_rad_s2 * effectiveness))
-    commands = omega / (params.max_rotor_speed_rad_s * params.voltage_factor)
-    return np.clip(commands, 0.0, 1.0).astype(np.float32)
+    commands = np.clip(
+        omega / (params.max_rotor_speed_rad_s * params.voltage_factor), 0.0, 1.0
+    ).astype(np.float32)
+    if not return_diagnostics:
+        return commands
+    allocation_matrix = _allocation_matrix(
+        params, rotor_thrust_n=rotor_thrust,
+        bemt_base_thrust=bemt_base_thrust,
+        bemt_base_torque=bemt_base_torque,
+        effectiveness=effectiveness,
+    )
+    allocated_wrench = allocation_matrix @ rotor_thrust
+    diagnostics = {
+        "requested_wrench": wrench.astype(float).tolist(),
+        "allocated_wrench": allocated_wrench.astype(float).tolist(),
+        "collective_scale": float(collective_scale),
+        "torque_scale": float(lo),
+        "requested_torque_nm": wrench[1:4].astype(float).tolist(),
+        "allocated_torque_nm": allocated_wrench[1:4].astype(float).tolist(),
+        "rotor_thrust_n": rotor_thrust.astype(float).tolist(),
+        "rotor_max_thrust_n": np.asarray(max_thrust, dtype=float).tolist(),
+        "motor_commands": commands.astype(float).tolist(),
+        "max_motor_command": float(np.max(commands)),
+        "torque_desaturation_fraction": float(1.0 - lo),
+        "collective_desaturation_fraction": float(1.0 - collective_scale),
+    }
+    return commands, diagnostics
 
 
 def policy_action_to_motor_commands(action, params: VehicleParameters) -> np.ndarray:
@@ -201,6 +228,8 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
         self._cached_params = None
         self._reference = None
         self._velocity_reference = None
+        self._last_allocation_diagnostics = {}
+        self._last_teacher_diagnostics = {}
         stage = getattr(env, "curriculum_stage", None)
         if reference_weight_override is not None and not 0.0 <= float(reference_weight_override) <= 1.0:
             raise ValueError("reference_weight_override must be between 0.0 and 1.0")
@@ -238,10 +267,21 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
         info["reference_teacher_uses_privileged_simulator_state"] = self.reference_weight > 0.0
         return observation, info
 
+    def step(self, action):
+        commands = self.action(action)
+        observation, reward, terminated, truncated, info = self.env.step(commands)
+        info = dict(info)
+        if self._last_allocation_diagnostics:
+            info["wrench_allocation"] = dict(self._last_allocation_diagnostics)
+        if self._last_teacher_diagnostics:
+            info["teacher_controller"] = dict(self._last_teacher_diagnostics)
+        return observation, reward, terminated, truncated, info
+
     def action(self, action):
         if self._cached_params is None or self.env.inner is None:
             raise RuntimeError("environment must be reset before mapping PPO actions")
         policy_wrench = policy_action_to_wrench(action, self._cached_params)
+        self._last_teacher_diagnostics = {}
         if self._velocity_reference is not None and self.reference_weight > 0.0:
             inner = self.env.inner
             teacher_wrench = self._velocity_reference.desired_wrench(
@@ -249,6 +289,7 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
                 desired_velocity_body=inner.desired_velocity_body,
                 desired_yaw_rate_rad_s=inner.desired_yaw_rate_rad_s,
             )
+            self._last_teacher_diagnostics = dict(self._velocity_reference.last_diagnostics)
             wrench = (
                 (1.0 - self.reference_weight) * policy_wrench
                 + self.reference_weight * teacher_wrench
@@ -273,7 +314,10 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
             if self.reference_weight > 0.0
             else self._cached_params
         )
-        return wrench_to_motor_commands(wrench, allocation_params)
+        commands, self._last_allocation_diagnostics = wrench_to_motor_commands(
+            wrench, allocation_params, return_diagnostics=True
+        )
+        return commands
 
 
 # Backwards-compatible import name for old tooling; semantics are body-wrench.
