@@ -2,6 +2,12 @@ name: Smooth2-only PPO - Five-stage 3D velocity and yaw-rate curriculum
 
 on:
   workflow_dispatch:
+    inputs:
+      preflight_only:
+        description: "Run Teacher validation only; never start PPO training"
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -72,6 +78,7 @@ jobs:
           retention-days: 30
 
       - name: Restore selected 1M teacher-assisted checkpoint
+        if: ${{ !inputs.preflight_only }}
         uses: actions/download-artifact@v4
         with:
           name: universal-ppo-stage2-teacher-to-teacher-free-backup
@@ -80,6 +87,7 @@ jobs:
           path: bootstrap
 
       - name: Verify selected teacher-assisted 1M bootstrap checkpoint and Smooth2 physics profile
+        if: ${{ !inputs.preflight_only }}
         run: |
           set -euo pipefail
           source_dir="bootstrap/training/runs/universal-quad-v5-foundation-stage2-teacher"
@@ -128,6 +136,7 @@ jobs:
           sha256sum "$source_model" | tee training/runs/universal-initial-from-1m-teacher-best.sha256
 
       - name: Train five chained teacher-assisted then teacher-free velocity and yaw-rate stages
+        if: ${{ !inputs.preflight_only }}
         run: |
           set -euo pipefail
           checkpoint="training/runs/universal-initial-from-1m-teacher-best.zip"
@@ -176,6 +185,7 @@ jobs:
           cp "$checkpoint" training/runs/universal-final-selected-best.zip
 
       - name: Run independent final velocity and yaw-rate evaluation
+        if: ${{ !inputs.preflight_only }}
         run: |
           set -euo pipefail
           evaluation_dir="training/runs/universal-final-independent-evaluation"
@@ -273,6 +283,7 @@ jobs:
           PY
 
       - name: Publish Smooth2-only curriculum outputs
+        if: ${{ !inputs.preflight_only }}
         if: success()
         run: |
           set -euo pipefail
@@ -354,6 +365,7 @@ jobs:
           fi
 
       - name: Print Smooth2-only training summaries
+        if: ${{ !inputs.preflight_only }}
         if: always()
         run: |
           for log in universal-velocity-ppo-stage-*.log; do
@@ -366,6 +378,7 @@ jobs:
           done
 
       - name: Upload Smooth2-only curriculum backup
+        if: ${{ !inputs.preflight_only }}
         if: always()
         uses: actions/upload-artifact@v4
         with:
