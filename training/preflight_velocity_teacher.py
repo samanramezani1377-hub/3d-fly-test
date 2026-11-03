@@ -57,7 +57,7 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
 
         # Report the physical thrust margin separately from controller quality.
         # A controller cannot hover if the sampled plant cannot produce weight.
-        params = env.inner.plant.params
+        params = base.inner.plant.params
         teacher = env._velocity_reference
         max_collective_thrust_n = float(teacher.max_collective_thrust_n)
         thrust_to_weight_ratio = max_collective_thrust_n / (params.mass_kg * 9.80665)
