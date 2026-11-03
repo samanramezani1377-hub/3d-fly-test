@@ -187,6 +187,16 @@ class AdaptiveDroneEnv(gym.Env):
             command[axis] = float(self.np_random.choice([-1.0, 1.0])) * magnitude * axis_limit
         return command[:3].astype(np.float32), float(command[3])
 
+    def _reset_target_axes_on_translation_stop(self, previous_velocity: np.ndarray) -> None:
+        if self.plant is None:
+            return
+        previous = np.asarray(previous_velocity, dtype=np.float64)
+        current = np.asarray(self.desired_velocity_body, dtype=np.float64)
+        if np.linalg.norm(previous[:2]) > 0.08 and np.linalg.norm(current[:2]) <= 0.08:
+            self.target[:2] = self.plant.position[:2]
+        if abs(float(previous[2])) > 0.08 and abs(float(current[2])) <= 0.08:
+            self.target[2] = float(self.plant.position[2])
+
     def _update_velocity_command(self) -> None:
         if not self.velocity_control:
             return
@@ -197,18 +207,24 @@ class AdaptiveDroneEnv(gym.Env):
             if self._velocity_sequence_index < len(self._velocity_command_sequence):
                 item = self._velocity_command_sequence[self._velocity_sequence_index]
                 self._active_velocity_command_index = self._velocity_sequence_index
+                previous_velocity = self.desired_velocity_body.copy()
                 self.desired_velocity_body = np.asarray(item["velocity_m_s"], dtype=np.float32)
                 self.desired_yaw_rate_rad_s = float(item["yaw_rate_rad_s"])
+                self._reset_target_axes_on_translation_stop(previous_velocity)
                 self._command_steps_remaining = max(int(item["duration_steps"]) - 1, 0)
                 self._velocity_sequence_index += 1
             else:
                 # Explicit neutral tail evaluates braking and stable stop behavior.
+                previous_velocity = self.desired_velocity_body.copy()
                 self._active_velocity_command_index = -1
                 self.desired_velocity_body[:] = 0.0
+                self._reset_target_axes_on_translation_stop(previous_velocity)
                 self.desired_yaw_rate_rad_s = 0.0
                 self._command_steps_remaining = self.max_steps + 1
             return
+        previous_velocity = self.desired_velocity_body.copy()
         self.desired_velocity_body, self.desired_yaw_rate_rad_s = self._sample_velocity_command()
+        self._reset_target_axes_on_translation_stop(previous_velocity)
         self._command_steps_remaining = int(self.np_random.integers(50, 151)) - 1  # 1-3 seconds at 50 Hz
 
     def _observation(self) -> np.ndarray:
