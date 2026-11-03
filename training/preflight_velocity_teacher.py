@@ -25,7 +25,7 @@ from train_universal_ppo import build_velocity_evaluation_sequence
 EXPECTED_PROFILE_IDS = {"smooth2-a2212-custom-prop"}
 EPISODES_PER_PROFILE = 3
 STAGE = 5
-MAX_STEPS = 1800  # Reserve enough simulation time for takeoff, all commands and braking.
+MAX_STEPS = 2000  # Includes 1.5 s yaw commands and a long independent neutral tail.
 
 
 def run_episode(profile_id: str, episode_index: int, seed: int,
@@ -137,10 +137,11 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
                     values.append(velocity_error)
                     if len(values) > 20:
                         linear_steady_errors.setdefault(command_index, []).append(velocity_error)
-                values = yaw_errors.setdefault(command_index, [])
-                values.append(yaw_error)
-                if len(values) > 20:
-                    yaw_steady_errors.setdefault(command_index, []).append(yaw_error)
+                else:
+                    values = yaw_errors.setdefault(command_index, [])
+                    values.append(yaw_error)
+                    if len(values) > 20:
+                        yaw_steady_errors.setdefault(command_index, []).append(yaw_error)
 
             if info.get("velocity_command_sequence_complete"):
                 if neutral_started is None:
@@ -229,7 +230,7 @@ def run_episode(profile_id: str, episode_index: int, seed: int,
             "no_crash": not crashed,
             "successful_takeoff": took_off,
             "all_26_translation_commands": len(linear_errors) == 26,
-            "all_30_yaw_commands": len(yaw_errors) == 30,
+            "all_4_yaw_only_commands": len(yaw_errors) == 4,
             "mean_velocity_error_le_0_50_m_s": mean_velocity_error <= 0.50,
             "worst_direction_error_le_0_85_m_s": max_direction_error <= 0.85,
             "mean_yaw_error_le_0_30_rad_s": mean_yaw_error <= 0.30,

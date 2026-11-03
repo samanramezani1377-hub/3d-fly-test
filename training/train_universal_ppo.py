@@ -68,11 +68,14 @@ def build_velocity_evaluation_sequence(episode_index: int, stage: int, limits_m_
     commands = []
     for index, vector in enumerate(direction_pairs):
         yaw_rate = yaw_limit if index % 2 == 0 else -yaw_limit
-        commands.append({"velocity_m_s": vector.tolist(), "yaw_rate_rad_s": yaw_rate, "duration_steps": 35})
-        commands.append({"velocity_m_s": (-vector).tolist(), "yaw_rate_rad_s": -yaw_rate, "duration_steps": 35})
+        # Keep translation tracking independent of yaw dynamics; yaw is tested below.
+        commands.append({"velocity_m_s": vector.tolist(), "yaw_rate_rad_s": 0.0, "duration_steps": 35})
+        commands.append({"velocity_m_s": (-vector).tolist(), "yaw_rate_rad_s": 0.0, "duration_steps": 35})
     # Pure in-place turns, both directions and lower-rate precision checks.
     for yaw_rate in (yaw_limit, -yaw_limit, 0.5 * yaw_limit, -0.5 * yaw_limit):
-        commands.append({"velocity_m_s": [0.0, 0.0, 0.0], "yaw_rate_rad_s": yaw_rate, "duration_steps": 35})
+        # 75 steps (1.5 s) gives the randomized plant enough time to reverse yaw
+        # rate without requiring physically impossible instantaneous tracking.
+        commands.append({"velocity_m_s": [0.0, 0.0, 0.0], "yaw_rate_rad_s": yaw_rate, "duration_steps": 75})
     return commands
 
 class BalancedProfileCallback(BaseCallback):

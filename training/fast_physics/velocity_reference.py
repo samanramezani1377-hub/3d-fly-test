@@ -21,7 +21,8 @@ class VelocityYawReferenceController:
         self, params: VehicleParameters, *, wind_m_s=(0.0, 0.0, 0.0),
         dt_s: float = 0.02, velocity_kp=(4.2, 4.2, 4.0),
         velocity_ki=(0.55, 0.55, 0.65), velocity_integral_limit=(1.25, 1.25, 1.0),
-        position_kp=(1.15, 1.15, 1.55), attitude_kp=(16.0, 16.0, 0.0),
+        position_kp=(1.15, 1.15, 1.55), position_hold_velocity_limit_m_s=(1.5, 1.5, 0.75),
+        attitude_kp=(16.0, 16.0, 0.0),
         attitude_kd=(8.5, 8.5, 0.0), yaw_rate_kp=6.5, yaw_rate_kd=0.45,
         max_horizontal_accel_m_s2=6.0, max_vertical_accel_m_s2=4.0,
         max_tilt_rad=0.55, max_yaw_accel_rad_s2=10.0,
@@ -54,6 +55,7 @@ class VelocityYawReferenceController:
         self.velocity_integral = np.zeros(3, dtype=np.float64)
         self._previous_command = np.zeros(4, dtype=np.float64)
         self.position_kp = np.asarray(position_kp, dtype=np.float64)
+        self.position_hold_velocity_limit = np.asarray(position_hold_velocity_limit_m_s, dtype=np.float64)
         self.attitude_kp = np.asarray(attitude_kp, dtype=np.float64)
         self.attitude_kd = np.asarray(attitude_kd, dtype=np.float64)
         self.yaw_rate_kp, self.yaw_rate_kd = float(yaw_rate_kp), float(yaw_rate_kd)
@@ -64,7 +66,7 @@ class VelocityYawReferenceController:
         if self.wind.shape != (3,) or any(
             x.shape != (3,) for x in
             (self.velocity_kp, self.velocity_ki, self.velocity_integral_limit,
-             self.position_kp, self.attitude_kp, self.attitude_kd)
+             self.position_kp, self.position_hold_velocity_limit, self.attitude_kp, self.attitude_kd)
         ):
             raise ValueError("wind and controller gains must be 3-vectors")
         if self.dt <= 0 or min(
@@ -100,7 +102,12 @@ class VelocityYawReferenceController:
         # Horizontal commands rotate with the nose; vertical is world-up.
         commanded_velocity_world = self._body_yaw_velocity_to_world(command_body, yaw)
         position_error = target - position
-        position_hold_velocity = self.position_kp * position_error
+        position_hold_velocity_raw = self.position_kp * position_error
+        position_hold_velocity = np.clip(
+            position_hold_velocity_raw,
+            -self.position_hold_velocity_limit,
+            self.position_hold_velocity_limit,
+        )
         # Explicit translation owns its commanded axes. When a translation
         # command ends, the environment moves the virtual target to the current
         # position so this term does not pull the aircraft back along its old path.
@@ -272,6 +279,8 @@ class VelocityYawReferenceController:
             "velocity_feedback_gain": feedback_gain.astype(float).tolist(),
             "desired_tilt_rad": [float(desired_roll), float(desired_pitch)],
             "desired_tilt_limit_rad": float(effective_tilt),
+            "position_hold_velocity_raw_m_s": position_hold_velocity_raw.astype(float).tolist(),
+            "position_hold_velocity_limited_m_s": position_hold_velocity.astype(float).tolist(),
             "desired_velocity_world_m_s": desired_velocity_world.astype(float).tolist(),
             "velocity_error_world_m_s": velocity_error.astype(float).tolist(),
             "desired_body_r_rad_s": float(desired_body_r),

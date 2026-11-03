@@ -181,3 +181,26 @@ def test_velocity_sequence_neutral_tail_separates_pure_braking_from_position_ret
             assert env.inner.neutral_tail_mode == mode
         finally:
             env.close()
+
+
+def test_velocity_teacher_caps_position_hold_velocity_for_large_position_error():
+    profile = next(
+        p for p in load_vehicle_profiles(DEFAULT_VEHICLE_FAMILY)
+        if p["vehicle_id"] == "smooth2-a2212-custom-prop"
+    )
+    env = VehicleFamilyEnv(
+        vehicle_id=profile["vehicle_id"], randomize=False,
+        curriculum_stage=5, velocity_control=True,
+    )
+    try:
+        env.reset(seed=7311)
+        controller = VelocityYawReferenceController(env.inner.plant.params, dt_s=env.inner.dt)
+        state = np.zeros(12, dtype=np.float64)
+        controller.desired_wrench(
+            state, target_position=np.array([100.0, -100.0, 100.0]),
+            desired_velocity_body=np.zeros(3), desired_yaw_rate_rad_s=0.0,
+        )
+        hold = np.asarray(controller.last_diagnostics["position_hold_velocity_limited_m_s"])
+        np.testing.assert_allclose(hold, [1.5, -1.5, 0.75])
+    finally:
+        env.close()
