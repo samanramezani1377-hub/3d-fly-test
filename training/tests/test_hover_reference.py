@@ -165,7 +165,10 @@ def test_velocity_sequence_neutral_tail_separates_pure_braking_from_position_ret
             env.inner._command_steps_remaining = 0
             env.inner._update_velocity_command()
             if should_reset_target:
-                np.testing.assert_allclose(env.inner.target, env.inner.plant.position)
+                # The command stopped horizontal translation only; vertical
+                # hold remains anchored to the original altitude until neutral tail.
+                np.testing.assert_allclose(env.inner.target[:2], env.inner.plant.position[:2])
+                np.testing.assert_allclose(env.inner.target[2], original_target[2])
             else:
                 np.testing.assert_allclose(env.inner.target, original_target)
 
