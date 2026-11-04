@@ -11,6 +11,7 @@ from pathlib import Path
 from stable_baselines3.common.callbacks import BaseCallback
 from fast_physics.vehicle_family import DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv, load_vehicle_profiles
 from fast_physics.ppo_action import BodyWrenchActionWrapper
+from fast_physics.propeller import BladeElementPropeller
 
 
 def parse_args(argv=None):
@@ -559,6 +560,13 @@ def main(argv=None):
                 diagnostics_enabled=False,
             )
         return _init
+
+    # Compile the unchanged BEMT kernel once in the parent before worker creation.
+    # Workers then reuse Numba's on-disk cache instead of compiling concurrently.
+    for profile in profiles:
+        bemt_config = profile.get("propulsion", {}).get("propeller_bemt")
+        if bemt_config:
+            BladeElementPropeller(bemt_config).evaluate(100.0, 0.0)
 
     env = SubprocVecEnv([make_env(i) for i in range(args.n_envs)])
     aggregate_eval_frequency = args.eval_frequency
