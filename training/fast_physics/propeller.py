@@ -1,12 +1,77 @@
-"""Vectorized runtime blade-element/momentum propeller model for Smooth2.
+"""Smooth2 CAD blade-element/momentum propeller model.
 
-Uses the pinned CAD blade stations and local axial inflow. This is a fast
-screening model, not CFD or thrust-stand calibration.
+The numerical model retains configured radial integration resolution, all 36
+induced-inflow bisection iterations, Prandtl tip loss and axial inflow. Numba
+accelerates the same equations without reducing physical resolution.
 """
 from __future__ import annotations
 
 import math
 import numpy as np
+
+try:
+    from numba import njit
+except ImportError:
+    njit = None
+
+
+def _section_terms(induced, axial, omega, r, chord, beta, tip_factor,
+                   rho, blade_count, alpha0, cl_limit, cd0, cd_k):
+    va = axial + induced
+    vt = omega * r
+    phi = math.atan2(va, vt)
+    vrel2 = vt * vt + va * va
+    cl = min(max(2.0 * math.pi * (beta - phi - alpha0), -cl_limit), cl_limit)
+    cd = cd0 + cd_k * cl * cl
+    dynamic = 0.5 * rho * vrel2 * blade_count * chord
+    d_thrust = dynamic * (cl * math.cos(phi) - cd * math.sin(phi))
+    d_torque = dynamic * (cl * math.sin(phi) + cd * math.cos(phi)) * r
+    sin_phi = max(abs(math.sin(phi)), 1e-8)
+    f_arg = tip_factor / sin_phi
+    loss = max(2.0 / math.pi * math.acos(min(1.0, math.exp(-f_arg))), 0.05)
+    momentum = 4.0 * math.pi * rho * r * induced * (induced + axial) * loss
+    return d_thrust - momentum, d_thrust, d_torque
+
+
+if njit is not None:
+    _section_terms_jit = njit(cache=True, fastmath=False)(_section_terms)
+
+    @njit(cache=True, fastmath=False)
+    def _bemt_evaluate_jit(omega, axial, r, chord, beta, tip_factor, dr,
+                           rho, blade_count, alpha0, cl_limit, cd0, cd_k):
+        n = r.shape[0]
+        lo = np.zeros(n, dtype=np.float64)
+        hi = np.full(n, max(0.6 * omega * (r[-1] + 0.5 * dr), 1.0), dtype=np.float64)
+        active = np.zeros(n, dtype=np.bool_)
+        for i in range(n):
+            residual, _, _ = _section_terms_jit(
+                0.0, axial, omega, r[i], chord[i], beta[i], tip_factor[i],
+                rho, blade_count, alpha0, cl_limit, cd0, cd_k
+            )
+            active[i] = residual > 0.0
+        for _ in range(36):
+            for i in range(n):
+                if active[i]:
+                    mid = 0.5 * (lo[i] + hi[i])
+                    residual, _, _ = _section_terms_jit(
+                        mid, axial, omega, r[i], chord[i], beta[i], tip_factor[i],
+                        rho, blade_count, alpha0, cl_limit, cd0, cd_k
+                    )
+                    if residual > 0.0:
+                        lo[i] = mid
+                    else:
+                        hi[i] = mid
+        thrust = 0.0
+        torque = 0.0
+        for i in range(n):
+            induced = 0.5 * (lo[i] + hi[i]) if active[i] else 0.0
+            _, d_thrust, d_torque = _section_terms_jit(
+                induced, axial, omega, r[i], chord[i], beta[i], tip_factor[i],
+                rho, blade_count, alpha0, cl_limit, cd0, cd_k
+            )
+            thrust += d_thrust * dr
+            torque += d_torque * dr
+        return max(thrust, 0.0), max(torque, 0.0)
 
 
 class BladeElementPropeller:
@@ -30,48 +95,45 @@ class BladeElementPropeller:
         if self.rho <= 0 or self.n_integral < 8:
             raise ValueError("invalid air density or integration resolution")
         r0 = max(self.hub_radius_m, stations[0, 0] * self.radius_m)
-        dr = (self.radius_m - r0) / self.n_integral
-        self.r = r0 + (np.arange(self.n_integral, dtype=np.float64) + 0.5) * dr
-        self.dr = dr
+        self.dr = (self.radius_m - r0) / self.n_integral
+        self.r = r0 + (np.arange(self.n_integral, dtype=np.float64) + 0.5) * self.dr
         radial = stations[:, 0]
         self.chord = np.interp(self.r / self.radius_m, radial, stations[:, 1])
         self.beta = np.radians(np.interp(self.r / self.radius_m, radial, stations[:, 2]))
-        tip_factor = 0.5 * self.blade_count * (self.radius_m - self.r) / self.r
-        self.tip_factor = tip_factor
+        self.tip_factor = 0.5 * self.blade_count * (self.radius_m - self.r) / self.r
 
     def evaluate(self, omega_rad_s: float, axial_inflow_m_s: float = 0.0) -> tuple[float, float]:
         """Return positive thrust (N) and shaft torque magnitude (Nm)."""
         omega = max(float(omega_rad_s), 0.0)
         if omega < 1e-6:
             return 0.0, 0.0
-        vt = omega * self.r
         axial = float(axial_inflow_m_s)
+        if njit is not None:
+            return _bemt_evaluate_jit(
+                omega, axial, self.r, self.chord, self.beta, self.tip_factor, self.dr,
+                self.rho, self.blade_count, self.alpha0, self.cl_limit, self.cd0, self.cd_k,
+            )
+
+        vt = omega * self.r
 
         def section(induced):
             va = axial + induced
             phi = np.arctan2(va, vt)
             vrel2 = vt * vt + va * va
-            cl = np.clip(
-                2.0 * math.pi * (self.beta - phi - self.alpha0),
-                -self.cl_limit, self.cl_limit,
-            )
+            cl = np.clip(2.0 * math.pi * (self.beta - phi - self.alpha0), -self.cl_limit, self.cl_limit)
             cd = self.cd0 + self.cd_k * cl * cl
             dynamic = 0.5 * self.rho * vrel2 * self.blade_count * self.chord
             d_thrust = dynamic * (cl * np.cos(phi) - cd * np.sin(phi))
             d_torque = dynamic * (cl * np.sin(phi) + cd * np.cos(phi)) * self.r
             sin_phi = np.maximum(np.abs(np.sin(phi)), 1e-8)
             f_arg = self.tip_factor / sin_phi
-            loss = np.maximum(
-                2.0 / math.pi * np.arccos(np.minimum(1.0, np.exp(-f_arg))),
-                0.05,
-            )
+            loss = np.maximum(2.0 / math.pi * np.arccos(np.minimum(1.0, np.exp(-f_arg))), 0.05)
             momentum = 4.0 * math.pi * self.rho * self.r * induced * (induced + axial) * loss
             return d_thrust - momentum, d_thrust, d_torque
 
         lo = np.zeros_like(self.r)
         hi = np.full_like(self.r, max(0.6 * omega * self.radius_m, 1.0))
-        residual_lo = section(lo)[0]
-        active = residual_lo > 0.0
+        active = section(lo)[0] > 0.0
         for _ in range(36):
             mid = 0.5 * (lo + hi)
             residual = section(mid)[0]
@@ -80,6 +142,4 @@ class BladeElementPropeller:
             hi = np.where(active & ~above, mid, hi)
         induced = np.where(active, 0.5 * (lo + hi), 0.0)
         _, d_thrust, d_torque = section(induced)
-        thrust = float(np.sum(d_thrust) * self.dr)
-        torque = float(np.sum(d_torque) * self.dr)
-        return max(thrust, 0.0), max(torque, 0.0)
+        return max(float(np.sum(d_thrust) * self.dr), 0.0), max(float(np.sum(d_torque) * self.dr), 0.0)
