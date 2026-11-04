@@ -58,6 +58,7 @@ jobs:
           python -c "import torch; assert torch.version.cuda is None; print('CPU-only PyTorch:', torch.__version__)"
 
       - name: Run teacher-only randomized capability preflight (must pass before PPO)
+        if: ${{ !inputs.diagnostics_only }}
         run: |
           set -euo pipefail
           python -m py_compile \
@@ -80,7 +81,7 @@ jobs:
             --output training/runs/universal-teacher-preflight/report.json
 
       - name: Preserve teacher preflight report even when the gate fails
-        if: always()
+        if: ${{ !inputs.diagnostics_only && always() }}
         uses: actions/upload-artifact@v4
         with:
           name: universal-teacher-capability-preflight
