@@ -347,3 +347,41 @@ The existing manual five-stage workflow has a `preflight_only` dispatch input, e
 
 
 The velocity Teacher's collective-thrust compensation now uses the vertical projection of its commanded attitude, rather than the current measured attitude. This prevents the controller from under-requesting collective thrust while it is still tilting toward a horizontal-acceleration command. A focused regression test is included in the existing preflight test step; no plant, motor, propeller, BEMT or PPO observation/action behavior is changed.
+
+
+## Current Smooth2-only five-stage velocity/yaw pipeline: evaluation safeguards
+
+The active workflow `.github/workflows/universal-ppo-five-stage.yml` now has three manual modes:
+
+- **Preflight only** (`preflight_only=true`, default): run the existing Teacher capability gate; do not train.
+- **Saved-run diagnostics only** (`preflight_only=false`, `diagnostics_only=true`): download the saved `smooth2-only-five-stage-backup` artifact from Actions run [41759545520](https://github.com/samanramezani1377-hub/3d-fly-test/actions/runs/41759545520), run Teacher/PPO comparisons and the independent final evaluation, and do not train or publish/commit model files.
+- **Full five-stage training** (`preflight_only=false`, `diagnostics_only=false`): run the existing five-stage training chain, then the same diagnostics and independent final evaluation.
+
+For the saved-run diagnostics mode, open **Actions → Smooth2-only PPO - Five-stage 3D velocity and yaw-rate curriculum → Run workflow**, set `preflight_only` to false and `diagnostics_only` to true. This reuses the saved model; it does not launch PPO training.
+
+### Independent final evaluation
+
+`BalancedProfileCallback.evaluate_checkpoint(model)` synchronizes the callback's `num_timesteps` with the loaded model before invoking the existing evaluation path. This is required when evaluation is called outside `model.learn()`; otherwise the callback can see timestep zero and silently skip the report.
+
+### Coverage-aware checkpoint selection
+
+For velocity/yaw control, missing tracking samples are represented as `null`, never as a zero tracking error. Tracking errors only enter the selection score from episodes that reached complete coverage. The lexicographic order is:
+
+1. maximize minimum per-profile mission success;
+2. minimize worst-profile crash rate;
+3. maximize minimum per-profile takeoff rate;
+4. maximize minimum full-command-coverage episode rate;
+5. maximize minimum velocity-direction coverage fraction;
+6. maximize minimum yaw-command coverage fraction;
+7. minimize velocity tracking error on full-coverage episodes;
+8. minimize yaw-rate tracking error on full-coverage episodes;
+9. minimize motor saturation;
+10. maximize mean return as the final tie-breaker.
+
+This prevents an episode that crashes before receiving commands from appearing to have perfect tracking because its error list was empty.
+
+### Teacher-to-PPO transfer diagnostics
+
+`training/diagnose_teacher_ppo.py` compares PPO-only, 80/20 PPO/Teacher blend, and Teacher-only control on identical seeded Smooth2 randomized initial observations. It crosses those three Teacher weights with both nominal-profile and randomized-episode allocator parameters, so Teacher contribution is not confounded with the allocator's parameter source. The trace records policy, Teacher and blended wrench requests, allocator/desaturation details, motor commands, state, tracking errors and crash reasons. The script asserts that all modes for a given seed begin from the same observation.
+
+The diagnostic report is written to `training/runs/universal-final-independent-evaluation/teacher-ppo-comparison.json` and is included in the uploaded Actions artifact. It is a simulation diagnostic, not a flight-safety approval. The workflow's independent final PPO evaluation remains Teacher-free.
