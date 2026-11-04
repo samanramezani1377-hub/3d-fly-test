@@ -350,7 +350,7 @@ def policy_action_to_motor_commands(action, params: VehicleParameters) -> np.nda
 class BodyWrenchActionWrapper(gym.ActionWrapper):
     """Blend PPO body-wrench requests with a teacher that fades across stages."""
     def __init__(self, env, disable_teacher: bool = False, reference_weight_override: float | None = None,
-                 diagnostics_enabled: bool = True):
+                 diagnostics_enabled: bool = True, allocator_use_randomized_params: bool | None = None):
         super().__init__(env)
         # SB3 PPO requires finite Box bounds. Keep a deliberately wide
         # symmetric envelope because the policy emits raw Gaussian samples;
@@ -361,6 +361,7 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
             low=-5.0, high=5.0, shape=(4,), dtype=np.float32
         )
         self.diagnostics_enabled = bool(diagnostics_enabled)
+        self.allocator_use_randomized_params = allocator_use_randomized_params
         self._cached_profile_id = None
         self._cached_params = None
         self._allocation_params = None
@@ -391,7 +392,12 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
             self._cached_profile_id = profile_id
         self._reference = None
         self._velocity_reference = None
-        self._allocation_params = self.env.inner.plant.params if self.reference_weight > 0.0 else self._cached_params
+        use_randomized_allocator = (
+            self.reference_weight > 0.0
+            if self.allocator_use_randomized_params is None
+            else bool(self.allocator_use_randomized_params)
+        )
+        self._allocation_params = self.env.inner.plant.params if use_randomized_allocator else self._cached_params
         if self._allocation_params.propeller_bemt:
             import json
             self._bemt_config_json = json.dumps(self._allocation_params.propeller_bemt, sort_keys=True, separators=(",", ":"))
@@ -466,6 +472,7 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
         if self.diagnostics_enabled:
             self._last_action_diagnostics = {
                 "teacher_weight": float(self.reference_weight),
+                "allocator_uses_randomized_episode_parameters": bool(self._allocation_params is self.env.inner.plant.params),
                 "policy_wrench_n_nm": policy_wrench.astype(float).tolist(),
                 "teacher_wrench_n_nm": teacher_wrench.astype(float).tolist() if teacher_wrench is not None else None,
                 "blended_wrench_n_nm": wrench.astype(float).tolist(),

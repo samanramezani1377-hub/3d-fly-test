@@ -31,7 +31,7 @@ def _finite(value):
     return number if math.isfinite(number) else None
 
 
-def run_mode(model, *, weight, seed, family_path, randomization_path, output_stage=5):
+def run_mode(model, *, weight, seed, allocator_randomized, family_path, randomization_path, output_stage=5):
     base = VehicleFamilyEnv(
         vehicle_family_path=family_path,
         randomization_path=randomization_path,
@@ -47,6 +47,7 @@ def run_mode(model, *, weight, seed, family_path, randomization_path, output_sta
         disable_teacher=(weight == 0.0),
         reference_weight_override=weight,
         diagnostics_enabled=True,
+        allocator_use_randomized_params=allocator_randomized,
     )
     options = {
         "velocity_command_sequence": build_velocity_evaluation_sequence(0, output_stage),
@@ -115,6 +116,7 @@ def run_mode(model, *, weight, seed, family_path, randomization_path, output_sta
     return {
         "mode": {0.0: "ppo_only", 0.8: "ppo_teacher_80_20", 1.0: "teacher_only"}[weight],
         "teacher_weight": weight,
+        "allocator_mode": "randomized_episode_parameters" if allocator_randomized else "nominal_profile_parameters",
         "seed": seed,
         "initial_observation_sha256": initial_observation_sha256,
         "initial_randomized_scenario": reset_info.get("scenario"),
@@ -152,12 +154,14 @@ def main():
     model = PPO.load(str(args.model), device="cpu")
     results = []
     for seed in args.seeds:
-        for weight in (0.0, 0.8, 1.0):
-            results.append(run_mode(
-                model, weight=weight, seed=seed,
-                family_path=args.vehicle_family,
-                randomization_path=args.randomization_config,
-            ))
+        for allocator_randomized in (False, True):
+            for weight in (0.0, 0.8, 1.0):
+                results.append(run_mode(
+                    model, weight=weight, seed=seed,
+                    allocator_randomized=allocator_randomized,
+                    family_path=args.vehicle_family,
+                    randomization_path=args.randomization_config,
+                ))
     for seed in args.seeds:
         hashes = {
             row["initial_observation_sha256"]
@@ -169,9 +173,15 @@ def main():
             )
 
     summary = {}
-    for mode in ("ppo_only", "ppo_teacher_80_20", "teacher_only"):
-        rows = [r for r in results if r["mode"] == mode]
-        summary[mode] = {
+    for allocator_randomized in (False, True):
+      allocator_label = "randomized_allocator" if allocator_randomized else "nominal_allocator"
+      for mode in ("ppo_only", "ppo_teacher_80_20", "teacher_only"):
+        rows = [
+            r for r in results
+            if r["mode"] == mode
+            and r["allocator_mode"] == ("randomized_episode_parameters" if allocator_randomized else "nominal_profile_parameters")
+        ]
+        summary[f"{mode}_{allocator_label}"] = {
             "episodes": len(rows),
             "takeoff_rate": sum(r["takeoff_success"] for r in rows) / len(rows),
             "crash_rate": sum(r["crashed"] for r in rows) / len(rows),
@@ -200,6 +210,8 @@ def main():
         "model_timesteps": int(model.num_timesteps),
         "randomization_enabled": True,
         "same_seed_across_modes": True,
+        "allocator_modes_compared": ["nominal_profile_parameters", "randomized_episode_parameters"],
+        "comparison_design": "3 teacher weights crossed with 2 allocator parameter sources, identical initial observation per seed",
         "identical_initial_observation_expected_per_seed": True,
         "initial_observation_hashes_are_reported_per_episode": True,
         "modes": summary,
