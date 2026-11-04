@@ -1,4 +1,4 @@
-from ppo_selection import checkpoint_selection_score
+from training.ppo_selection import checkpoint_selection_score
 
 
 def report(*, success=0.0, crash=1.0, takeoff=1.0, complete=0.0,

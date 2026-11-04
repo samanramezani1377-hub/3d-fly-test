@@ -417,7 +417,7 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
     def step(self, action):
         commands = self.action(action)
         observation, reward, terminated, truncated, info = self.env.step(commands)
-        if self.diagnostics_enabled and (self._last_allocation_diagnostics or self._last_teacher_diagnostics):
+        if self.diagnostics_enabled and (self._last_allocation_diagnostics or self._last_teacher_diagnostics or self._last_action_diagnostics):
             info = dict(info)
             if self._last_allocation_diagnostics:
                 info["wrench_allocation"] = self._last_allocation_diagnostics

@@ -113,7 +113,7 @@ class BalancedProfileCallback(BaseCallback):
         if selection_path.is_file():
             saved = json.loads(selection_path.read_text(encoding="utf-8"))
             saved_score = tuple(saved.get("score", ()))
-            # Older selection rules are not comparable to the current seven-field rule.
+            # Older selection rules are not comparable to the current ten-field rule.
             if len(saved_score) == 10:
                 self.best_score = saved_score
                 self.best_report = saved.get("report")
