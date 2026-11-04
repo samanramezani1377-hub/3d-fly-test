@@ -9,9 +9,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from stable_baselines3.common.callbacks import BaseCallback
-from fast_physics.vehicle_family import DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv, load_vehicle_profiles
-from fast_physics.ppo_action import BodyWrenchActionWrapper
+from fast_physics.vehicle_family import DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv, load_vehicle_profiles, profile_to_parameters
+from fast_physics.ppo_action import BodyWrenchActionWrapper, wrench_to_motor_commands
 from fast_physics.propeller import BladeElementPropeller
+from fast_physics.dynamics import FastQuadrotor
 
 
 def parse_args(argv=None):
@@ -569,6 +570,14 @@ def main(argv=None):
             warmup_model = BladeElementPropeller(bemt_config)
             warmup_model.evaluate(100.0, 0.0)
             warmup_model.evaluate_many(np.full(4, 100.0), np.zeros(4))
+            warmup_params = profile_to_parameters(profile)
+            wrench_to_motor_commands(
+                np.array([warmup_params.mass_kg * 9.80665, 0.0, 0.0, 0.0]),
+                warmup_params,
+            )
+            warmup_plant = FastQuadrotor(warmup_params)
+            warmup_plant.reset(position=(0.0, 0.0, 1.0))
+            warmup_plant.step(np.full(4, 0.5, dtype=np.float64), diagnostics=False)
 
     env = SubprocVecEnv([make_env(i) for i in range(args.n_envs)])
     aggregate_eval_frequency = args.eval_frequency
