@@ -24,11 +24,11 @@ env:
   NUMEXPR_NUM_THREADS: "1"
   PYTHONUNBUFFERED: "1"
   STAGE_STEPS: "400000"
-  N_ENVS: "100"
+  N_ENVS: "20"
 
 jobs:
   train-universal-family:
-    name: Smooth2 only - 5 x (400K teacher + 400K teacher-free), 100 parallel envs
+    name: Smooth2 only - 5 x (400K teacher + 400K teacher-free), 20 parallel envs
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
@@ -144,7 +144,7 @@ jobs:
             teacher_run="universal-velocity-ppo-stage-${stage}-teacher"
             student_run="universal-velocity-ppo-stage-${stage}-teacher-free"
 
-            echo "===== Stage ${stage}A: 400K steps, velocity/yaw teacher weight 0.80, 100 envs ====="
+            echo "===== Stage ${stage}A: 400K steps, velocity/yaw teacher weight 0.80, 20 envs ====="
             python training/train_universal_ppo.py \
               --timesteps "$STAGE_STEPS" --n-envs "$N_ENVS" \
               --seed "$((2042 + stage * 10 + 1))" \
@@ -163,7 +163,7 @@ jobs:
             test -s "$teacher_best" || { echo "Stage $stage teacher phase produced no evaluated best checkpoint"; exit 1; }
             test -s "training/runs/$teacher_run/best/selection.json"
 
-            echo "===== Stage ${stage}B: 400K steps, teacher disabled (0.00), 100 envs ====="
+            echo "===== Stage ${stage}B: 400K steps, teacher disabled (0.00), 20 envs ====="
             python training/train_universal_ppo.py \
               --timesteps "$STAGE_STEPS" --n-envs "$N_ENVS" \
               --seed "$((2042 + stage * 10 + 2))" \
@@ -338,7 +338,7 @@ jobs:
             "evaluation_neutral_speed_acceptance_m_s": 0.25,
             "evaluation_neutral_speed_sustained_seconds": 0.5,
             "checkpoint_frequency": 50000,
-            "parallel_environments": 100,
+            "parallel_environments": 20,
             "geometry_and_rotor_positions": "Smooth2 pinned CAD-derived geometry and rotor positions only",
             "minimum_worst_case_thrust_to_weight_ratio": 1.05,
             "thrust_margin_calculation": "Smooth2 BEMT static thrust envelope with motor effectiveness and voltage-scaled rotor speed",
