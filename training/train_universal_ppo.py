@@ -551,9 +551,13 @@ def main(argv=None):
                 curriculum_stage=args.curriculum_stage,
                 sampling_weights_path=sampling_weights_path,
                 velocity_control=args.velocity_control,
+                diagnostics_enabled=False,
             )
-            return BodyWrenchActionWrapper(base_env, disable_teacher=args.no_teacher,
-                reference_weight_override=args.teacher_weight)
+            return BodyWrenchActionWrapper(
+                base_env, disable_teacher=args.no_teacher,
+                reference_weight_override=args.teacher_weight,
+                diagnostics_enabled=False,
+            )
         return _init
 
     env = SubprocVecEnv([make_env(i) for i in range(args.n_envs)])
