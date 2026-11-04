@@ -89,7 +89,7 @@ jobs:
           retention-days: 30
 
       - name: Download the existing five-stage run for diagnostics only
-        if: ${{ inputs.diagnostics_only }}
+        if: ${{ inputs.diagnostics_only && !inputs.preflight_only }}
         uses: actions/download-artifact@v4
         with:
           name: smooth2-only-five-stage-backup
