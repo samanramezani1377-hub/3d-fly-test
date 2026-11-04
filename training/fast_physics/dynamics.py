@@ -78,6 +78,33 @@ class FastQuadrotor:
             raise ValueError("dt and gravity must be finite and positive")
         self.params = params
         self.propeller_model = BladeElementPropeller(params.propeller_bemt) if params.propeller_bemt else None
+        # Cache episode-invariant physical coefficients once per plant.
+        self._rotor_positions = np.asarray(params.rotor_positions_m, dtype=np.float64) - np.asarray(
+            params.center_of_mass_m, dtype=np.float64
+        )
+        self._motor_effectiveness = np.asarray(params.motor_effectiveness, dtype=np.float64)
+        self._spin_signs = np.asarray(params.spin_signs, dtype=np.float64)
+        self._inertia = np.asarray(params.inertia_matrix, dtype=np.float64)
+        self._inverse_inertia = np.linalg.inv(self._inertia)
+        self._linear_drag = np.asarray(
+            params.linear_drag_body_kg_s if params.linear_drag_body_kg_s is not None
+            else (params.linear_drag_kg_s,) * 3, dtype=np.float64
+        )
+        self._quadratic_drag = np.asarray(
+            params.quadratic_drag_body_kg_m if params.quadratic_drag_body_kg_m is not None
+            else (params.quadratic_drag_kg_m,) * 3, dtype=np.float64
+        )
+        self._motor_alpha = -np.expm1(-float(dt) / params.motor_time_constant_s)
+        self._thrust_scale = (
+            params.thrust_coefficient_n_per_rad_s2 / float(params.propeller_bemt.get(
+                "reference_thrust_coefficient_n_per_rad_s2", params.thrust_coefficient_n_per_rad_s2
+            )) if params.propeller_bemt else 1.0
+        )
+        self._torque_scale = (
+            params.torque_to_thrust_m / float(params.propeller_bemt.get(
+                "reference_torque_to_thrust_m", params.torque_to_thrust_m
+            )) if params.propeller_bemt else 1.0
+        )
         self.dt = float(dt)
         self.gravity = float(gravity_m_s2)
         self.position = np.zeros(3, dtype=np.float64)
@@ -122,7 +149,7 @@ class FastQuadrotor:
 
         # Correct the geometric overlap once, then resolve impact velocities.
         self.position[2] += penetration
-        inverse_inertia = np.linalg.inv(self.params.inertia_matrix)
+        inverse_inertia = self._inverse_inertia
         active = 0
         normal_impulse_sum = 0.0
         for _ in range(4):
@@ -172,7 +199,7 @@ class FastQuadrotor:
             self.position[2] -= residual
         return active, penetration, normal_impulse_sum
 
-    def step(self, motor_commands: np.ndarray) -> tuple[np.ndarray, dict]:
+    def step(self, motor_commands: np.ndarray, *, diagnostics: bool = True) -> tuple[np.ndarray, dict]:
         command = np.asarray(motor_commands, dtype=np.float64)
         if command.shape != (4,):
             raise ValueError("motor_commands must contain four normalized rotor commands")
@@ -183,8 +210,7 @@ class FastQuadrotor:
         target_omega = command * p.max_rotor_speed_rad_s * p.voltage_factor
         previous_motor_omega = self.motor_omega.copy()
         # Exact discretization of a first-order motor-speed response.
-        alpha = -np.expm1(-self.dt / p.motor_time_constant_s)
-        self.motor_omega += alpha * (target_omega - self.motor_omega)
+        self.motor_omega += self._motor_alpha * (target_omega - self.motor_omega)
         motor_omega_dot = (self.motor_omega - previous_motor_omega) / self.dt
 
         # Reconstruct attitude before rotor aerodynamics so each blade model
@@ -193,9 +219,7 @@ class FastQuadrotor:
         rot = _rotation_matrix_from_quaternion(quaternion)
         air_velocity_world = self.velocity - self.wind
         air_velocity_body = rot.T @ air_velocity_world
-        rotor_positions = np.asarray(p.rotor_positions_m, dtype=np.float64) - np.asarray(
-            p.center_of_mass_m, dtype=np.float64
-        )
+        rotor_positions = self._rotor_positions
         local_air_velocity = air_velocity_body[None, :] + np.cross(
             np.broadcast_to(self.angular_velocity, rotor_positions.shape), rotor_positions
         )
@@ -206,23 +230,15 @@ class FastQuadrotor:
                 )
                 for i, omega in enumerate(self.motor_omega)
             ]
-            motor_scale = np.asarray(p.motor_effectiveness, dtype=np.float64)
-            thrust_scale = (
-                p.thrust_coefficient_n_per_rad_s2
-                / float(p.propeller_bemt.get("reference_thrust_coefficient_n_per_rad_s2", p.thrust_coefficient_n_per_rad_s2))
-            )
-            torque_scale = (
-                p.torque_to_thrust_m
-                / float(p.propeller_bemt.get("reference_torque_to_thrust_m", p.torque_to_thrust_m))
-            )
-            thrusts = np.asarray([item[0] for item in bemt_results], dtype=np.float64) * thrust_scale * motor_scale
-            rotor_shaft_torque_nm = np.asarray([item[1] for item in bemt_results], dtype=np.float64) * torque_scale * motor_scale
+            motor_scale = self._motor_effectiveness
+            thrusts = np.asarray([item[0] for item in bemt_results], dtype=np.float64) * self._thrust_scale * motor_scale
+            rotor_shaft_torque_nm = np.asarray([item[1] for item in bemt_results], dtype=np.float64) * self._torque_scale * motor_scale
             thrust_model_status = "runtime_CAD_station_BEMT_with_axial_inflow_and_per_motor_effectiveness"
         else:
             thrusts = (
                 p.thrust_coefficient_n_per_rad_s2
                 * self.motor_omega ** 2
-                * np.asarray(p.motor_effectiveness, dtype=np.float64)
+                * self._motor_effectiveness
             )
             rotor_shaft_torque_nm = p.torque_to_thrust_m * thrusts
             thrust_model_status = "quadratic_coefficient_fallback"
@@ -232,7 +248,7 @@ class FastQuadrotor:
         # ESC limits are not characterized. It must not be read as measured current.
         estimated_shaft_torque_nm = rotor_shaft_torque_nm
         estimated_shaft_power_w = np.abs(estimated_shaft_torque_nm * self.motor_omega)
-        if p.battery_nominal_voltage_v is not None:
+        if diagnostics and p.battery_nominal_voltage_v is not None:
             estimated_motor_current_a = estimated_shaft_power_w / (
                 p.motor_efficiency_upper_bound * p.battery_nominal_voltage_v
             )
@@ -253,33 +269,16 @@ class FastQuadrotor:
         forces_body[:, 2] = thrusts
         torques_body = np.cross(rotor_positions, forces_body)
         torques_body[:, 2] += (
-            np.asarray(p.spin_signs, dtype=np.float64)
-            * rotor_shaft_torque_nm
+            self._spin_signs * rotor_shaft_torque_nm
         )
         total_force_body = forces_body.sum(axis=0)
         total_torque_body = torques_body.sum(axis=0)
 
-        # The attitude vector is the public state contract. Reconstructing q
-        # here also keeps direct reset-time attitude perturbations synchronized.
-        quaternion = _quaternion_from_euler(self.attitude)
-        rot = _rotation_matrix_from_quaternion(quaternion)
-        air_velocity_world = self.velocity - self.wind
-        air_velocity_body = rot.T @ air_velocity_world
-        linear_drag = np.asarray(
-            p.linear_drag_body_kg_s
-            if p.linear_drag_body_kg_s is not None
-            else (p.linear_drag_kg_s,) * 3,
-            dtype=np.float64,
-        )
-        quadratic_drag = np.asarray(
-            p.quadratic_drag_body_kg_m
-            if p.quadratic_drag_body_kg_m is not None
-            else (p.quadratic_drag_kg_m,) * 3,
-            dtype=np.float64,
-        )
+        # Reuse the attitude transform and body air velocity computed above;
+        # neither attitude nor world velocity changes before this drag calculation.
         drag_body = (
-            -linear_drag * air_velocity_body
-            -quadratic_drag * np.abs(air_velocity_body) * air_velocity_body
+            -self._linear_drag * air_velocity_body
+            -self._quadratic_drag * np.abs(air_velocity_body) * air_velocity_body
         )
         drag_world = rot @ drag_body
         force_world = rot @ total_force_body + drag_world
@@ -288,10 +287,10 @@ class FastQuadrotor:
         self.velocity += acceleration * self.dt
         self.position += self.velocity * self.dt
 
-        inertia = p.inertia_matrix
+        inertia = self._inertia
         old_body_rates = self.angular_velocity.copy()
         angular_momentum = inertia @ self.angular_velocity
-        spin_signs = np.asarray(p.spin_signs, dtype=np.float64)
+        spin_signs = self._spin_signs
         # spin_signs encode the BODY reaction-torque sign used by Q_i=s_i*kQ*T_i;
         # the physical rotor angular momentum points in the opposite direction.
         rotor_spin_momentum = -p.rotor_inertia_kg_m2 * float(np.dot(spin_signs, self.motor_omega))
@@ -301,12 +300,11 @@ class FastQuadrotor:
             -np.cross(self.angular_velocity, rotor_angular_momentum)
             - np.array([0.0, 0.0, rotor_angular_acceleration])
         )
-        angular_acceleration = np.linalg.solve(
-            inertia,
+        angular_acceleration = self._inverse_inertia @ (
             total_torque_body
             + rotor_gyro_torque
             - np.cross(self.angular_velocity, angular_momentum)
-            - p.angular_damping_nms * self.angular_velocity,
+            - p.angular_damping_nms * self.angular_velocity
         )
         self.angular_velocity += angular_acceleration * self.dt
 
@@ -326,6 +324,12 @@ class FastQuadrotor:
         self.attitude = _euler_from_quaternion(quaternion)
         self.attitude = (self.attitude + np.pi) % (2.0 * np.pi) - np.pi
         contact_count, penetration_m, normal_impulse_ns = self._resolve_ground_contact()
+        self.time += self.dt
+        if not diagnostics:
+            return self.state(), {
+                "ground_contact_active_points": int(contact_count),
+                "ground_penetration_before_solve_m": float(penetration_m),
+            }
         final_rotation = _rotation_matrix_from_quaternion(_quaternion_from_euler(self.attitude))
         support_points = np.asarray(p.ground_contact_points_m, dtype=np.float64).reshape((-1, 3))
         if len(support_points):
@@ -333,7 +337,6 @@ class FastQuadrotor:
             support_heights = (self.position[2] + support_offsets[:, 2]).astype(float).tolist()
         else:
             support_heights = []
-        self.time += self.dt
 
         return self.state(), {
             "ground_contact_model": "CAD_support_points_6dof_sequential_impulse",
@@ -343,8 +346,8 @@ class FastQuadrotor:
             "ground_support_point_heights_m": support_heights,
             "rotor_thrust_n": thrusts.astype(float).tolist(),
             "rotor_axial_inflow_m_s": (-local_air_velocity[:, 2]).astype(float).tolist(),
-            "motor_effectiveness": np.asarray(p.motor_effectiveness, dtype=np.float64).astype(float).tolist(),
-            "rotor_reaction_torque_sign": np.asarray(p.spin_signs, dtype=np.float64).astype(float).tolist(),
+            "motor_effectiveness": self._motor_effectiveness.astype(float).tolist(),
+            "rotor_reaction_torque_sign": self._spin_signs.astype(float).tolist(),
             "rotor_omega_rad_s": self.motor_omega.astype(float).tolist(),
             "total_thrust_n": float(thrusts.sum()),
             "thrust_model_status": thrust_model_status,
