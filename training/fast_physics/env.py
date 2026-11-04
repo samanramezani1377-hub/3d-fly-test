@@ -49,6 +49,7 @@ class AdaptiveDroneEnv(gym.Env):
         randomize: bool = True,
         curriculum_stage: int | None = None,
         velocity_control: bool = False,
+        diagnostics_enabled: bool = True,
     ):
         super().__init__()
         if params is None:
@@ -68,6 +69,7 @@ class AdaptiveDroneEnv(gym.Env):
         self.randomization = json.loads(Path(randomization_path).read_text(encoding="utf-8"))
         self.curriculum_stage = curriculum_stage
         self.velocity_control = bool(velocity_control)
+        self.diagnostics_enabled = bool(diagnostics_enabled)
         # Conservative software-training envelope; not a claim of flight-tested limits.
         self.velocity_command_limits_m_s = np.array([1.5, 1.5, 0.75], dtype=np.float32)
         self.yaw_rate_limits_rad_s = {1: np.deg2rad(20.0), 2: np.deg2rad(35.0), 3: np.deg2rad(50.0), 4: np.deg2rad(70.0), 5: np.deg2rad(90.0)}
@@ -378,7 +380,7 @@ class AdaptiveDroneEnv(gym.Env):
                 self.desired_velocity_body, float(self.plant.attitude[2])
             )
             self.target += reference_velocity_world * self.dt
-        state, telemetry = self.plant.step(action)
+        state, telemetry = self.plant.step(action, diagnostics=self.diagnostics_enabled)
         self._steps += 1
 
         state_finite = bool(np.all(np.isfinite(state)))
@@ -511,45 +513,57 @@ class AdaptiveDroneEnv(gym.Env):
             truncated = False
             reward = -100.0
 
-        info = {
-            **telemetry,
-            "crashed": crashed,
-            "crash_reason": crash_reasons[0] if crash_reasons else None,
-            "crash_reasons": crash_reasons,
-            "has_taken_off": self._taken_off,
-            "takeoff_failed": takeoff_failed,
-            "ground_contact": ground_contact,
-            "ground_clearance_m": float(ground_clearance_m),
-            "ground_penetration_before_solve_m": float(ground_penetration_m),
-            "lowest_point_height_m": float(min(telemetry.get("ground_support_point_heights_m") or [z - ground_clearance_m])),
-            "altitude_m": float(z),
-            "position_xyz_m": safe_state[:3].astype(float).tolist(),
-            "position_error_m": float(np.linalg.norm(position_error)),
-            "altitude_error_m": altitude_error,
-            "horizontal_error_m": horizontal_error,
-            "scenario": dict(self._scenario_details),
-            "online_estimator": self.estimator.diagnostics(),
-            "state_velocity_m_s": safe_state[3:6].astype(float).tolist(),
-            "velocity_control_enabled": self.velocity_control,
-            "desired_velocity_body_m_s": self.desired_velocity_body.astype(float).tolist(),
-            "measured_velocity_body_yaw_m_s": measured_velocity_body.astype(float).tolist(),
-            "velocity_tracking_error_m_s": tracking_error_norm,
-            "desired_yaw_rate_rad_s": float(self.desired_yaw_rate_rad_s),
-            "yaw_rate_tracking_error_rad_s": float(yaw_rate_tracking_error),
-            "measured_yaw_rate_rad_s": float(measured_yaw_rate) if self.velocity_control else 0.0,
-            "velocity_command_index": self._active_velocity_command_index,
-            "velocity_command_sequence_length": len(self._velocity_command_sequence) if self._velocity_command_sequence is not None else 0,
-            "velocity_command_sequence_complete": bool(self._velocity_command_sequence is not None and self._velocity_sequence_index >= len(self._velocity_command_sequence) and np.linalg.norm(self.desired_velocity_body) <= 1e-6 and abs(self.desired_yaw_rate_rad_s) <= 1e-6),
-            "neutral_tail_mode": self.neutral_tail_mode,
-            "actual_linear_acceleration_world_m_s2": np.asarray(telemetry.get("linear_acceleration_world_m_s2", [0.0, 0.0, 0.0]), dtype=float).tolist(),
-            "actual_tilt_rad": float(tilt),
-            "attitude_rad": safe_state[6:9].astype(float).tolist(),
-            "angular_velocity_rad_s": safe_state[9:12].astype(float).tolist(),
-            "state_finite": state_finite,
-            "control_effort_proxy": float(np.mean(np.square(action))),
-            "motor_saturation_fraction": float(np.mean(action >= 1.0 - 1e-4)),
-            "motor_zero_command_fraction": float(np.mean(action <= 1e-4)),
-        }
+        if self.diagnostics_enabled:
+            info = {
+                **telemetry,
+                "crashed": crashed,
+                "crash_reason": crash_reasons[0] if crash_reasons else None,
+                "crash_reasons": crash_reasons,
+                "has_taken_off": self._taken_off,
+                "takeoff_failed": takeoff_failed,
+                "ground_contact": ground_contact,
+                "ground_clearance_m": float(ground_clearance_m),
+                "ground_penetration_before_solve_m": float(ground_penetration_m),
+                "lowest_point_height_m": float(min(telemetry.get("ground_support_point_heights_m") or [z - ground_clearance_m])),
+                "altitude_m": float(z),
+                "position_xyz_m": safe_state[:3].astype(float).tolist(),
+                "position_error_m": float(np.linalg.norm(position_error)),
+                "altitude_error_m": altitude_error,
+                "horizontal_error_m": horizontal_error,
+                "scenario": dict(self._scenario_details),
+                "online_estimator": self.estimator.diagnostics(),
+                "state_velocity_m_s": safe_state[3:6].astype(float).tolist(),
+                "velocity_control_enabled": self.velocity_control,
+                "desired_velocity_body_m_s": self.desired_velocity_body.astype(float).tolist(),
+                "measured_velocity_body_yaw_m_s": measured_velocity_body.astype(float).tolist(),
+                "velocity_tracking_error_m_s": tracking_error_norm,
+                "desired_yaw_rate_rad_s": float(self.desired_yaw_rate_rad_s),
+                "yaw_rate_tracking_error_rad_s": float(yaw_rate_tracking_error),
+                "measured_yaw_rate_rad_s": float(measured_yaw_rate) if self.velocity_control else 0.0,
+                "velocity_command_index": self._active_velocity_command_index,
+                "velocity_command_sequence_length": len(self._velocity_command_sequence) if self._velocity_command_sequence is not None else 0,
+                "velocity_command_sequence_complete": bool(self._velocity_command_sequence is not None and self._velocity_sequence_index >= len(self._velocity_command_sequence) and np.linalg.norm(self.desired_velocity_body) <= 1e-6 and abs(self.desired_yaw_rate_rad_s) <= 1e-6),
+                "neutral_tail_mode": self.neutral_tail_mode,
+                "actual_linear_acceleration_world_m_s2": np.asarray(telemetry.get("linear_acceleration_world_m_s2", [0.0, 0.0, 0.0]), dtype=float).tolist(),
+                "actual_tilt_rad": float(tilt),
+                "attitude_rad": safe_state[6:9].astype(float).tolist(),
+                "angular_velocity_rad_s": safe_state[9:12].astype(float).tolist(),
+                "state_finite": state_finite,
+                "control_effort_proxy": float(np.mean(np.square(action))),
+                "motor_saturation_fraction": float(np.mean(action >= 1.0 - 1e-4)),
+                "motor_zero_command_fraction": float(np.mean(action <= 1e-4)),
+            }
+        else:
+            # Minimal info preserves crash/episode status while avoiding per-step
+            # telemetry serialization and diagnostic dictionary construction.
+            info = {
+                "crashed": crashed,
+                "crash_reason": crash_reasons[0] if crash_reasons else None,
+                "has_taken_off": self._taken_off,
+                "takeoff_failed": takeoff_failed,
+                "ground_contact": ground_contact,
+                "state_finite": state_finite,
+            }
         return obs, float(reward), terminated, truncated, info
 
     def close(self):
