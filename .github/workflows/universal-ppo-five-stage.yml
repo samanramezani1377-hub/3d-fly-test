@@ -63,8 +63,11 @@ jobs:
             training/fast_physics/velocity_reference.py \
             training/fast_physics/ppo_action.py \
             training/train_universal_ppo.py \
+            training/ppo_selection.py \
+            training/diagnose_teacher_ppo.py \
             training/preflight_velocity_teacher.py
           python -m pytest training/tests/test_hover_reference.py -q -k "neutral_tail_separates_pure_braking_from_position_return or caps_position_hold_velocity or compensates_collective_for_desired_tilt"
+          python -m pytest training/tests/test_ppo_selection.py -q
           python training/preflight_velocity_teacher.py \
             --vehicle-family vehicle_models/family/vehicle_profiles.json \
             --vehicle-id smooth2-a2212-custom-prop \
@@ -187,6 +190,16 @@ jobs:
           done
           cp "$checkpoint" training/runs/universal-final-selected-best.zip
 
+      - name: Compare PPO and privileged Teacher on identical Smooth2 randomized seeds
+        if: ${{ !inputs.preflight_only }}
+        run: |
+          set -euo pipefail
+          python training/diagnose_teacher_ppo.py \
+            --model training/runs/universal-final-selected-best.zip \
+            --vehicle-family vehicle_models/family/vehicle_profiles.json \
+            --randomization-config vehicle_models/family/domain_randomization.json \
+            --output training/runs/universal-final-independent-evaluation/teacher-ppo-comparison.json
+
       - name: Run independent final velocity and yaw-rate evaluation
         if: ${{ !inputs.preflight_only }}
         run: |
@@ -233,9 +246,7 @@ jobs:
               velocity_control=True,
           )
           callback.init_callback(model)
-          callback.last_checkpoint_timesteps = int(model.num_timesteps)
-          callback.last_eval_timesteps = 0
-          callback._on_rollout_end()
+          callback.evaluate_checkpoint(model)
 
           reports = sorted((output_dir / "reports").glob("profile-evaluation-*.json"))
           assert len(reports) == 1, f"Expected exactly one final evaluation report, found {reports}"

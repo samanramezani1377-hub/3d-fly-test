@@ -13,6 +13,7 @@ from fast_physics.vehicle_family import DEFAULT_VEHICLE_FAMILY, VehicleFamilyEnv
 from fast_physics.ppo_action import BodyWrenchActionWrapper, wrench_to_motor_commands
 from fast_physics.propeller import BladeElementPropeller
 from fast_physics.dynamics import FastQuadrotor
+from ppo_selection import checkpoint_selection_score
 
 
 def parse_args(argv=None):
@@ -39,6 +40,11 @@ def parse_args(argv=None):
     p.add_argument("--velocity-control", action="store_true", help="Train nose-relative 3D velocity plus independent yaw-rate tracking.")
     return p.parse_args(argv)
 
+
+
+def _mean_present(values):
+    finite = [float(value) for value in values if value is not None and np.isfinite(float(value))]
+    return float(sum(finite) / len(finite)) if finite else None
 
 
 def build_velocity_evaluation_sequence(episode_index: int, stage: int, limits_m_s=(1.5, 1.5, 0.75)):
@@ -93,7 +99,7 @@ class BalancedProfileCallback(BaseCallback):
         self.frequency = max(1, frequency)
         self.checkpoint_frequency = max(1, checkpoint_frequency)
         self.best_dir, self.reports_dir = Path(best_dir), Path(reports_dir)
-        self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, -1.0, -1.0, -1.0, float("-inf"), float("-inf")), None
+        self.seed, self.best_score, self.best_report = seed, (-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, float("-inf")), None
         self.latest_dir = self.best_dir.parent
         self.sampling_weights_path = self.latest_dir / "profile-sampling-weights.json"
         self.latest_dir.mkdir(parents=True, exist_ok=True)
@@ -108,7 +114,7 @@ class BalancedProfileCallback(BaseCallback):
             saved = json.loads(selection_path.read_text(encoding="utf-8"))
             saved_score = tuple(saved.get("score", ()))
             # Older selection rules are not comparable to the current seven-field rule.
-            if len(saved_score) == 7:
+            if len(saved_score) == 10:
                 self.best_score = saved_score
                 self.best_report = saved.get("report")
 
@@ -125,6 +131,17 @@ class BalancedProfileCallback(BaseCallback):
     def _on_step(self) -> bool:
         # BaseCallback requires this method; returning True keeps PPO training running.
         return True
+
+    def evaluate_checkpoint(self, model):
+        """Run one evaluation outside learn(), with SB3 callback counters synchronized."""
+        if self.model is None:
+            self.init_callback(model)
+        elif self.model is not model:
+            raise RuntimeError("evaluation callback is already bound to a different model")
+        self.num_timesteps = int(model.num_timesteps)
+        self.last_checkpoint_timesteps = int(self.num_timesteps)
+        self.last_eval_timesteps = max(0, int(self.num_timesteps) - self.frequency)
+        self._on_rollout_end()
 
     def _on_training_start(self):
         if self.last_checkpoint_timesteps is None:
@@ -208,14 +225,17 @@ class BalancedProfileCallback(BaseCallback):
                         if self.velocity_control:
                             command_index = int(info.get("velocity_command_index", -1))
                             if command_index >= 0:
-                                velocity_tracking_errors.append(float(info.get("velocity_tracking_error_m_s", float("inf"))))
-                                if command_index < 26:
-                                    velocity_command_errors.setdefault(command_index, []).append(
-                                        float(info.get("velocity_tracking_error_m_s", float("inf")))
-                                    )
-                                yaw_error = abs(float(info.get("yaw_rate_tracking_error_rad_s", float("inf"))))
-                                yaw_rate_errors.append(yaw_error)
-                                yaw_command_errors.setdefault(command_index, []).append(yaw_error)
+                                velocity_error = info.get("velocity_tracking_error_m_s")
+                                if velocity_error is not None and np.isfinite(float(velocity_error)):
+                                    velocity_error = float(velocity_error)
+                                    velocity_tracking_errors.append(velocity_error)
+                                    if command_index < 26:
+                                        velocity_command_errors.setdefault(command_index, []).append(velocity_error)
+                                yaw_error = info.get("yaw_rate_tracking_error_rad_s")
+                                if yaw_error is not None and np.isfinite(float(yaw_error)):
+                                    yaw_error = abs(float(yaw_error))
+                                    yaw_rate_errors.append(yaw_error)
+                                    yaw_command_errors.setdefault(command_index, []).append(yaw_error)
                             if info.get("velocity_command_sequence_complete"):
                                 if neutral_started_step is None:
                                     neutral_started_step = int(plant_env.inner._steps)
@@ -260,12 +280,13 @@ class BalancedProfileCallback(BaseCallback):
                         if terminated or truncated:
                             break
                     stable_seconds = max_stable_steps * plant_env.inner.dt
-                    mean_tracking_error = (sum(velocity_tracking_errors) / max(len(velocity_tracking_errors), 1)) if self.velocity_control else 0.0
+                    mean_tracking_error = (sum(velocity_tracking_errors) / len(velocity_tracking_errors)) if velocity_tracking_errors else None
                     command_means = [sum(values) / len(values) for values in velocity_command_errors.values()]
-                    max_command_error = max(command_means, default=float("inf")) if self.velocity_control else 0.0
+                    max_command_error = max(command_means) if command_means else None
                     command_coverage = len(velocity_command_errors) if self.velocity_control else 0
-                    mean_yaw_rate_error = sum(yaw_rate_errors) / max(len(yaw_rate_errors), 1) if self.velocity_control else 0.0
-                    max_yaw_command_error = max((sum(values) / len(values) for values in yaw_command_errors.values()), default=float("inf")) if self.velocity_control else 0.0
+                    mean_yaw_rate_error = (sum(yaw_rate_errors) / len(yaw_rate_errors)) if yaw_rate_errors else None
+                    yaw_command_means = [sum(values) / len(values) for values in yaw_command_errors.values()]
+                    max_yaw_command_error = max(yaw_command_means) if yaw_command_means else None
                     yaw_command_coverage = len(yaw_command_errors) if self.velocity_control else 0
                     mean_estimated_battery_current_a = (
                         sum(estimated_battery_current_samples) / len(estimated_battery_current_samples)
@@ -274,13 +295,18 @@ class BalancedProfileCallback(BaseCallback):
                     estimated_battery_energy_consumed_wh = info.get("battery_energy_consumed_wh_estimate")
                     estimated_battery_consumed_ah = info.get("battery_consumed_ah_estimate")
                     final_battery_state_of_charge_estimate = info.get("battery_state_of_charge_estimate")
-                    success = bool(not crashed and took_off and (
-                        mean_tracking_error <= 0.50 and max_command_error <= 0.85
-                        and command_coverage == 26
-                        and mean_yaw_rate_error <= 0.30 and max_yaw_command_error <= 0.50
-                        and yaw_command_coverage == 30
-                        and neutral_stop_time is not None and neutral_stop_time <= 3.5
-                        if self.velocity_control else stable_seconds >= 5.0))
+                    if self.velocity_control:
+                        success = bool(
+                            not crashed and took_off
+                            and command_coverage == 26 and yaw_command_coverage == 30
+                            and mean_tracking_error is not None and mean_tracking_error <= 0.50
+                            and max_command_error is not None and max_command_error <= 0.85
+                            and mean_yaw_rate_error is not None and mean_yaw_rate_error <= 0.30
+                            and max_yaw_command_error is not None and max_yaw_command_error <= 0.50
+                            and neutral_stop_time is not None and neutral_stop_time <= 3.5
+                        )
+                    else:
+                        success = bool(not crashed and took_off and stable_seconds >= 5.0)
                     episodes.append({"seed": seed, "success": success,
                         "takeoff_success": took_off, "takeoff_failed": bool(not took_off and truncated),
                         "crashed": crashed, "steps": plant_env.inner._steps,
@@ -291,6 +317,7 @@ class BalancedProfileCallback(BaseCallback):
                         "mean_yaw_rate_tracking_error_rad_s": mean_yaw_rate_error,
                         "max_yaw_command_tracking_error_rad_s": max_yaw_command_error,
                         "yaw_command_coverage": yaw_command_coverage,
+                        "full_command_coverage": bool(command_coverage == 26 and yaw_command_coverage == 30),
                         "neutral_braking_time_seconds": neutral_stop_time,
                         "return": total,
                         "mean_motor_saturation_fraction": sum(saturation_samples) / max(len(saturation_samples), 1),
@@ -312,12 +339,19 @@ class BalancedProfileCallback(BaseCallback):
                 "takeoff_failure_rate": sum(x["takeoff_failed"] for x in episodes) / count,
                 "crash_rate": sum(x["crashed"] for x in episodes) / count,
                 "mean_stable_hover_seconds": sum(x["stable_hover_seconds_max"] for x in episodes) / count,
-                "mean_velocity_tracking_error_m_s": sum(x["mean_velocity_tracking_error_m_s"] for x in episodes) / count,
-                "mean_max_direction_tracking_error_m_s": sum(x["max_direction_velocity_tracking_error_m_s"] for x in episodes) / count,
+                "mean_velocity_tracking_error_m_s": _mean_present([x["mean_velocity_tracking_error_m_s"] for x in episodes]),
+                "mean_max_direction_tracking_error_m_s": _mean_present([x["max_direction_velocity_tracking_error_m_s"] for x in episodes]),
                 "mean_velocity_direction_coverage": sum(x["velocity_direction_coverage"] for x in episodes) / count,
-                "mean_yaw_rate_tracking_error_rad_s": sum(x["mean_yaw_rate_tracking_error_rad_s"] for x in episodes) / count,
-                "mean_max_yaw_command_tracking_error_rad_s": sum(x["max_yaw_command_tracking_error_rad_s"] for x in episodes) / count,
+                "mean_yaw_rate_tracking_error_rad_s": _mean_present([x["mean_yaw_rate_tracking_error_rad_s"] for x in episodes]),
+                "mean_max_yaw_command_tracking_error_rad_s": _mean_present([x["max_yaw_command_tracking_error_rad_s"] for x in episodes]),
                 "mean_yaw_command_coverage": sum(x["yaw_command_coverage"] for x in episodes) / count,
+                "full_command_coverage_episode_rate": sum(x["full_command_coverage"] for x in episodes) / count,
+                "mean_complete_episode_velocity_tracking_error_m_s": _mean_present([
+                    x["mean_velocity_tracking_error_m_s"] for x in episodes if x["full_command_coverage"]
+                ]),
+                "mean_complete_episode_yaw_rate_tracking_error_rad_s": _mean_present([
+                    x["mean_yaw_rate_tracking_error_rad_s"] for x in episodes if x["full_command_coverage"]
+                ]),
                 "mean_neutral_braking_time_seconds": (
                     sum(x["neutral_braking_time_seconds"] for x in episodes if x["neutral_braking_time_seconds"] is not None)
                     / sum(x["neutral_braking_time_seconds"] is not None for x in episodes)
@@ -347,19 +381,20 @@ class BalancedProfileCallback(BaseCallback):
                 ),
                 "mean_return": sum(x["return"] for x in episodes) / count,
                 "episodes": episodes})
-        score = (min(x["success_rate"] for x in profile_reports),
-            -max(x["crash_rate"] for x in profile_reports),
-            min(x["takeoff_success_rate"] for x in profile_reports),
-            -sum(x["mean_velocity_tracking_error_m_s"] for x in profile_reports) / len(profile_reports) if self.velocity_control else sum(x["mean_stable_hover_seconds"] for x in profile_reports) / len(profile_reports),
-            -sum(x["mean_yaw_rate_tracking_error_rad_s"] for x in profile_reports) / len(profile_reports) if self.velocity_control else 0.0,
-            -sum(x["mean_motor_saturation_fraction"] for x in profile_reports) / len(profile_reports), 
-            sum(x["mean_return"] for x in profile_reports) / len(profile_reports))
+        score = checkpoint_selection_score(profile_reports, velocity_control=self.velocity_control)
         report = {"timesteps": int(self.num_timesteps), "selection_score": list(score),
-            "selection_rule": ["maximize minimum per-profile mission success",
-                "minimize worst-profile crash rate", "maximize minimum per-profile takeoff rate",
-                ("minimize mean velocity tracking error" if self.velocity_control else "maximize mean stable-hover duration"),
-                ("minimize mean yaw-rate tracking error" if self.velocity_control else "not applicable"),
-                "minimize motor saturation", "maximize mean return as final tie-breaker"], "profiles": profile_reports}
+            "selection_rule": [
+                "maximize minimum per-profile mission success",
+                "minimize worst-profile crash rate",
+                "maximize minimum per-profile takeoff rate",
+                "maximize minimum per-profile full-command-coverage episode rate",
+                "maximize minimum per-profile mean velocity-direction coverage fraction",
+                "maximize minimum per-profile mean yaw-command coverage fraction",
+                "minimize mean velocity tracking error on full-coverage episodes only",
+                "minimize mean yaw-rate tracking error on full-coverage episodes only",
+                "minimize mean motor saturation",
+                "maximize mean return as final tie-breaker",
+            ], "profiles": profile_reports}
         self.reports_dir.mkdir(parents=True, exist_ok=True)
         report_path = self.reports_dir / f"profile-evaluation-{self.num_timesteps}.json"
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -629,7 +664,7 @@ def main(argv=None):
             "best_checkpoint": str(best_checkpoint),
             "balanced_selection_score": list(eval_callback.best_score),
             "balanced_selection_report": eval_callback.best_report,
-            "checkpoint_selection": ("min_profile_velocity_mission_success_then_min_worst_crash_then_min_profile_takeoff_then_min_velocity_tracking_error_then_min_yaw_rate_tracking_error_then_min_motor_saturation_then_mean_return" if args.velocity_control else "min_profile_hover_then_min_worst_crash_then_min_profile_takeoff_then_stable_duration_then_min_upper_motor_saturation_then_mean_episode_return"),
+            "checkpoint_selection": ("min_profile_mission_success_then_min_worst_crash_then_min_profile_takeoff_then_max_full_coverage_episode_rate_then_max_minimum_command_coverage_then_min_tracking_errors_on_full_coverage_episodes_then_min_motor_saturation_then_mean_return" if args.velocity_control else "min_profile_hover_then_min_worst_crash_then_min_profile_takeoff_then_stable_duration_then_min_upper_motor_saturation_then_mean_episode_return"),
             "history_length": args.history_length, "curriculum_stage": args.curriculum_stage,
             "initial_model": str(args.load_model) if args.load_model else None,
             "domain_randomization": not args.no_randomization,

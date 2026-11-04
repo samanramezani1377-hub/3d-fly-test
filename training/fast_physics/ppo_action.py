@@ -369,6 +369,7 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
         self._velocity_reference = None
         self._last_allocation_diagnostics = {}
         self._last_teacher_diagnostics = {}
+        self._last_action_diagnostics = {}
         stage = getattr(env, "curriculum_stage", None)
         if reference_weight_override is not None and not 0.0 <= float(reference_weight_override) <= 1.0:
             raise ValueError("reference_weight_override must be between 0.0 and 1.0")
@@ -422,6 +423,8 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
                 info["wrench_allocation"] = self._last_allocation_diagnostics
             if self._last_teacher_diagnostics:
                 info["teacher_controller"] = self._last_teacher_diagnostics
+            if self._last_action_diagnostics:
+                info["action_diagnostics"] = self._last_action_diagnostics
         return observation, reward, terminated, truncated, info
 
     def action(self, action):
@@ -429,6 +432,8 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
             raise RuntimeError("environment must be reset before mapping PPO actions")
         policy_wrench = policy_action_to_wrench(action, self._cached_params)
         self._last_teacher_diagnostics = {}
+        self._last_action_diagnostics = {}
+        teacher_wrench = None
         if self._velocity_reference is not None and self.reference_weight > 0.0:
             inner = self.env.inner
             teacher_wrench = self._velocity_reference.desired_wrench(
@@ -459,6 +464,13 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
         # actuator uncertainty remains a genuine policy-learning problem.
         allocation_params = self._allocation_params
         if self.diagnostics_enabled:
+            self._last_action_diagnostics = {
+                "teacher_weight": float(self.reference_weight),
+                "policy_wrench_n_nm": policy_wrench.astype(float).tolist(),
+                "teacher_wrench_n_nm": teacher_wrench.astype(float).tolist() if teacher_wrench is not None else None,
+                "blended_wrench_n_nm": wrench.astype(float).tolist(),
+                "teacher_minus_policy_wrench_n_nm": (teacher_wrench - policy_wrench).astype(float).tolist() if teacher_wrench is not None else None,
+            }
             commands, self._last_allocation_diagnostics = wrench_to_motor_commands(
                 wrench, allocation_params, return_diagnostics=True, bemt_config_json=self._bemt_config_json
             )
