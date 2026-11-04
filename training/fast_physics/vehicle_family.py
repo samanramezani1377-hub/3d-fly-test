@@ -234,6 +234,7 @@ class VehicleFamilyEnv(gym.Env):
         randomize: bool = True, curriculum_stage: int | None = None,
         sampling_weights_path: str | Path | None = None,
         velocity_control: bool = False,
+        diagnostics_enabled: bool = True,
     ):
         super().__init__()
         self.profiles = load_vehicle_profiles(vehicle_family_path)
@@ -245,6 +246,7 @@ class VehicleFamilyEnv(gym.Env):
         self.dt, self.max_steps, self.history_length = float(dt), int(max_steps), int(history_length)
         self.randomize, self.curriculum_stage = bool(randomize), curriculum_stage
         self.velocity_control = bool(velocity_control)
+        self.diagnostics_enabled = bool(diagnostics_enabled)
         self.sampling_weights_path = Path(sampling_weights_path) if sampling_weights_path else None
         self.active_profile = None
         self.active_features = np.zeros(VEHICLE_FEATURE_SIZE, dtype=np.float32)
@@ -301,26 +303,34 @@ class VehicleFamilyEnv(gym.Env):
                 max_steps=self.max_steps, history_length=self.history_length,
                 randomize=self.randomize, curriculum_stage=self.curriculum_stage,
                 velocity_control=self.velocity_control,
+                diagnostics_enabled=self.diagnostics_enabled,
             )
         else:
             self.inner.base_params = params
             self.inner.model_metadata = metadata
         obs, info = self.inner.reset(seed=seed, options=options)
-        info = {
-            **info, **metadata,
-            "policy_observation_includes_vehicle_configuration": True,
-            "vehicle_configuration_features": self.active_features.tolist(),
-            "vehicle_profile": self.active_profile["display_name"],
-            "policy_observation_excludes_episode_randomization_ground_truth": True,
-        }
+        if self.diagnostics_enabled:
+            info = {
+                **info, **metadata,
+                "policy_observation_includes_vehicle_configuration": True,
+                "vehicle_configuration_features": self.active_features.tolist(),
+                "vehicle_profile": self.active_profile["display_name"],
+                "policy_observation_excludes_episode_randomization_ground_truth": True,
+            }
+        else:
+            info = {
+                "vehicle_id": self.active_profile["vehicle_id"],
+                "calibration_status": self.active_profile["calibration_status"],
+            }
         return self._combine_observation(obs), info
 
     def step(self, action):
         if self.inner is None:
             raise RuntimeError("reset must be called before step")
         obs, reward, terminated, truncated, info = self.inner.step(action)
-        info = {**info, "vehicle_id": self.active_profile["vehicle_id"],
-                "calibration_status": self.active_profile["calibration_status"]}
+        if self.diagnostics_enabled:
+            info = {**info, "vehicle_id": self.active_profile["vehicle_id"],
+                    "calibration_status": self.active_profile["calibration_status"]}
         return self._combine_observation(obs), reward, terminated, truncated, info
 
     def close(self):
