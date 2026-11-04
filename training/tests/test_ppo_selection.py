@@ -51,3 +51,11 @@ def test_score_is_finite_and_json_serializable_for_missing_metrics():
     import json
     score = checkpoint_selection_score([report()])
     json.dumps(score, allow_nan=False)
+
+def test_tracking_errors_require_full_coverage_evidence_for_every_profile():
+    first = report(complete=1.0, velocity_coverage=26, yaw_coverage=30,
+                   velocity_error=0.2, yaw_error=0.1)
+    second = report(complete=0.0, velocity_coverage=3, yaw_coverage=3)
+    score = checkpoint_selection_score([first, second])
+    assert score[6] == -1_000_000.0
+    assert score[7] == -1_000_000.0

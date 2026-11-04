@@ -46,8 +46,14 @@ def checkpoint_selection_score(profile_reports, *, velocity_control=True):
     ]
     # A large finite penalty keeps JSON standards-compliant and ensures absent
     # full-coverage evidence can never masquerade as a zero tracking error.
-    velocity_error_score = -(sum(complete_velocity_errors) / len(complete_velocity_errors)) if complete_velocity_errors else -1_000_000.0
-    yaw_error_score = -(sum(complete_yaw_errors) / len(complete_yaw_errors)) if complete_yaw_errors else -1_000_000.0
+    velocity_error_score = (
+        -(sum(complete_velocity_errors) / len(complete_velocity_errors))
+        if len(complete_velocity_errors) == len(profile_reports) else -1_000_000.0
+    )
+    yaw_error_score = (
+        -(sum(complete_yaw_errors) / len(complete_yaw_errors))
+        if len(complete_yaw_errors) == len(profile_reports) else -1_000_000.0
+    )
     return common + (
         complete_rate, velocity_coverage, yaw_coverage,
         velocity_error_score, yaw_error_score, -mean_saturation, mean_return,
