@@ -98,7 +98,7 @@ jobs:
           path: previous-run
 
       - name: Select existing final model without retraining
-        if: ${{ inputs.diagnostics_only }}
+        if: ${{ inputs.diagnostics_only && !inputs.preflight_only }}
         run: |
           set -euo pipefail
           source_model="previous-run/training/runs/universal-final-selected-best.zip"
