@@ -29,6 +29,7 @@ def _allocation_matrix(
     bemt_base_thrust: np.ndarray | None = None,
     bemt_base_torque: np.ndarray | None = None,
     effectiveness: np.ndarray | None = None,
+    validate_rank: bool = True,
 ) -> np.ndarray:
     positions = np.asarray(params.rotor_positions_m, dtype=np.float64)
     cg = np.asarray(params.center_of_mass_m, dtype=np.float64)
@@ -47,7 +48,9 @@ def _allocation_matrix(
     else:
         torque_ratio = np.full(4, params.torque_to_thrust_m, dtype=np.float64)
     matrix[3, :] = np.asarray(params.spin_signs, dtype=np.float64) * torque_ratio
-    if not np.all(np.isfinite(matrix)) or np.linalg.matrix_rank(matrix) < 4:
+    if not np.all(np.isfinite(matrix)):
+        raise ValueError("vehicle rotor mixer contains non-finite values")
+    if validate_rank and np.linalg.matrix_rank(matrix) < 4:
         raise ValueError("vehicle rotor geometry does not provide a full-rank 4-axis mixer")
     return matrix
 
@@ -123,7 +126,14 @@ def wrench_to_motor_commands(
         raise ValueError("invalid per-rotor thrust authority")
     collective = float(np.clip(wrench[0], 0.0, float(max_thrust.sum())))
 
+    relative = np.asarray(params.rotor_positions_m, dtype=np.float64) - np.asarray(
+        params.center_of_mass_m, dtype=np.float64
+    )
+    spin_signs = np.asarray(params.spin_signs, dtype=np.float64)
+    rank_validated = False
+
     def allocate(scale_collective: float, scale_torque: float) -> np.ndarray:
+        nonlocal rank_validated
         request = np.array([
             collective * scale_collective,
             wrench[1] * scale_torque,
@@ -132,16 +142,26 @@ def wrench_to_motor_commands(
         ], dtype=np.float64)
         estimate = np.full(4, max(collective * scale_collective / 4.0, 1e-8), dtype=np.float64)
         candidate = estimate
-        # BEMT reaction torque is nonlinear in rotor speed. Re-linearize its
-        # local Q/T ratio around the current per-rotor thrust estimate.
         for _ in range(6):
-            inverse = _allocation_inverse(
-                params, rotor_thrust_n=estimate,
-                bemt_base_thrust=bemt_base_thrust,
-                bemt_base_torque=bemt_base_torque,
-                effectiveness=effectiveness,
-            )
-            candidate = inverse @ request
+            if bemt_base_thrust is not None and bemt_base_torque is not None:
+                base_thrust = estimate / np.maximum(effectiveness, 1e-12)
+                thrust_at_point = np.interp(base_thrust, bemt_base_thrust, bemt_base_thrust)
+                torque_at_point = np.interp(base_thrust, bemt_base_thrust, bemt_base_torque)
+                torque_ratio = torque_at_point / np.maximum(thrust_at_point, 1e-9)
+            else:
+                torque_ratio = np.full(4, params.torque_to_thrust_m, dtype=np.float64)
+            matrix = np.empty((4, 4), dtype=np.float64)
+            matrix[0, :] = 1.0
+            matrix[1, :] = relative[:, 1]
+            matrix[2, :] = -relative[:, 0]
+            matrix[3, :] = spin_signs * torque_ratio
+            if not np.all(np.isfinite(matrix)):
+                raise ValueError("vehicle rotor mixer contains non-finite values")
+            if not rank_validated:
+                if np.linalg.matrix_rank(matrix) < 4:
+                    raise ValueError("vehicle rotor geometry does not provide a full-rank 4-axis mixer")
+                rank_validated = True
+            candidate = np.linalg.solve(matrix, request)
             estimate = np.clip(candidate, 1e-8, max_thrust)
         return candidate
 
@@ -214,7 +234,8 @@ def policy_action_to_motor_commands(action, params: VehicleParameters) -> np.nda
 
 class BodyWrenchActionWrapper(gym.ActionWrapper):
     """Blend PPO body-wrench requests with a teacher that fades across stages."""
-    def __init__(self, env, disable_teacher: bool = False, reference_weight_override: float | None = None):
+    def __init__(self, env, disable_teacher: bool = False, reference_weight_override: float | None = None,
+                 diagnostics_enabled: bool = True):
         super().__init__(env)
         # SB3 PPO requires finite Box bounds. Keep a deliberately wide
         # symmetric envelope because the policy emits raw Gaussian samples;
@@ -224,6 +245,7 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
         self.action_space = gym.spaces.Box(
             low=-5.0, high=5.0, shape=(4,), dtype=np.float32
         )
+        self.diagnostics_enabled = bool(diagnostics_enabled)
         self._cached_profile_id = None
         self._cached_params = None
         self._reference = None
@@ -262,19 +284,21 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
                     plant.params, target_position=self.env.inner.target,
                     wind_m_s=plant.wind, dt_s=self.env.inner.dt,
                 )
-        info = dict(info)
-        info["reference_teacher_weight"] = self.reference_weight
-        info["reference_teacher_uses_privileged_simulator_state"] = self.reference_weight > 0.0
+        if self.diagnostics_enabled:
+            info = dict(info)
+            info["reference_teacher_weight"] = self.reference_weight
+            info["reference_teacher_uses_privileged_simulator_state"] = self.reference_weight > 0.0
         return observation, info
 
     def step(self, action):
         commands = self.action(action)
         observation, reward, terminated, truncated, info = self.env.step(commands)
-        info = dict(info)
-        if self._last_allocation_diagnostics:
-            info["wrench_allocation"] = dict(self._last_allocation_diagnostics)
-        if self._last_teacher_diagnostics:
-            info["teacher_controller"] = dict(self._last_teacher_diagnostics)
+        if self.diagnostics_enabled and (self._last_allocation_diagnostics or self._last_teacher_diagnostics):
+            info = dict(info)
+            if self._last_allocation_diagnostics:
+                info["wrench_allocation"] = self._last_allocation_diagnostics
+            if self._last_teacher_diagnostics:
+                info["teacher_controller"] = self._last_teacher_diagnostics
         return observation, reward, terminated, truncated, info
 
     def action(self, action):
@@ -289,7 +313,8 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
                 desired_velocity_body=inner.desired_velocity_body,
                 desired_yaw_rate_rad_s=inner.desired_yaw_rate_rad_s,
             )
-            self._last_teacher_diagnostics = dict(self._velocity_reference.last_diagnostics)
+            if self.diagnostics_enabled:
+                self._last_teacher_diagnostics = self._velocity_reference.last_diagnostics
             wrench = (
                 (1.0 - self.reference_weight) * policy_wrench
                 + self.reference_weight * teacher_wrench
@@ -314,9 +339,13 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
             if self.reference_weight > 0.0
             else self._cached_params
         )
-        commands, self._last_allocation_diagnostics = wrench_to_motor_commands(
-            wrench, allocation_params, return_diagnostics=True
-        )
+        if self.diagnostics_enabled:
+            commands, self._last_allocation_diagnostics = wrench_to_motor_commands(
+                wrench, allocation_params, return_diagnostics=True
+            )
+        else:
+            self._last_allocation_diagnostics = {}
+            commands = wrench_to_motor_commands(wrench, allocation_params, return_diagnostics=False)
         return commands
 
 
