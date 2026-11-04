@@ -44,6 +44,9 @@ jobs:
       - name: Compile Python training modules
         run: python -m compileall -q training
 
+      - name: Run physics optimization parity and cache regression checks
+        run: python -m pytest -q training/tests/test_physics_optimization_parity.py
+
       - name: Run existing reward and checkpoint regression checks
         run: python -m unittest training.test_reward_design
 

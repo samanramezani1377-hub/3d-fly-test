@@ -224,15 +224,12 @@ class FastQuadrotor:
             np.broadcast_to(self.angular_velocity, rotor_positions.shape), rotor_positions
         )
         if self.propeller_model is not None:
-            bemt_results = [
-                self.propeller_model.evaluate(
-                    omega, axial_inflow_m_s=-float(local_air_velocity[i, 2])
-                )
-                for i, omega in enumerate(self.motor_omega)
-            ]
+            base_thrusts, base_torques = self.propeller_model.evaluate_many(
+                self.motor_omega, -local_air_velocity[:, 2]
+            )
             motor_scale = self._motor_effectiveness
-            thrusts = np.asarray([item[0] for item in bemt_results], dtype=np.float64) * self._thrust_scale * motor_scale
-            rotor_shaft_torque_nm = np.asarray([item[1] for item in bemt_results], dtype=np.float64) * self._torque_scale * motor_scale
+            thrusts = base_thrusts * self._thrust_scale * motor_scale
+            rotor_shaft_torque_nm = base_torques * self._torque_scale * motor_scale
             thrust_model_status = "runtime_CAD_station_BEMT_with_axial_inflow_and_per_motor_effectiveness"
         else:
             thrusts = (

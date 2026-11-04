@@ -93,7 +93,7 @@ def _bemt_static_lookup(config_json: str, max_omega: float, thrust_scale: float,
     return omega_grid, np.maximum.accumulate(thrust_grid), np.maximum.accumulate(torque_grid)
 
 
-def _rotor_thrust_limits_and_inverse(params: VehicleParameters):
+def _rotor_thrust_limits_and_inverse(params: VehicleParameters, *, bemt_config_json: str | None = None):
     effectiveness = np.asarray(params.motor_effectiveness, dtype=np.float64)
     max_omega = params.max_rotor_speed_rad_s * params.voltage_factor
     if params.propeller_bemt:
@@ -107,7 +107,7 @@ def _rotor_thrust_limits_and_inverse(params: VehicleParameters):
         thrust_scale = params.thrust_coefficient_n_per_rad_s2 / reference_kf
         torque_scale = params.torque_to_thrust_m / reference_kq_kf
         omega_grid, base_thrust, base_torque = _bemt_static_lookup(
-            json.dumps(params.propeller_bemt, sort_keys=True, separators=(",", ":")),
+            bemt_config_json if bemt_config_json is not None else json.dumps(params.propeller_bemt, sort_keys=True, separators=(",", ":")),
             max_omega, thrust_scale, torque_scale,
         )
         return base_thrust[-1] * effectiveness, omega_grid, base_thrust, base_torque, effectiveness
@@ -115,13 +115,13 @@ def _rotor_thrust_limits_and_inverse(params: VehicleParameters):
 
 
 def wrench_to_motor_commands(
-    wrench, params: VehicleParameters, *, return_diagnostics: bool = False
+    wrench, params: VehicleParameters, *, return_diagnostics: bool = False, bemt_config_json: str | None = None
 ) -> np.ndarray | tuple[np.ndarray, dict]:
     """Allocate wrench and invert the same Smooth2 BEMT static thrust curve used by the plant."""
     wrench = np.asarray(wrench, dtype=np.float64)
     if wrench.shape != (4,) or not np.all(np.isfinite(wrench)):
         raise ValueError("body wrench must be a finite four-value vector")
-    max_thrust, bemt_omega, bemt_base_thrust, bemt_base_torque, effectiveness = _rotor_thrust_limits_and_inverse(params)
+    max_thrust, bemt_omega, bemt_base_thrust, bemt_base_torque, effectiveness = _rotor_thrust_limits_and_inverse(params, bemt_config_json=bemt_config_json)
     if np.any(max_thrust <= 0) or not np.all(np.isfinite(max_thrust)):
         raise ValueError("invalid per-rotor thrust authority")
     collective = float(np.clip(wrench[0], 0.0, float(max_thrust.sum())))
@@ -248,6 +248,8 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
         self.diagnostics_enabled = bool(diagnostics_enabled)
         self._cached_profile_id = None
         self._cached_params = None
+        self._allocation_params = None
+        self._bemt_config_json = None
         self._reference = None
         self._velocity_reference = None
         self._last_allocation_diagnostics = {}
@@ -273,6 +275,12 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
             self._cached_profile_id = profile_id
         self._reference = None
         self._velocity_reference = None
+        self._allocation_params = self.env.inner.plant.params if self.reference_weight > 0.0 else self._cached_params
+        if self._allocation_params.propeller_bemt:
+            import json
+            self._bemt_config_json = json.dumps(self._allocation_params.propeller_bemt, sort_keys=True, separators=(",", ":"))
+        else:
+            self._bemt_config_json = None
         if self.reference_weight > 0.0:
             plant = self.env.inner.plant
             if bool(getattr(self.env.inner, "velocity_control", False)):
@@ -334,18 +342,14 @@ class BodyWrenchActionWrapper(gym.ActionWrapper):
         # voltage limit, motor effectiveness and yaw torque ratio to the oracle.
         # Teacher-free PPO inference keeps the nominal allocator so randomized
         # actuator uncertainty remains a genuine policy-learning problem.
-        allocation_params = (
-            self.env.inner.plant.params
-            if self.reference_weight > 0.0
-            else self._cached_params
-        )
+        allocation_params = self._allocation_params
         if self.diagnostics_enabled:
             commands, self._last_allocation_diagnostics = wrench_to_motor_commands(
-                wrench, allocation_params, return_diagnostics=True
+                wrench, allocation_params, return_diagnostics=True, bemt_config_json=self._bemt_config_json
             )
         else:
             self._last_allocation_diagnostics = {}
-            commands = wrench_to_motor_commands(wrench, allocation_params, return_diagnostics=False)
+            commands = wrench_to_motor_commands(wrench, allocation_params, return_diagnostics=False, bemt_config_json=self._bemt_config_json)
         return commands
 
 

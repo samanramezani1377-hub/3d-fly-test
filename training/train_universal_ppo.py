@@ -566,7 +566,9 @@ def main(argv=None):
     for profile in profiles:
         bemt_config = profile.get("propulsion", {}).get("propeller_bemt")
         if bemt_config:
-            BladeElementPropeller(bemt_config).evaluate(100.0, 0.0)
+            warmup_model = BladeElementPropeller(bemt_config)
+            warmup_model.evaluate(100.0, 0.0)
+            warmup_model.evaluate_many(np.full(4, 100.0), np.zeros(4))
 
     env = SubprocVecEnv([make_env(i) for i in range(args.n_envs)])
     aggregate_eval_frequency = args.eval_frequency

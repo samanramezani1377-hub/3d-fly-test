@@ -74,6 +74,23 @@ if njit is not None:
         return max(thrust, 0.0), max(torque, 0.0)
 
 
+if njit is not None:
+    @njit(cache=True, fastmath=False)
+    def _bemt_evaluate_many_jit(omegas, axial_inflows, r, chord, beta, tip_factor, dr,
+                                rho, blade_count, alpha0, cl_limit, cd0, cd_k):
+        """Evaluate rotor batches in one compiled call, preserving each BEMT solve."""
+        count = omegas.shape[0]
+        thrust = np.zeros(count, dtype=np.float64)
+        torque = np.zeros(count, dtype=np.float64)
+        for i in range(count):
+            if omegas[i] >= 1e-6:
+                thrust[i], torque[i] = _bemt_evaluate_jit(
+                    omegas[i], axial_inflows[i], r, chord, beta, tip_factor, dr,
+                    rho, blade_count, alpha0, cl_limit, cd0, cd_k,
+                )
+        return thrust, torque
+
+
 class BladeElementPropeller:
     def __init__(self, config: dict):
         self.radius_m = float(config["radius_m"])
@@ -101,6 +118,23 @@ class BladeElementPropeller:
         self.chord = np.interp(self.r / self.radius_m, radial, stations[:, 1])
         self.beta = np.radians(np.interp(self.r / self.radius_m, radial, stations[:, 2]))
         self.tip_factor = 0.5 * self.blade_count * (self.radius_m - self.r) / self.r
+
+
+    def evaluate_many(self, omega_rad_s, axial_inflow_m_s):
+        """Evaluate matching rotor arrays with one Python-to-Numba transition."""
+        omegas = np.asarray(omega_rad_s, dtype=np.float64)
+        axial = np.asarray(axial_inflow_m_s, dtype=np.float64)
+        if omegas.ndim != 1 or axial.shape != omegas.shape:
+            raise ValueError("rotor speeds and axial inflows must be matching 1-D arrays")
+        omegas = np.maximum(omegas, 0.0)
+        if njit is not None:
+            return _bemt_evaluate_many_jit(
+                omegas, axial, self.r, self.chord, self.beta, self.tip_factor, self.dr,
+                self.rho, self.blade_count, self.alpha0, self.cl_limit, self.cd0, self.cd_k,
+            )
+        results = [self.evaluate(w, v) for w, v in zip(omegas, axial)]
+        return (np.asarray([x[0] for x in results], dtype=np.float64),
+                np.asarray([x[1] for x in results], dtype=np.float64))
 
     def evaluate(self, omega_rad_s: float, axial_inflow_m_s: float = 0.0) -> tuple[float, float]:
         """Return positive thrust (N) and shaft torque magnitude (Nm)."""
