@@ -16,8 +16,8 @@ from pathlib import Path
 import numpy as np
 from stable_baselines3 import PPO
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+TRAINING_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(TRAINING_DIR))
 from train_universal_ppo import build_velocity_evaluation_sequence
 from fast_physics.vehicle_family import VehicleFamilyEnv, load_vehicle_profiles
 from fast_physics.ppo_action import BodyWrenchActionWrapper
