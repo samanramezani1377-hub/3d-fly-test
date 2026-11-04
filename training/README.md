@@ -30,7 +30,7 @@ Requires Python 3.10+ and a C++ compiler with C++20 support (for example, g++).
 
 ## Active GitHub Actions PPO workflow
 
-The active universal training entry point is `.github/workflows/universal-ppo-five-stage.yml`. It is a **manual-only, five-stage CPU workflow** for one shared policy across four provisional quadrotor profiles. It does not run on ordinary pushes or pull requests.
+The active Smooth2 training entry point is `.github/workflows/universal-ppo-five-stage.yml`. It is a **manual-only, five-stage CPU workflow** for one shared policy pinned to `smooth2-a2212-custom-prop`. It does not run PPO training on ordinary pushes or pull requests.
 
 Current workflow configuration (keep this section aligned with the [full operational guide](../docs/UNIVERSAL_PPO_SINGLE_STAGE_GUIDE.md)):
 
@@ -39,9 +39,9 @@ Current workflow configuration (keep this section aligned with the [full operati
 | Active stages | 5 |
 | Phases per stage | 400K teacher-assisted + 400K teacher-free |
 | Total new transitions | 4,000,000 aggregate |
-| Parallel environments | 100 |
+| Parallel environments | 20 |
 | Rollout length | 500 per environment |
-| Aggregate transitions per rollout | 50,000 |
+| Aggregate transitions per rollout | 10,000 |
 | PPO minibatch size | 250 |
 | Teacher blend | 0.80, then 0.00 |
 | Periodic evaluation | Every 200,000 aggregate transitions |
@@ -55,9 +55,9 @@ Before checkpoint restoration or PPO training, the workflow runs `training/prefl
 
  It evaluates nose-relative 3D velocity commands, pure in-place yaw turns in both directions, and combined translation/yaw commands. The stage yaw-rate limits are 20, 35, 50, 70 and 90 degrees/second.
 
-The workflow randomizes mass, CG, inertia, motor effectiveness/response/RPM, thrust and torque coefficients, battery voltage factor, drag, wind and sensor noise. The four vehicle profiles are still marked `provisional_estimate`; randomization does not replace measured physical calibration. The workflow publishes its model, stage outputs and final independent per-profile evaluation under `training/models/universal-quad-four-vehicle-five-stage/`.
+The workflow randomizes Smooth2 mass, CG, inertia, motor effectiveness/response/RPM, thrust and torque coefficients, battery voltage factor, drag, wind and sensor noise. These values remain engineering estimates; randomization does not replace measured physical calibration. The workflow publishes its model, stage outputs and final independent evaluation under `training/models/smooth2-only-five-stage/`.
 
-Launch only once from **Actions → Universal quadrotor PPO - Five-stage 3D velocity and yaw-rate curriculum → Run workflow** on `main`. Do not start duplicate runs. See the [five-stage velocity/yaw guide](../docs/UNIVERSAL_PPO_SINGLE_STAGE_GUIDE.md) for exact stage chaining, evaluation semantics, artifact locations and the simulation-only boundary.
+Launch only once from **Actions → Smooth2-only PPO - Five-stage 3D velocity and yaw-rate curriculum → Run workflow** on `main`. Do not start duplicate training runs. For the no-training saved-model diagnostic, set `preflight_only=false` and `diagnostics_only=true`. See the [five-stage velocity/yaw guide](../docs/UNIVERSAL_PPO_SINGLE_STAGE_GUIDE.md) for stage chaining, evaluation semantics, artifact locations and the simulation-only boundary.
 
 ## Google Colab
 
