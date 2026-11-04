@@ -18,6 +18,11 @@ from .parameters import VehicleParameters
 from .vehicle_family import profile_to_parameters
 from .propeller import BladeElementPropeller
 
+try:
+    from numba import njit
+except ImportError:  # pragma: no cover
+    njit = None
+
 
 REFERENCE_WEIGHT_BY_STAGE = {1: 0.80, 2: 0.60, 3: 0.40, 4: 0.20, 5: 0.0}
 
@@ -114,8 +119,97 @@ def _rotor_thrust_limits_and_inverse(params: VehicleParameters, *, bemt_config_j
     return params.thrust_coefficient_n_per_rad_s2 * effectiveness * max_omega ** 2, None, None, None, effectiveness
 
 
+
+if njit is not None:
+    @njit(cache=True, fastmath=False)
+    def _allocation_candidate_jit(collective, wrench, collective_scale, torque_scale,
+                                  relative, spin_signs, max_thrust, effectiveness,
+                                  base_thrust, base_torque, torque_to_thrust_m, use_bemt):
+        request = np.empty(4, dtype=np.float64)
+        request[0] = collective * collective_scale
+        request[1] = wrench[1] * torque_scale
+        request[2] = wrench[2] * torque_scale
+        request[3] = wrench[3] * torque_scale
+        estimate = np.full(4, max(collective * collective_scale / 4.0, 1e-8), dtype=np.float64)
+        candidate = estimate.copy()
+        for _ in range(6):
+            matrix = np.empty((4, 4), dtype=np.float64)
+            matrix[0, :] = 1.0
+            matrix[1, :] = relative[:, 1]
+            matrix[2, :] = -relative[:, 0]
+            for i in range(4):
+                if use_bemt:
+                    base_value = estimate[i] / max(effectiveness[i], 1e-12)
+                    thrust_value = np.interp(base_value, base_thrust, base_thrust)
+                    torque_value = np.interp(base_value, base_thrust, base_torque)
+                    ratio = torque_value / max(thrust_value, 1e-9)
+                else:
+                    ratio = torque_to_thrust_m
+                matrix[3, i] = spin_signs[i] * ratio
+            candidate = np.linalg.solve(matrix, request)
+            for i in range(4):
+                estimate[i] = min(max(candidate[i], 1e-8), max_thrust[i])
+        return candidate
+
+    @njit(cache=True, fastmath=False)
+    def _allocation_core_jit(wrench, collective, relative, spin_signs, max_thrust,
+                             effectiveness, base_thrust, base_torque,
+                             torque_to_thrust_m, use_bemt):
+        base = _allocation_candidate_jit(
+            collective, wrench, 1.0, 0.0, relative, spin_signs, max_thrust,
+            effectiveness, base_thrust, base_torque, torque_to_thrust_m, use_bemt,
+        )
+        feasible = True
+        for i in range(4):
+            if base[i] < -1e-8 or base[i] > max_thrust[i] + 1e-8:
+                feasible = False
+                break
+        collective_scale = 1.0
+        if not feasible:
+            lo, hi = 0.0, 1.0
+            for _ in range(24):
+                mid = 0.5 * (lo + hi)
+                candidate = _allocation_candidate_jit(
+                    collective, wrench, mid, 0.0, relative, spin_signs, max_thrust,
+                    effectiveness, base_thrust, base_torque, torque_to_thrust_m, use_bemt,
+                )
+                ok = True
+                for i in range(4):
+                    if candidate[i] < -1e-8 or candidate[i] > max_thrust[i] + 1e-8:
+                        ok = False
+                        break
+                if ok:
+                    lo = mid
+                else:
+                    hi = mid
+            collective_scale = lo
+        lo, hi = 0.0, 1.0
+        for _ in range(24):
+            mid = 0.5 * (lo + hi)
+            candidate = _allocation_candidate_jit(
+                collective, wrench, collective_scale, mid, relative, spin_signs,
+                max_thrust, effectiveness, base_thrust, base_torque,
+                torque_to_thrust_m, use_bemt,
+            )
+            ok = True
+            for i in range(4):
+                if candidate[i] < -1e-8 or candidate[i] > max_thrust[i] + 1e-8:
+                    ok = False
+                    break
+            if ok:
+                lo = mid
+            else:
+                hi = mid
+        rotor_thrust = _allocation_candidate_jit(
+            collective, wrench, collective_scale, lo, relative, spin_signs,
+            max_thrust, effectiveness, base_thrust, base_torque,
+            torque_to_thrust_m, use_bemt,
+        )
+        return np.clip(rotor_thrust, 0.0, max_thrust), collective_scale, lo
+
+
 def wrench_to_motor_commands(
-    wrench, params: VehicleParameters, *, return_diagnostics: bool = False, bemt_config_json: str | None = None
+    wrench, params: VehicleParameters, *, return_diagnostics: bool = False, bemt_config_json: str | None = None, _use_numba: bool = True
 ) -> np.ndarray | tuple[np.ndarray, dict]:
     """Allocate wrench and invert the same Smooth2 BEMT static thrust curve used by the plant."""
     wrench = np.asarray(wrench, dtype=np.float64)
@@ -130,67 +224,88 @@ def wrench_to_motor_commands(
         params.center_of_mass_m, dtype=np.float64
     )
     spin_signs = np.asarray(params.spin_signs, dtype=np.float64)
-    rank_validated = False
-
-    def allocate(scale_collective: float, scale_torque: float) -> np.ndarray:
-        nonlocal rank_validated
-        request = np.array([
-            collective * scale_collective,
-            wrench[1] * scale_torque,
-            wrench[2] * scale_torque,
-            wrench[3] * scale_torque,
-        ], dtype=np.float64)
-        estimate = np.full(4, max(collective * scale_collective / 4.0, 1e-8), dtype=np.float64)
-        candidate = estimate
-        for _ in range(6):
-            if bemt_base_thrust is not None and bemt_base_torque is not None:
-                base_thrust = estimate / np.maximum(effectiveness, 1e-12)
-                thrust_at_point = np.interp(base_thrust, bemt_base_thrust, bemt_base_thrust)
-                torque_at_point = np.interp(base_thrust, bemt_base_thrust, bemt_base_torque)
-                torque_ratio = torque_at_point / np.maximum(thrust_at_point, 1e-9)
-            else:
-                torque_ratio = np.full(4, params.torque_to_thrust_m, dtype=np.float64)
-            matrix = np.empty((4, 4), dtype=np.float64)
-            matrix[0, :] = 1.0
-            matrix[1, :] = relative[:, 1]
-            matrix[2, :] = -relative[:, 0]
-            matrix[3, :] = spin_signs * torque_ratio
-            if not np.all(np.isfinite(matrix)):
-                raise ValueError("vehicle rotor mixer contains non-finite values")
-            if not rank_validated:
-                if np.linalg.matrix_rank(matrix) < 4:
-                    raise ValueError("vehicle rotor geometry does not provide a full-rank 4-axis mixer")
-                rank_validated = True
-            candidate = np.linalg.solve(matrix, request)
-            estimate = np.clip(candidate, 1e-8, max_thrust)
-        return candidate
-
-    # First find a feasible collective-only operating point. This is normally
-    # scale 1 for symmetric quad layouts; the fallback handles asymmetric arms.
-    base = allocate(1.0, 0.0)
-    if np.any(base < -1e-8) or np.any(base > max_thrust + 1e-8):
+    use_bemt = bemt_base_thrust is not None and bemt_base_torque is not None
+    if njit is not None and _use_numba:
+        initial = np.full(4, max(collective / 4.0, 1e-8), dtype=np.float64)
+        _allocation_matrix(
+            params, rotor_thrust_n=initial,
+            bemt_base_thrust=bemt_base_thrust,
+            bemt_base_torque=bemt_base_torque,
+            effectiveness=effectiveness,
+            validate_rank=True,
+        )
+        base_thrust_arg = bemt_base_thrust if use_bemt else np.zeros(1, dtype=np.float64)
+        base_torque_arg = bemt_base_torque if use_bemt else np.zeros(1, dtype=np.float64)
+        rotor_thrust, collective_scale, lo = _allocation_core_jit(
+            wrench, collective, relative, spin_signs, max_thrust, effectiveness,
+            base_thrust_arg, base_torque_arg, params.torque_to_thrust_m, use_bemt,
+        )
+    else:
+        relative = np.asarray(params.rotor_positions_m, dtype=np.float64) - np.asarray(
+            params.center_of_mass_m, dtype=np.float64
+        )
+        spin_signs = np.asarray(params.spin_signs, dtype=np.float64)
+        rank_validated = False
+    
+        def allocate(scale_collective: float, scale_torque: float) -> np.ndarray:
+            nonlocal rank_validated
+            request = np.array([
+                collective * scale_collective,
+                wrench[1] * scale_torque,
+                wrench[2] * scale_torque,
+                wrench[3] * scale_torque,
+            ], dtype=np.float64)
+            estimate = np.full(4, max(collective * scale_collective / 4.0, 1e-8), dtype=np.float64)
+            candidate = estimate
+            for _ in range(6):
+                if bemt_base_thrust is not None and bemt_base_torque is not None:
+                    base_thrust = estimate / np.maximum(effectiveness, 1e-12)
+                    thrust_at_point = np.interp(base_thrust, bemt_base_thrust, bemt_base_thrust)
+                    torque_at_point = np.interp(base_thrust, bemt_base_thrust, bemt_base_torque)
+                    torque_ratio = torque_at_point / np.maximum(thrust_at_point, 1e-9)
+                else:
+                    torque_ratio = np.full(4, params.torque_to_thrust_m, dtype=np.float64)
+                matrix = np.empty((4, 4), dtype=np.float64)
+                matrix[0, :] = 1.0
+                matrix[1, :] = relative[:, 1]
+                matrix[2, :] = -relative[:, 0]
+                matrix[3, :] = spin_signs * torque_ratio
+                if not np.all(np.isfinite(matrix)):
+                    raise ValueError("vehicle rotor mixer contains non-finite values")
+                if not rank_validated:
+                    if np.linalg.matrix_rank(matrix) < 4:
+                        raise ValueError("vehicle rotor geometry does not provide a full-rank 4-axis mixer")
+                    rank_validated = True
+                candidate = np.linalg.solve(matrix, request)
+                estimate = np.clip(candidate, 1e-8, max_thrust)
+            return candidate
+    
+        # First find a feasible collective-only operating point. This is normally
+        # scale 1 for symmetric quad layouts; the fallback handles asymmetric arms.
+        base = allocate(1.0, 0.0)
+        if np.any(base < -1e-8) or np.any(base > max_thrust + 1e-8):
+            lo, hi = 0.0, 1.0
+            for _ in range(24):
+                mid = 0.5 * (lo + hi)
+                candidate = allocate(mid, 0.0)
+                if np.all(candidate >= -1e-8) and np.all(candidate <= max_thrust + 1e-8):
+                    lo = mid
+                else:
+                    hi = mid
+            collective_scale = lo
+        else:
+            collective_scale = 1.0
+    
+        # Keep the requested collective and uniformly desaturate body torques.
         lo, hi = 0.0, 1.0
         for _ in range(24):
             mid = 0.5 * (lo + hi)
-            candidate = allocate(mid, 0.0)
+            candidate = allocate(collective_scale, mid)
             if np.all(candidate >= -1e-8) and np.all(candidate <= max_thrust + 1e-8):
                 lo = mid
             else:
                 hi = mid
-        collective_scale = lo
-    else:
-        collective_scale = 1.0
-
-    # Keep the requested collective and uniformly desaturate body torques.
-    lo, hi = 0.0, 1.0
-    for _ in range(24):
-        mid = 0.5 * (lo + hi)
-        candidate = allocate(collective_scale, mid)
-        if np.all(candidate >= -1e-8) and np.all(candidate <= max_thrust + 1e-8):
-            lo = mid
-        else:
-            hi = mid
-    rotor_thrust = np.clip(allocate(collective_scale, lo), 0.0, max_thrust)
+        rotor_thrust = np.clip(allocate(collective_scale, lo), 0.0, max_thrust)
     if bemt_omega is not None:
         omega = np.interp(
             rotor_thrust / np.maximum(effectiveness, 1e-12),

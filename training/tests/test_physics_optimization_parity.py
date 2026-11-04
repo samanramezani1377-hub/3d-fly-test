@@ -10,7 +10,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "training"))
 
 from fast_physics.propeller import BladeElementPropeller
-from fast_physics.ppo_action import _rotor_thrust_limits_and_inverse
+from fast_physics.ppo_action import _rotor_thrust_limits_and_inverse, wrench_to_motor_commands
+from fast_physics.dynamics import _dynamics_accelerations_python, _dynamics_accelerations_jit
 from fast_physics.vehicle_family import load_vehicle_profiles, profile_to_parameters
 
 
@@ -54,3 +55,89 @@ def test_bemt_batch_rejects_mismatched_input_shapes():
         assert "matching 1-D arrays" in str(exc)
     else:
         raise AssertionError("mismatched rotor input arrays must be rejected")
+
+
+def test_numba_motor_allocator_matches_original_numpy_path():
+    params = _smooth2_params()
+    rng = np.random.default_rng(20261104)
+    arm = float(np.mean(np.linalg.norm(np.asarray(params.rotor_positions_m)[:, :2], axis=1)))
+    weight = params.mass_kg * 9.80665
+    for _ in range(32):
+        wrench = np.array([
+            rng.uniform(0.55, 1.35) * weight,
+            rng.uniform(-0.18, 0.18) * weight * arm,
+            rng.uniform(-0.18, 0.18) * weight * arm,
+            rng.uniform(-0.18, 0.18) * weight * params.torque_to_thrust_m,
+        ], dtype=np.float64)
+        reference = wrench_to_motor_commands(wrench, params, _use_numba=False)
+        optimized = wrench_to_motor_commands(wrench, params, _use_numba=True)
+        np.testing.assert_allclose(optimized, reference, rtol=2e-6, atol=2e-6)
+
+
+def test_compiled_dynamics_acceleration_core_matches_python_equations():
+    rng = np.random.default_rng(731)
+    for _ in range(40):
+        rotation = np.linalg.qr(rng.normal(size=(3, 3)))[0]
+        if np.linalg.det(rotation) < 0:
+            rotation[:, 0] *= -1.0
+        air_velocity = rng.normal(size=3)
+        force = rng.normal(size=3)
+        torque = rng.normal(size=3) * 0.1
+        inertia = np.diag(rng.uniform(0.002, 0.02, size=3))
+        inverse = np.linalg.inv(inertia)
+        angular_velocity = rng.normal(size=3)
+        spin = np.array([1.0, -1.0, 1.0, -1.0])
+        omega = rng.uniform(0.0, 1000.0, size=4)
+        omega_dot = rng.normal(size=4) * 100.0
+        args = (
+            rotation, air_velocity, force, torque, 0.6, 9.80665,
+            np.array([0.08, 0.09, 0.1]), np.array([0.01, 0.02, 0.03]),
+            inertia, inverse, angular_velocity, spin, omega, omega_dot, 1.2e-5, 0.002,
+        )
+        expected = _dynamics_accelerations_python(*args)
+        actual = _dynamics_accelerations_jit(*args)
+        for a, b in zip(actual, expected):
+            np.testing.assert_allclose(a, b, rtol=2e-12, atol=2e-12)
+
+
+def test_numba_motor_allocator_matches_original_numpy_path():
+    params = _smooth2_params()
+    rng = np.random.default_rng(20261104)
+    arm = float(np.mean(np.linalg.norm(np.asarray(params.rotor_positions_m)[:, :2], axis=1)))
+    weight = params.mass_kg * 9.80665
+    for _ in range(32):
+        wrench = np.array([
+            rng.uniform(0.55, 1.35) * weight,
+            rng.uniform(-0.18, 0.18) * weight * arm,
+            rng.uniform(-0.18, 0.18) * weight * arm,
+            rng.uniform(-0.18, 0.18) * weight * params.torque_to_thrust_m,
+        ], dtype=np.float64)
+        reference = wrench_to_motor_commands(wrench, params, _use_numba=False)
+        optimized = wrench_to_motor_commands(wrench, params, _use_numba=True)
+        np.testing.assert_allclose(optimized, reference, rtol=2e-6, atol=2e-6)
+
+
+def test_compiled_dynamics_acceleration_core_matches_python_equations():
+    rng = np.random.default_rng(731)
+    for _ in range(40):
+        rotation = np.linalg.qr(rng.normal(size=(3, 3)))[0]
+        if np.linalg.det(rotation) < 0:
+            rotation[:, 0] *= -1.0
+        air_velocity = rng.normal(size=3)
+        force = rng.normal(size=3)
+        torque = rng.normal(size=3) * 0.1
+        inertia = np.diag(rng.uniform(0.002, 0.02, size=3))
+        inverse = np.linalg.inv(inertia)
+        angular_velocity = rng.normal(size=3)
+        spin = np.array([1.0, -1.0, 1.0, -1.0])
+        omega = rng.uniform(0.0, 1000.0, size=4)
+        omega_dot = rng.normal(size=4) * 100.0
+        args = (
+            rotation, air_velocity, force, torque, 0.6, 9.80665,
+            np.array([0.08, 0.09, 0.1]), np.array([0.01, 0.02, 0.03]),
+            inertia, inverse, angular_velocity, spin, omega, omega_dot, 1.2e-5, 0.002,
+        )
+        expected = _dynamics_accelerations_python(*args)
+        actual = _dynamics_accelerations_jit(*args)
+        for actual_value, expected_value in zip(actual, expected):
+            np.testing.assert_allclose(actual_value, expected_value, rtol=2e-12, atol=2e-12)

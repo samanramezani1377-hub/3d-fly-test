@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 
 from .parameters import VehicleParameters
-from .propeller import BladeElementPropeller
+from .propeller import BladeElementPropeller, njit
 
 
 def rotation_matrix(angles: np.ndarray) -> np.ndarray:
@@ -67,6 +67,45 @@ def _euler_from_quaternion(q: np.ndarray) -> np.ndarray:
     pitch = np.arcsin(np.clip(2 * (w*y - z*x), -1.0, 1.0))
     yaw = np.arctan2(2 * (w*z + x*y), 1 - 2 * (y*y + z*z))
     return np.array([roll, pitch, yaw], dtype=np.float64)
+
+
+def _dynamics_accelerations_python(
+    rotation, air_velocity_body, total_force_body, total_torque_body,
+    mass_kg, gravity_m_s2, linear_drag, quadratic_drag, inertia,
+    inverse_inertia, angular_velocity, spin_signs, motor_omega,
+    motor_omega_dot, rotor_inertia, angular_damping,
+):
+    """Numeric 6-DoF force and angular-acceleration core; equations mirror FastQuadrotor.step."""
+    drag_body = (
+        -linear_drag * air_velocity_body
+        -quadratic_drag * np.abs(air_velocity_body) * air_velocity_body
+    )
+    drag_world = rotation @ drag_body
+    force_world = rotation @ total_force_body + drag_world
+    force_world[2] -= mass_kg * gravity_m_s2
+    acceleration = force_world / mass_kg
+
+    angular_momentum = inertia @ angular_velocity
+    rotor_spin_momentum = -rotor_inertia * float(np.dot(spin_signs, motor_omega))
+    rotor_angular_momentum = np.array([0.0, 0.0, rotor_spin_momentum])
+    rotor_angular_acceleration = -rotor_inertia * float(np.dot(spin_signs, motor_omega_dot))
+    rotor_gyro_torque = (
+        -np.cross(angular_velocity, rotor_angular_momentum)
+        - np.array([0.0, 0.0, rotor_angular_acceleration])
+    )
+    angular_acceleration = inverse_inertia @ (
+        total_torque_body
+        + rotor_gyro_torque
+        - np.cross(angular_velocity, angular_momentum)
+        - angular_damping * angular_velocity
+    )
+    return acceleration, angular_acceleration, drag_world, rotor_gyro_torque
+
+
+_dynamics_accelerations_jit = (
+    njit(cache=True, fastmath=False)(_dynamics_accelerations_python)
+    if njit is not None else _dynamics_accelerations_python
+)
 
 
 class FastQuadrotor:
@@ -273,36 +312,19 @@ class FastQuadrotor:
 
         # Reuse the attitude transform and body air velocity computed above;
         # neither attitude nor world velocity changes before this drag calculation.
-        drag_body = (
-            -self._linear_drag * air_velocity_body
-            -self._quadratic_drag * np.abs(air_velocity_body) * air_velocity_body
+        old_body_rates = self.angular_velocity.copy()
+        acceleration, angular_acceleration, drag_world, rotor_gyro_torque = _dynamics_accelerations_jit(
+            rot, air_velocity_body, total_force_body, total_torque_body,
+            p.mass_kg, self.gravity, self._linear_drag, self._quadratic_drag,
+            self._inertia, self._inverse_inertia, self.angular_velocity,
+            self._spin_signs, self.motor_omega, motor_omega_dot,
+            p.rotor_inertia_kg_m2, p.angular_damping_nms,
         )
-        drag_world = rot @ drag_body
         force_world = rot @ total_force_body + drag_world
         force_world[2] -= p.mass_kg * self.gravity
-        acceleration = force_world / p.mass_kg
         self.velocity += acceleration * self.dt
         self.position += self.velocity * self.dt
 
-        inertia = self._inertia
-        old_body_rates = self.angular_velocity.copy()
-        angular_momentum = inertia @ self.angular_velocity
-        spin_signs = self._spin_signs
-        # spin_signs encode the BODY reaction-torque sign used by Q_i=s_i*kQ*T_i;
-        # the physical rotor angular momentum points in the opposite direction.
-        rotor_spin_momentum = -p.rotor_inertia_kg_m2 * float(np.dot(spin_signs, self.motor_omega))
-        rotor_angular_momentum = np.array([0.0, 0.0, rotor_spin_momentum])
-        rotor_angular_acceleration = -p.rotor_inertia_kg_m2 * float(np.dot(spin_signs, motor_omega_dot))
-        rotor_gyro_torque = (
-            -np.cross(self.angular_velocity, rotor_angular_momentum)
-            - np.array([0.0, 0.0, rotor_angular_acceleration])
-        )
-        angular_acceleration = self._inverse_inertia @ (
-            total_torque_body
-            + rotor_gyro_torque
-            - np.cross(self.angular_velocity, angular_momentum)
-            - p.angular_damping_nms * self.angular_velocity
-        )
         self.angular_velocity += angular_acceleration * self.dt
 
         # Integrate attitude on SO(3) with a unit quaternion and the midpoint
