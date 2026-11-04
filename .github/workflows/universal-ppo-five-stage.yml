@@ -57,6 +57,9 @@ jobs:
           set -euo pipefail
           python -m py_compile \
             training/fast_physics/env.py \
+            training/fast_physics/dynamics.py \
+            training/fast_physics/propeller.py \
+            training/fast_physics/vehicle_family.py \
             training/fast_physics/velocity_reference.py \
             training/fast_physics/ppo_action.py \
             training/train_universal_ppo.py \
