@@ -3,4 +3,5 @@ gymnasium>=0.29
 websocket-client>=1.6
 stable-baselines3>=2.0
 tensorboard>=2.12
+numba>=0.58
 pytest>=7
