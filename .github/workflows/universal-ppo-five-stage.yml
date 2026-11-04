@@ -8,6 +8,11 @@ on:
         required: true
         type: boolean
         default: true
+      diagnostics_only:
+        description: "Use the saved 41759545520 model for Teacher/PPO diagnostics and independent evaluation; do not train"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -83,8 +88,27 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      - name: Download the existing five-stage run for diagnostics only
+        if: ${{ inputs.diagnostics_only }}
+        uses: actions/download-artifact@v4
+        with:
+          name: smooth2-only-five-stage-backup
+          run-id: 41759545520
+          github-token: ${{ github.token }}
+          path: previous-run
+
+      - name: Select existing final model without retraining
+        if: ${{ inputs.diagnostics_only }}
+        run: |
+          set -euo pipefail
+          source_model="previous-run/training/runs/universal-final-selected-best.zip"
+          test -s "$source_model"
+          mkdir -p training/runs
+          cp "$source_model" training/runs/universal-final-selected-best.zip
+          echo "Using saved final PPO checkpoint from run 41759545520; no PPO training will run."
+
       - name: Restore selected 1M teacher-assisted checkpoint
-        if: ${{ !inputs.preflight_only }}
+        if: ${{ !inputs.preflight_only && !inputs.diagnostics_only }}
         uses: actions/download-artifact@v4
         with:
           name: universal-ppo-stage2-teacher-to-teacher-free-backup
@@ -93,7 +117,7 @@ jobs:
           path: bootstrap
 
       - name: Verify selected teacher-assisted 1M bootstrap checkpoint and Smooth2 physics profile
-        if: ${{ !inputs.preflight_only }}
+        if: ${{ !inputs.preflight_only && !inputs.diagnostics_only }}
         run: |
           set -euo pipefail
           source_dir="bootstrap/training/runs/universal-quad-v5-foundation-stage2-teacher"
@@ -142,7 +166,7 @@ jobs:
           sha256sum "$source_model" | tee training/runs/universal-initial-from-1m-teacher-best.sha256
 
       - name: Train five chained teacher-assisted then teacher-free velocity and yaw-rate stages
-        if: ${{ !inputs.preflight_only }}
+        if: ${{ !inputs.preflight_only && !inputs.diagnostics_only }}
         run: |
           set -euo pipefail
           checkpoint="training/runs/universal-initial-from-1m-teacher-best.zip"
@@ -305,7 +329,7 @@ jobs:
           PY
 
       - name: Publish Smooth2-only curriculum outputs
-        if: ${{ !inputs.preflight_only && success() }}
+        if: ${{ !inputs.preflight_only && !inputs.diagnostics_only && success() }}
         run: |
           set -euo pipefail
           target="training/models/smooth2-only-five-stage"
