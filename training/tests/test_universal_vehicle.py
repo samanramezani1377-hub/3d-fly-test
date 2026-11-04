@@ -224,7 +224,8 @@ def test_universal_evaluation_publishes_battery_diagnostics_without_using_them_f
     ):
         assert key in source
         assert key in workflow
-    # Electrical diagnostics are report-only and are not added to policy observations.
-    score_start = source.index("score = (")
-    score_end = source.index("report = {", score_start)
-    assert "battery" not in source[score_start:score_end].lower()
+    # Electrical diagnostics are report-only and are excluded from the
+    # dedicated lexicographic checkpoint-selection function.
+    selection_source = (ROOT / "training" / "ppo_selection.py").read_text(encoding="utf-8")
+    assert "checkpoint_selection_score" in source
+    assert "battery" not in selection_source.lower()
