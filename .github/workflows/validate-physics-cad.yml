@@ -9,8 +9,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: validation-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A unique group per run prevents rapid commits from cancelling or replacing checks.
+  group: validation-${{ github.run_id }}
+  cancel-in-progress: false
 
 env:
   OMP_NUM_THREADS: "1"
