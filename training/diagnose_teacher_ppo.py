@@ -158,6 +158,16 @@ def main():
                 family_path=args.vehicle_family,
                 randomization_path=args.randomization_config,
             ))
+    for seed in args.seeds:
+        hashes = {
+            row["initial_observation_sha256"]
+            for row in results if row["seed"] == seed
+        }
+        if len(hashes) != 1:
+            raise RuntimeError(
+                f"same-seed control modes did not start from an identical observation for seed {seed}: {sorted(hashes)}"
+            )
+
     summary = {}
     for mode in ("ppo_only", "ppo_teacher_80_20", "teacher_only"):
         rows = [r for r in results if r["mode"] == mode]

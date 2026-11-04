@@ -251,6 +251,10 @@ jobs:
           reports = sorted((output_dir / "reports").glob("profile-evaluation-*.json"))
           assert len(reports) == 1, f"Expected exactly one final evaluation report, found {reports}"
           report = json.loads(reports[0].read_text(encoding="utf-8"))
+          assert int(report.get("timesteps", -1)) == int(model.num_timesteps), (
+              f"Final evaluation used stale callback timestep state: report={report.get('timesteps')} "
+              f"model={model.num_timesteps}"
+          )
           expected_ids = {"smooth2-a2212-custom-prop"}
           results = report.get("profiles", [])
           actual_ids = {item.get("vehicle_id") for item in results}
@@ -264,6 +268,9 @@ jobs:
               "mean_yaw_rate_tracking_error_rad_s",
               "mean_max_yaw_command_tracking_error_rad_s",
               "mean_yaw_command_coverage",
+              "full_command_coverage_episode_rate",
+              "mean_complete_episode_velocity_tracking_error_m_s",
+              "mean_complete_episode_yaw_rate_tracking_error_rad_s",
               "mean_neutral_braking_time_seconds",
               "mean_motor_saturation_fraction",
               "mean_estimated_battery_current_a",
@@ -288,6 +295,7 @@ jobs:
               "model": str(model_path),
               "model_timesteps": int(model.num_timesteps),
               "report": str(reports[0]),
+              "teacher_ppo_comparison": str(output_dir / "teacher-ppo-comparison.json"),
               "metrics_by_vehicle": metrics_by_vehicle,
           }
           (output_dir / "final-evaluation-summary.json").write_text(
